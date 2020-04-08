@@ -18,6 +18,7 @@ import waffleoRai_Compression.definitions.CompressionDefs;
 import waffleoRai_Compression.definitions.CompressionInfoNode;
 import waffleoRai_Files.EncryptionDefinition;
 import waffleoRai_Files.EncryptionDefinitions;
+import waffleoRai_Files.FileClass;
 import waffleoRai_Files.FileDefinitions;
 import waffleoRai_Files.FileTypeDefNode;
 import waffleoRai_Files.FileTypeDefinition;
@@ -50,7 +51,7 @@ public class FileTreeSaver {
 	 * 		14 - Is Link?
 	 * 		13 - Has metadata? (V3+)
 	 * 		 7 - Source compressed? (If file)
-	 * 		 6 - Has type chain (V2+)
+	 * 		 6 - Has type chain [file]/file class[dir] (V2+)(V4+ for dir)
 	 * 		 5 - Has encryption (V2+)
 	 * 	Name [VLS 2x2] 
 	 * 	Metadata [VLS 4x2] (V3+) (If applicable)
@@ -60,6 +61,8 @@ public class FileTreeSaver {
 	 * 	Offset [8]
 	 * 	Length [8]
 	 *  Encryption Def ID [4] (If applicable) (V2+)
+	 *  Encryption Start [8] (If applicable) (V4+)
+	 *  Encryption Region Size [8] (If applicable) (V4+)
 	 *  # Type chain nodes [4] (If applicable) (V2+)
 	 *  Type chain [4 * n] (If applicable) (V2+)
 	 *  	ID [4] (First bit is always set if compression)
@@ -72,9 +75,10 @@ public class FileTreeSaver {
 	 * 
 	 * If directory...
 	 * 	Number of children [4]
+	 * 	File class [2] (If applicable) (V4+)
 	 * 
 	 * If link...
-	 * 	(If target is a file, then need file fields.
+	 * 	(If target is a file, then need (some) file fields.
 	 * 		don't need dir fields if dir, though) 
 	 * 	Offset of target (relative to "eert") [4]
 	 * 
@@ -89,7 +93,7 @@ public class FileTreeSaver {
 	public static final String MAGIC_TABLE = "SPBt";
 	public static final String MAGIC_TREE = "eert";
 	
-	public static final int CURRENT_VERSION = 3;
+	public static final int CURRENT_VERSION = 4;
 	
 	public static final String ENCODING = "UTF8";
 	
@@ -102,6 +106,7 @@ public class FileTreeSaver {
 		
 		long cpos = stpos;
 		int flags = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos+=2;
+		boolean hasfc = false;
 
 		//Get name...
 		SerializedString ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.WORD, 2);
@@ -122,9 +127,16 @@ public class FileTreeSaver {
 				dir.setMetadataValue(split[0], split[1]);
 			}
 		}
+		if(version >= 4 && (flags & 0x0040) != 0) hasfc = true;
 		
 		//Get children count...
 		int ccount = in.intFromFile(cpos); cpos += 4;
+		
+		if(hasfc){
+			int fcval = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos+=2;
+			FileClass fc = FileClass.getFromInteger(fcval);
+			dir.setFileClass(fc);
+		}
 		
 		for(int i = 0; i < ccount; i++)
 		{
@@ -172,7 +184,13 @@ public class FileTreeSaver {
 		{
 			int defid = in.intFromFile(cpos); cpos += 4;
 			EncryptionDefinition def = EncryptionDefinitions.getByID(defid);
-			fn.setEncryption(def);
+			
+			if(version >= 4){
+				long enc_off = in.longFromFile(cpos); cpos+=8;
+				long enc_sz = in.longFromFile(cpos); cpos+=8;
+				fn.setEncryption(def, enc_off, enc_sz);
+			}
+			else fn.setEncryption(def);
 		}
 		
 		if((flags & 0x40) != 0)
@@ -501,17 +519,26 @@ public class FileTreeSaver {
 		
 		List<FileNode> children = dir.getChildren();
 		
+		//Serialize metadata...
+		String metadata = null;
+		if(dir.hasMetadata()) metadata = serializeMetadata(dir);
+		
 		int dsz = 2 + (int)nodename.getFileSize() + 4;
+		if(metadata != null) dsz += 4 + 2+ metadata.length();
+		boolean hasfc = (dir.getFileClass() != null);
+		if(hasfc) dsz += 2;
 		FileBuffer data = new FileBuffer(dsz, true);
 		int dflags = 0x8000;
 		if(dir.hasMetadata()) dflags |= 0x2000;
+		if(hasfc) dflags |= 0x0040;
 		data.addToFile((short)dflags);
 		data.addToFile(nodename);
-		if(dir.hasMetadata())
+		if(metadata != null)
 		{
-			data.addVariableLengthString(ENCODING, serializeMetadata(dir), BinFieldSize.DWORD, 2);
+			data.addVariableLengthString(ENCODING, metadata, BinFieldSize.DWORD, 2);
 		}
 		data.addToFile(children.size());
+		if(hasfc) data.addToFile((short)dir.getFileClass().getIntegerValue());
 		
 		DatNode dirnode = new DatNode();
 		dirnode.dat = data;
@@ -612,7 +639,7 @@ public class FileTreeSaver {
 				int csz = 2 + (int)cname.getFileSize() + 20;
 				if(child.sourceDataCompressed()){csz += (4 + (20 * ccsz)); flag |= 0x80;}
 				if(!typechain.isEmpty()){csz += (4 + (typechain.size() << 2)); flag |= 0x40;}
-				if(child.getEncryption() != null){csz += 4; flag |= 0x20;}
+				if(child.getEncryption() != null){csz += 12; flag |= 0x20;}
 				//if(child.sourceDataCompressed()){csz += 8; flag |= 0x80;}
 				
 				FileBuffer cdat = new FileBuffer(csz, true);
@@ -631,11 +658,15 @@ public class FileTreeSaver {
 				if(child.getEncryption() != null)
 				{
 					cdat.addToFile(child.getEncryption().getID());
+					cdat.addToFile(child.getEncryptionOffset());
+					cdat.addToFile(child.getEncryptionLength());
 				}
 				if(!typechain.isEmpty())
 				{
 					cdat.addToFile(typechain.size());
-					for(FileTypeNode node : typechain) cdat.addToFile(node.getTypeID());
+					for(FileTypeNode node : typechain){
+						cdat.addToFile(node.getTypeID());
+					}
 				}
 				//if(child.sourceDataCompressed())cdat.addToFile(child.getOffsetOfCompressionStart());
 				if(child.sourceDataCompressed())

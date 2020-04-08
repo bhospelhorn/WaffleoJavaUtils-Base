@@ -95,5 +95,8 @@ public class Amp implements Filter{
 		
 	}
 
+	public boolean done(){
+		return source.done();
+	}
 
 }

@@ -11,8 +11,12 @@ public interface EncryptionDefinition {
 	public String getDescription();
 	public void setDescription(String s);
 	
+	public void setStateValue(int key, int value);
+	public int getStateValue(int key);
+	
 	public boolean decrypt(StreamWrapper input, OutputStream output, List<byte[]> keydata);
 	
 	public boolean encrypt(StreamWrapper input, OutputStream stream, List<byte[]> keydata);
 	
+	public int[] getExpectedKeydataSizes();
 }

@@ -194,6 +194,10 @@ public class BesselO2LPF extends BufferedFilter{
 		
 		return out;
 	}
+	
+	public boolean done(){
+		return input.done();
+	}
 
 	
 }

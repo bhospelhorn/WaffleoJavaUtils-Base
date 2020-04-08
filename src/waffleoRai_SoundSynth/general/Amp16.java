@@ -107,5 +107,9 @@ public class Amp16 implements Filter{
 		// TODO Auto-generated method stub
 		
 	}
+	
+	public boolean done(){
+		return source.done();
+	}
 
 }

@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import waffleoRai_Compression.definitions.AbstractCompDef;
+
 public class FileTypeDefNode implements FileTypeNode{
 
 	private FileTypeDefinition def;
@@ -54,4 +56,10 @@ public class FileTypeDefNode implements FileTypeNode{
 
 	public FileClass getFileClass(){return def.getFileClass();}
 	
+	public FileTypeDefinition getTypeDefinition(){return getDefinition();}
+	public AbstractCompDef getCompressionDefinition(){return null;}
+	
+	public FileTypeNode copyChain(){
+		return new FileTypeDefNode(def);
+	}
 }

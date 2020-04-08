@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
@@ -40,12 +41,14 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	private Map<String, String> metadata;
 	
 	//Compressed Container
-	private List<CompressionInfoNode> comp_chain;
+	private LinkedList<CompressionInfoNode> comp_chain;
 	
 	//Type data on THIS file
 	private FileTypeNode type_chain;
 	
 	private EncryptionDefinition encryption;
+	private long enc_start;
+	private long enc_len;
 	
 	//Scratch
 	protected int scratch_field;
@@ -70,6 +73,8 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	public String getSourcePath(){return sourcePath;}
 	public boolean isLink(){return false;}
 	public EncryptionDefinition getEncryption(){return encryption;}
+	public long getEncryptionOffset(){return enc_start;}
+	public long getEncryptionLength(){return enc_len;}
 	public String getMetadataValue(String key){if(metadata == null){return null;}; return metadata.get(key);}
 	
 	public boolean hasMetadata()
@@ -92,7 +97,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		int sz = 1;
 		if(comp_chain != null) sz += comp_chain.size();
 		List<CompressionInfoNode> list = new ArrayList<CompressionInfoNode>(sz);
-		list.addAll(comp_chain);
+		if(comp_chain != null) list.addAll(comp_chain);
 		return list;
 	}
 	
@@ -141,13 +146,33 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		else return getFileName();
 	}
 	
+	public boolean hasTypingMark(){
+		return (type_chain != null);
+	}
+	
 	/* --- Setters --- */
 	
-	public void setFileName(String name){fileName = name;}
+	public void setFileName(String name){
+		String oldname = fileName;
+		fileName = name;
+		if(parent != null) parent.changeChildName(this, oldname);
+	}
+	
 	public void setOffset(long off){offset = off;}
 	public void setLength(long len){length = len;}
 	public void setSourcePath(String path){sourcePath = path;}
-	public void setEncryption(EncryptionDefinition def){encryption = def;}
+	
+	public void setEncryption(EncryptionDefinition def){
+		encryption = def;
+		enc_start = 0;
+		enc_len = length;
+	}
+	
+	public void setEncryption(EncryptionDefinition def, long offset, long length){
+		encryption = def;
+		enc_start = offset;
+		enc_len = length;
+	}
 	
 	public void setMetadataValue(String key, String value)
 	{
@@ -168,7 +193,14 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	public void addCompressionChainNode(AbstractCompDef def, long stpos, long len)
 	{
 		if(comp_chain == null) comp_chain = new LinkedList<CompressionInfoNode>();
+		//System.err.println("addCompressionChainNode: 0x" + Long.toHexString(stpos));
 		comp_chain.add(new CompressionInfoNode(def, stpos, len));
+	}
+	
+	public void pushCompressionChainNode(AbstractCompDef def, long stpos, long len)
+	{
+		if(comp_chain == null) comp_chain = new LinkedList<CompressionInfoNode>();
+		comp_chain.push(new CompressionInfoNode(def, stpos, len));
 	}
 	
 	public void clearCompressionChain(){comp_chain.clear();}
@@ -190,7 +222,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	
 	public boolean equals(Object o)
 	{
-		if(o == this) return true;
+		if(o == this) {return true;}
 		if(o == null) return false;
 		if(!(o instanceof FileNode)) return false;
 		FileNode fn = (FileNode)o;
@@ -210,6 +242,12 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		
 		if(this.isDirectory() && !other.isDirectory()) return -1;
 		if(!this.isDirectory() && other.isDirectory()) return 1;
+		
+		if(this.isDirectory() && other.isDirectory()){
+			//If one has type marking and other doesn't, nonmarked comes first
+			if(this.hasTypingMark() && !other.hasTypingMark()) return 1;
+			if(!this.hasTypingMark() && other.hasTypingMark()) return -1;
+		}
 		
 		return this.fileName.compareTo(other.fileName);
 	}
@@ -251,12 +289,34 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	
 	/* --- Other --- */
 	
-	public FileNode copy(DirectoryNode parent_copy)
-	{
-		FileNode copy = new FileNode(parent_copy, this.fileName);
+	private void copyDataTo(FileNode copy){
+		
 		copy.length = this.length;
 		copy.offset = this.offset;
 		copy.sourcePath = this.sourcePath;
+		
+		copy.encryption = encryption;
+		copy.enc_start = enc_start;
+		copy.enc_len = enc_len;
+		
+		copy.comp_chain = new LinkedList<CompressionInfoNode>();
+		if(this.comp_chain != null) copy.comp_chain.addAll(comp_chain);
+		
+		if(metadata != null){
+			Set<String> metakeys = metadata.keySet();
+			for(String k : metakeys) copy.setMetadataValue(k, metadata.get(k));	
+		}
+		
+		//Copy type chain
+		if(type_chain != null) copy.type_chain = type_chain.copyChain();
+		else copy.type_chain = null;
+		
+	}
+	
+	public FileNode copy(DirectoryNode parent_copy)
+	{
+		FileNode copy = new FileNode(parent_copy, this.fileName);
+		copyDataTo(copy);
 		
 		return copy;
 	}
@@ -268,6 +328,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	
 	public boolean splitNodeAt(long off)
 	{
+
 		if(off >= this.length) return false;
 		if(off < 0) return false;
 		
@@ -279,21 +340,69 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		FileNode n1 = new FileNode(parent, myname + ".front");
 		FileNode n2 = new FileNode(parent, myname + ".back");
 		
+		copyDataTo(n1);
+		copyDataTo(n2);
+		
 		n1.offset = offset;
 		n1.setLength(l1);
-		n1.setSourcePath(sourcePath);
-		n1.encryption = encryption;
-		n1.comp_chain = this.getCompressionChain();
-		
+
 		n2.offset = rel_off;
 		n2.setLength(l2);
-		n2.setSourcePath(sourcePath);
-		n2.encryption = encryption;
-		n2.comp_chain = this.getCompressionChain();
 		
+		//Splitting not recommended if encrypted, but hey you do you
+		if(encryption != null){
+			long enc_end = enc_start + enc_len;
+			if(enc_start < rel_off){
+				//Covers n1
+				if(enc_end < rel_off){
+					//Ends before end of n1
+					n1.enc_len = rel_off - enc_start;
+				}
+				else n1.enc_len = n1.length - enc_start;
+			}
+			else{
+				n1.encryption = null;
+				n1.enc_start = 0;
+				n1.enc_len = 0;
+			}
+			
+			if(enc_end > rel_off){
+				//Covers n2
+				if(enc_start < rel_off) n2.enc_start = 0;
+				else n2.enc_start = enc_start - rel_off;
+				
+				if(enc_start < rel_off) n2.enc_len = enc_end - rel_off;
+				else n2.enc_len = enc_end - enc_start;
+			}
+			else{
+				n2.encryption = null;
+				n2.enc_start = 0;
+				n2.enc_len = 0;
+			}
+		}
+
 		setParent(null);
 		
 		return true;
+	}
+	
+	public String getLocationString(){
+		if(this.isDirectory()) return "Directory";
+		StringBuilder sb = new StringBuilder(1024);
+		
+		if(sourceDataCompressed()){
+			for(CompressionInfoNode c : comp_chain){
+				sb.append("Decomp From: 0x" + Long.toHexString(c.getStartOffset()) + " -> ");
+			}
+			sb.append("0x" + Long.toHexString(getOffset()));
+			sb.append(" - 0x" + Long.toHexString(getOffset() + getLength()));
+		}
+		else{
+			sb.append("0x" + Long.toHexString(getOffset()));
+			sb.append(" - 0x" + Long.toHexString(getOffset() + getLength()));
+		}
+	
+		return sb.toString();
 	}
 	
 	/* --- Load --- */
@@ -304,8 +413,10 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		long stoff = getOffset();
 		long edoff = stoff + getLength();
 		
+		//System.err.println("Loading data for node -- " + getSourcePath() + " 0x" + Long.toHexString(getOffset()) + ": 0x" + Long.toHexString(getLength()));
 		if(comp_chain != null)
 		{
+			//System.err.println("Non-null compression chain!");
 			for(CompressionInfoNode comp : comp_chain)
 			{
 				FileBuffer file = null;
@@ -315,16 +426,22 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 				{
 					edoff = stoff + comp.getLength();
 					file = FileBuffer.createBuffer(path, stoff, edoff);	
+					//System.err.println("Source compressed region: 0x" + Long.toHexString(stoff) + " - 0x" + Long.toHexString(edoff));
 				}
 				else file = FileBuffer.createBuffer(path, stoff);
 				FileBufferStreamer streamer = new FileBufferStreamer(file);
 				AbstractCompDef def = comp.getDefinition();
 				if(def == null) return null;
 				path = def.decompressToDiskBuffer(streamer);
+				//System.err.println("Decompressed to: " + path);
+				stoff = this.getOffset();
+				edoff = stoff + this.getLength();
 			}
 		}
 		
+		//System.err.println("Loading from " + path + ": 0x" + Long.toHexString(stoff) + " - 0x" + Long.toHexString(edoff));
 		FileBuffer file = FileBuffer.createBuffer(path, stoff, edoff);
+		//System.err.println("File loaded! Size = 0x" + Long.toHexString(file.getFileSize()));
 
 		return file;
 	}
@@ -336,8 +453,10 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		FileTypeNode typechain = getTypeChainHead();
 		while(typechain != null)
 		{
+			//System.err.println("Type: " + typechain.toString());
 			if(typechain.isCompression())
 			{
+				//System.err.println("Compression type!");
 				if(typechain instanceof CompDefNode)
 				{
 					AbstractCompDef def = ((CompDefNode)typechain).getDefinition();
@@ -351,6 +470,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 			else break;
 		}
 		
+		//System.err.println("Returning buffer of size 0x" + Long.toHexString(buffer.getFileSize()));
 		return buffer;
 	}
 	

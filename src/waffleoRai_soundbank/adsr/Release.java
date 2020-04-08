@@ -123,7 +123,8 @@ public class Release {
 		}
 		else if(eMode == ADSRMode.LINEAR_DB)
 		{
-			return new ADSRLinearDBRamper(false, suslev, 0.0, samps);
+			//return new ADSRLinearDBRamper(false, suslev, 0.0, samps);
+			return new ADSRLinearDBFullRampdown(suslev, 0.0, samps);
 		}
 		return null;
 	}
@@ -137,7 +138,8 @@ public class Release {
 		}
 		else if(eMode == ADSRMode.LINEAR_DB)
 		{
-			return new ADSRLinearDBRamper(false, 1.0, 0.0, samps);
+			//return new ADSRLinearDBRamper(false, 1.0, 0.0, samps);
+			return new ADSRLinearDBFullRampdown(samps);
 		}
 		return null;
 	}

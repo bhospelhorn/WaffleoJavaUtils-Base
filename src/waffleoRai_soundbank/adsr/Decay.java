@@ -124,7 +124,8 @@ public class Decay {
 		}
 		else if(eMode == ADSRMode.LINEAR_DB)
 		{
-			return new ADSRLinearDBRamper(false, 1.0, suslev, samps);
+			//return new ADSRLinearDBRamper(false, 1.0, suslev, samps);
+			return new ADSRLinearDBFullRampdown(1.0, suslev, samps);
 		}
 		return null;
 	}
@@ -138,7 +139,8 @@ public class Decay {
 		}
 		else if(eMode == ADSRMode.LINEAR_DB)
 		{
-			return new ADSRLinearDBRamper(false, 1.0, 0.0, samps);
+			//return new ADSRLinearDBRamper(false, 1.0, 0.0, samps);
+			return new ADSRLinearDBFullRampdown(samps);
 		}
 		
 		return null;

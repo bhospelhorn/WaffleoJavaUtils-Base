@@ -10,5 +10,7 @@ public interface FileTypeDefinition {
 	public int getTypeID();
 	
 	public void setDescriptionString(String s);
+	
+	public String getDefaultExtension();
 
 }

@@ -17,6 +17,9 @@ import javax.sound.sampled.SourceDataLine;
  * 2020.03.19 | 1.0.0
  * 		Initial Documentation
  * 
+ * 2020.04.06 | 1.1.0
+ * 		Added done()
+ * 
  */
 
 /**
@@ -34,8 +37,8 @@ import javax.sound.sampled.SourceDataLine;
  * can occur well before they are played back, noting the time coordinate of the event
  * relative to the current playback time coordinate is essential.
  * @author Blythe Hospelhorn
- * @version 1.0.0
- * @since March 19, 2020
+ * @version 1.1.0
+ * @since April 6, 2020
  */
 public abstract class SequencePlayer implements SynthPlayer{
 	
@@ -52,8 +55,8 @@ public abstract class SequencePlayer implements SynthPlayer{
 	private long tr_solo_vector;
 	private long tr_mute_vector;
 	
-	private double ch_atten; //Factor by which to attenuate individual channels
-	private double master; //Master volume
+	private double ch_atten = 1.0; //Factor by which to attenuate individual channels
+	private double master = 0.5; //Master volume
 		
 	private int tpqn; //Ticks per quarter note
 	private int tempo; //us per qn
@@ -246,6 +249,9 @@ public abstract class SequencePlayer implements SynthPlayer{
 		return true;
 	}
 	
+	public boolean done(){
+		return !(isRunning());
+	}
 	/*--- Setters ---*/
 	
 	public void setMasterAttenuation(double amp_ratio){
@@ -323,6 +329,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 	 */
 	protected void setTickResolution(int ticks_per_qn){
 		this.tpqn = ticks_per_qn;
+		updateTickRate();
 	}
 	
 	/*--- Listeners ---*/
@@ -539,7 +546,8 @@ public abstract class SequencePlayer implements SynthPlayer{
 		myloops = 0;
 		ctr_sampling = 0;
 		ctr_tick = 0;
-		for(PlayerTrack t : tracks)t.resetTo(0);
+		for(int i = 0; i < tracks.length; i++){if(tracks[i] != null) tracks[i].resetTo(0);}
+		//for(PlayerTrack t : tracks)t.resetTo(0);
 	}
 	
 	public int[] nextSample() throws InterruptedException
@@ -564,7 +572,10 @@ public abstract class SequencePlayer implements SynthPlayer{
 				//SynthChannel ch = channels[i];
 				//int[] chsamps = ch.nextSample();
 				//lastChLevels[i] = chsamps;
-				for(int j = 0; j < ccount; j++) sum[j] += chsamps[j] * ch_atten;
+				for(int j = 0; j < ccount; j++) {
+					sum[j] += chsamps[j] * ch_atten;
+					//if(i == 0 && chsamps[j] != 0) System.err.println(chsamps[j]);
+				}
 			}	
 			sendChannelLevelToListeners(i, chsamps);
 			chmask = chmask << 1;
@@ -576,6 +587,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 		
 		sendLevelToListeners(out);
 		time_coord++;
+		//if(out[0] != 0) System.err.println("Output: " + out[0] + " | " + out[1]);
 		return out;
 	}
 	
@@ -654,13 +666,15 @@ public abstract class SequencePlayer implements SynthPlayer{
 					{
 						//Do operations for this tick
 						//System.err.println("tick");
-						for(PlayerTrack t : tracks) t.onTick(tick);
+						for(int i = 0; i < tracks.length; i++){if(tracks[i] != null) tracks[i].onTick(tick);}
+						//for(PlayerTrack t : tracks) t.onTick(tick);
 						sendTickToListeners();
 						tick++;
 						
 						//Check flags set by MIDI operations...
 						//(Track end, tempo change, loop end)
-						for(PlayerTrack t : tracks){seqend = (seqend && t.trackEnd());};
+						for(int i = 0; i < tracks.length; i++){if(tracks[i] != null) {seqend = (seqend && tracks[i].trackEnd());};}
+						//for(PlayerTrack t : tracks){seqend = (seqend && t.trackEnd());};
 						if(seqend) break;
 						if(loopme)loopMe();
 						if(tempo_flag)
@@ -826,6 +840,16 @@ public abstract class SequencePlayer implements SynthPlayer{
 	{
 		if(playback_line == null) return 0;
 		return playback_line.getLongFramePosition();
+	}
+	
+	/**
+	 * Check whether this player is currently synthesizing and playing back.
+	 * @return True if player is running, false if not.
+	 * @since 1.0.0
+	 */
+	public boolean isRunning(){
+		if(worker == null) return false;
+		return (worker.isRunning());
 	}
 	
 	/*--- Write ---*/

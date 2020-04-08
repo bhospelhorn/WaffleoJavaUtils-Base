@@ -19,6 +19,8 @@ public class DefaultSynthChannel implements SynthChannel{
 	
 	/* ----- Instance Variables ----- */
 	
+	private boolean closed = false;
+	
 	private Map<Byte, SynthSampleStream> voices;
 	private Map<Byte, SynthSampleStream> releasedVoices;
 	
@@ -176,6 +178,13 @@ public class DefaultSynthChannel implements SynthChannel{
 		for(SynthSampleStream voice : releasedVoices.values()) voice.setPitchWheelLevel((int)pitch_wheel);
 	}
 	
+	public void setPitchBendDirect(int cents){
+		//Always scales to 12 semis for pitch wheel...
+		pitch_wheel = (short)Math.round(((double)cents/1200.0) * (double)0x7FFF);
+		for(SynthSampleStream voice : voices.values()) voice.setPitchBendDirect(cents);
+		for(SynthSampleStream voice : releasedVoices.values()) voice.setPitchBendDirect(cents);
+	}
+	
 	public void allNotesOff()
 	{
 		for(Byte k : voices.keySet())
@@ -215,6 +224,7 @@ public class DefaultSynthChannel implements SynthChannel{
 		for(SynthSampleStream voice : voices.values())
 		{
 			double mono = (double)voice.nextSample()[0];
+			//System.err.println("Voice mono output: " + mono);
 			if(voice.getBitDepth() != bitDepth)
 			{
 				//Scale...
@@ -224,6 +234,7 @@ public class DefaultSynthChannel implements SynthChannel{
 			double[] vpan = voice.getInternalPanAmpRatios();
 			sum[0] += (mono * vpan[0]);
 			sum[1] += (mono * vpan[1]);
+			//if(!voices.isEmpty())System.err.println("Pan factors: " + vpan[0] + " | " + vpan[1]);
 			//sum[0] += mono;
 			//sum[1] += mono;
 		}
@@ -244,9 +255,11 @@ public class DefaultSynthChannel implements SynthChannel{
 			if(!voice.releaseSamplesRemaining())
 			{
 				//releasedVoices.remove(k);
+				//System.err.println("Release done for " + k);
 				deletes.add(k);
 				freeVoice(voice);
 			}
+			//System.err.println("Release voices: " + releasedVoices.size());
 		}
 		for(Byte k : deletes){releasedVoices.remove(k);}
 		
@@ -255,11 +268,13 @@ public class DefaultSynthChannel implements SynthChannel{
 		double[] panned = new double[2];
 		panned[0] = (sum[0] * ch_pan[0][0]) + (sum[1] * ch_pan[1][0]);
 		panned[1] = (sum[0] * ch_pan[0][1]) + (sum[1] * ch_pan[1][1]);
+		//if(!voices.isEmpty())System.err.println("Raw channel stereo output: " + panned[0] + " | " + panned[1]);
 		
 		//Volume
 		int[] out = new int[2];
 		out[0] = saturate((int)Math.round(panned[0] * ch_vol * ch_exp));
 		out[1] = saturate((int)Math.round(panned[1] * ch_vol * ch_exp));
+		//if(!voices.isEmpty())System.err.println("Channel stereo output: " + String.format("%04x | %04x", out[0], out[1]));
 		
 		//out[0] = saturate((int)Math.round(sum[0]));
 		//out[1] = saturate((int)Math.round(sum[1]));
@@ -269,7 +284,15 @@ public class DefaultSynthChannel implements SynthChannel{
 
 	@Override
 	public void close() {
-		stopAllVoices();
+		closed = true;
+		//stopAllVoices();
+		allNotesOff();
 	}
 
+	public boolean done(){
+		//Has been closed and all voices stopped
+		if(!closed) return false;
+		return (releasedVoices.isEmpty());
+	}
+	
 }

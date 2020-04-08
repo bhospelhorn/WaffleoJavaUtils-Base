@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import waffleoRai_SoundSynth.AudioSampleStream;
 import waffleoRai_SoundSynth.BufferedFilter;
 import waffleoRai_SoundSynth.FunctionWindow;
+import waffleoRai_SoundSynth.SynthMath;
 
 public class WindowedSincInterpolator extends BufferedFilter{
 	
@@ -48,7 +49,7 @@ public class WindowedSincInterpolator extends BufferedFilter{
 		window_size = samplesPerSide;
 		
 		input_samplerate = in.getSampleRate();
-		sr_ratio = cents2FreqRatio(initCents);
+		sr_ratio = SynthMath.cents2FreqRatio(initCents);
 		target_samplerate = (sr_ratio) * input_samplerate;
 		
 		j_counter = 0;
@@ -134,24 +135,21 @@ public class WindowedSincInterpolator extends BufferedFilter{
 			future[future.length-1] = newSample;
 		}
 		
+		public boolean zeroed(){
+			if(current != 0) return false;
+			for(int i = 0; i < past.length; i++){
+				if(past[i] != 0) return false;
+			}
+			for(int i = 0; i < future.length; i++){
+				if(future[i] != 0) return false;
+			}
+			return true;
+		}
 	}
 	
 	/*----- Mathy -----*/
 	
-	public static double sinc(double in)
-	{
-		if(in == 0.0) return 1.0;
-		double pix = in * Math.PI;
-		
-		return Math.sin(pix)/pix;
-	}
 	
-	public static double cents2FreqRatio(int cents)
-	{
-		double exp = ((double)cents * -1.0) / 1200.0;
-		return Math.pow(2.0, exp);
-	}
-
 
 	/*----- Getters -----*/
 	
@@ -177,7 +175,7 @@ public class WindowedSincInterpolator extends BufferedFilter{
 	{
 		super.close();
 		this.input = input;
-		window.flushSavedValues();
+		//window.flushSavedValues();
 		
 		input_samplerate = (double)input.getSampleRate();
 		target_samplerate = (sr_ratio) * input_samplerate;
@@ -200,9 +198,9 @@ public class WindowedSincInterpolator extends BufferedFilter{
 	{
 		resetBuffer(false);
 		
-		sr_ratio = cents2FreqRatio(cents);
+		sr_ratio = SynthMath.cents2FreqRatio(cents);
 		target_samplerate = sr_ratio * input_samplerate;
-		window.flushSavedValues();
+		//window.flushSavedValues();
 		
 		super.setBufferHold(false);
 	}
@@ -293,8 +291,8 @@ public class WindowedSincInterpolator extends BufferedFilter{
 			double shift = (double)window_size;
 			//Do K
 			double val = 0.0;
-			if(sr_ratio < 1.0) val = sinc(sr_ratio * diff);
-			else val = sinc(diff);
+			if(sr_ratio < 1.0) val = SynthMath.sinc(sr_ratio * diff);
+			else val = SynthMath.sinc(diff);
 			val *= (double)swindows[c].getCurrentSample();
 			val *= window.getMultiplier(diff + shift);
 			sum += val;
@@ -304,16 +302,16 @@ public class WindowedSincInterpolator extends BufferedFilter{
 			{
 				//Before
 				double mydiff = diff - (s+1);
-				if(sr_ratio < 1.0) val = sinc(sr_ratio * mydiff);
-				else val = sinc(mydiff);
+				if(sr_ratio < 1.0) val = SynthMath.sinc(sr_ratio * mydiff);
+				else val = SynthMath.sinc(mydiff);
 				val *= (double)swindows[c].getPastSample(s);
 				val *= window.getMultiplier(mydiff + shift);
 				sum += val;
 				
 				//After
 				mydiff = diff + (s+1);
-				if(sr_ratio < 1.0) val = sinc(sr_ratio * mydiff);
-				else val = sinc(mydiff);
+				if(sr_ratio < 1.0) val = SynthMath.sinc(sr_ratio * mydiff);
+				else val = SynthMath.sinc(mydiff);
 				val *= (double)swindows[c].getFutureSample(s);
 				val *= window.getMultiplier(mydiff + shift);
 				sum += val;
@@ -351,4 +349,10 @@ public class WindowedSincInterpolator extends BufferedFilter{
 		altin = null;
 	}
 	
+	public boolean done(){
+		//Source is done and sample window is all 0s
+		if(!input.done()) return false;
+		for(SampleWindow sw : swindows) if(!sw.zeroed()) return false;
+		return true;
+	}
 }

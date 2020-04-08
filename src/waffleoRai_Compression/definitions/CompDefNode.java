@@ -1,6 +1,7 @@
 package waffleoRai_Compression.definitions;
 
 import waffleoRai_Files.FileClass;
+import waffleoRai_Files.FileTypeDefinition;
 import waffleoRai_Files.FileTypeNode;
 
 public class CompDefNode implements FileTypeNode{
@@ -28,4 +29,15 @@ public class CompDefNode implements FileTypeNode{
 	public String toString(){return def.getDescription();}
 	
 	public FileClass getFileClass(){return FileClass.COMPRESSED;}
+	
+	public FileTypeDefinition getTypeDefinition(){return null;}
+	public AbstractCompDef getCompressionDefinition(){return getDefinition();}
+	
+	public FileTypeNode copyChain(){
+
+		CompDefNode copy = new CompDefNode(def);
+		copy.child = child.copyChain();
+		
+		return copy;
+	}
 }

@@ -6,6 +6,8 @@ package waffleoRai_SoundSynth;
  * 2020.03.19 | 1.0.0
  * 		Initial Documentation
  * 
+ * 2020.04.06 | 1.1.0
+ * 		Added done() so automatic stopping for players is possible
  */
 
 /**
@@ -13,8 +15,8 @@ package waffleoRai_SoundSynth;
  * full samples stored in signed int values instead of as data stream bytes.
  * <br>This is set up to make it easier to apply filters downstream.
  * @author Blythe Hospelhorn
- * @version 1.0.0
- * @since March 19, 2020
+ * @version 1.1.0
+ * @since April 6, 2020
  */
 public interface AudioSampleStream {
 
@@ -74,4 +76,11 @@ public interface AudioSampleStream {
 	 */
 	public void close();
 	
+	/**
+	 * Check whether this sample stream has any samples remaining to
+	 * send to output. 
+	 * @return True if this sample doesn't loop and all of its
+	 * samples have been exhausted. False if playable samples remain.
+	 */
+	public boolean done();
 }

@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import javax.swing.JPanel;
 
-import waffleoRai_Utils.FileClass;
+import waffleoRai_Files.FileClass;
 import waffleoRai_Utils.StreamWrapper;
 
 public abstract class AbstractCompDef {

@@ -3,6 +3,7 @@ package waffleoRai_SoundSynth.general;
 import waffleoRai_SoundSynth.AudioSampleStream;
 import waffleoRai_SoundSynth.Filter;
 import waffleoRai_SoundSynth.FunctionWindow;
+import waffleoRai_SoundSynth.SynthMath;
 import waffleoRai_SoundSynth.general.WindowedSincInterpolator.SampleWindow;
 
 public class UnbufferedWindowedSincInterpolator implements Filter{
@@ -46,7 +47,7 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 		window_size = samplesPerSide;
 		
 		input_samplerate = in.getSampleRate();
-		sr_ratio = WindowedSincInterpolator.cents2FreqRatio(initCents);
+		sr_ratio = SynthMath.cents2FreqRatio(initCents);
 		target_samplerate = (sr_ratio) * input_samplerate;
 		
 		j_counter = 0;
@@ -94,10 +95,10 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 	
 	public void setPitchShift(int cents)
 	{
-		sr_ratio = WindowedSincInterpolator.cents2FreqRatio(cents);
+		sr_ratio = SynthMath.cents2FreqRatio(cents);
 		target_samplerate = sr_ratio * input_samplerate;
 		
-		window.flushSavedValues();
+		//window.flushSavedValues();
 		j_counter = 0;
 		k_counter = 0;
 		
@@ -111,7 +112,7 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 		target_samplerate = sr;
 		sr_ratio = target_samplerate/input_samplerate;
 		
-		window.flushSavedValues();
+		//window.flushSavedValues();
 		j_counter = 0;
 		k_counter = 0;
 	}
@@ -170,8 +171,8 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 			double shift = (double)window_size;
 			//Do K
 			double val = 0.0;
-			if(sr_ratio < 1.0) val = WindowedSincInterpolator.sinc(sr_ratio * diff);
-			else val = WindowedSincInterpolator.sinc(diff);
+			if(sr_ratio < 1.0) val = SynthMath.quicksinc(sr_ratio * diff);
+			else val = SynthMath.quicksinc(diff);
 			val *= (double)swindows[c].getCurrentSample();
 			val *= window.getMultiplier(diff + shift);
 			sum += val;
@@ -181,16 +182,16 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 			{
 				//Before
 				double mydiff = diff - (s+1);
-				if(sr_ratio < 1.0) val = WindowedSincInterpolator.sinc(sr_ratio * mydiff);
-				else val = WindowedSincInterpolator.sinc(mydiff);
+				if(sr_ratio < 1.0) val = SynthMath.quicksinc(sr_ratio * mydiff);
+				else val = SynthMath.quicksinc(mydiff);
 				val *= (double)swindows[c].getPastSample(s);
 				val *= window.getMultiplier(mydiff + shift);
 				sum += val;
 				
 				//After
 				mydiff = diff + (s+1);
-				if(sr_ratio < 1.0) val = WindowedSincInterpolator.sinc(sr_ratio * mydiff);
-				else val = WindowedSincInterpolator.sinc(mydiff);
+				if(sr_ratio < 1.0) val = SynthMath.quicksinc(sr_ratio * mydiff);
+				else val = SynthMath.quicksinc(mydiff);
 				val *= (double)swindows[c].getFutureSample(s);
 				val *= window.getMultiplier(mydiff + shift);
 				sum += val;
@@ -211,12 +212,18 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 		j_counter = 0;
 		k_counter = 0;
 		for(SampleWindow sw : swindows) sw.flush();
-		window.flushSavedValues();
+		//window.flushSavedValues();
 	}
 	
 	public void close()
 	{
 		reset();
+	}
+	
+	public boolean done(){
+		if(!input.done()) return false;
+		for(SampleWindow sw : swindows) if(!sw.zeroed()) return false;
+		return true;
 	}
 	
 }

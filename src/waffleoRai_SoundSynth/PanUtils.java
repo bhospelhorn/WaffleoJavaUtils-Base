@@ -37,7 +37,7 @@ public class PanUtils {
 			}
 			else
 			{
-				double amt = (double)(0x7F-pan)/(double)0x40;	
+				double amt = (double)(pan - 0x40)/(double)0x40;	
 				ratios[1] = calcAmpRatio_SameChannel_Mono2Stereo(amt);
 				ratios[0] = calcAmpRatio_OppChannel_Mono2Stereo(amt);
 			}
@@ -48,14 +48,16 @@ public class PanUtils {
 	
 	private static double calcAmpRatio_SameChannel_Mono2Stereo(double amt)
 	{
-		//y = x + 1.0
+		//y = x + 1
 		return amt + 1.0;
 	}
 	
 	private static double calcAmpRatio_OppChannel_Mono2Stereo(double amt)
 	{
-		//y = -1/(x-1)
-		return -1.0 / (amt - 1.0);
+		/*//y = -1/(x-1)
+		return -1.0 / (amt - 1.0);*/
+		//y = 1 - x
+		return 1.0 - amt;
 	}
 
 	public static double[][] getLRAmpRatios_Stereo2Stereo(byte pan)
@@ -110,7 +112,7 @@ public class PanUtils {
 			}
 			else
 			{
-				double amt = (double)(0x7F-pan)/(double)0x40;	
+				double amt = (double)(pan-0x40)/(double)0x40;	
 				out[0][0] = 1.0 - amt; 
 				out[0][1] = amt;
 			}	

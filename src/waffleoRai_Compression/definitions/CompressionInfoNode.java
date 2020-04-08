@@ -17,4 +17,6 @@ public class CompressionInfoNode {
 	public long getStartOffset(){return stOff;}
 	public long getLength(){return len;}
 
+	public void setStartOffset(long pos){stOff = pos;}
+	
 }

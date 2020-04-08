@@ -9,26 +9,38 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Enumeration;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 import javax.swing.tree.TreeNode;
+
+import waffleoRai_Files.FileClass;
 
 public class DirectoryNode extends FileNode{
 
 	/* --- Instance Variables --- */
 	
-	private Set<FileNode> children;
+	//private Set<FileNode> children;
+	private Map<String, FileNode> children;
 	private int endIndex;
+	
+	private FileClass fileclass;
+	
+	/* --- Interfaces --- */
+	
+	public interface TreeDumpListener{
+		public void onStartNodeDump(FileNode node);
+	}
 	
 	/* --- Construction --- */
 	
 	public DirectoryNode(DirectoryNode parent, String name)
 	{
 		super(parent, name);
-		children = new HashSet<FileNode>();
+		//children = new HashSet<FileNode>();
+		children = new HashMap<String, FileNode>();
 		endIndex = -1;
 	}
 	
@@ -39,7 +51,7 @@ public class DirectoryNode extends FileNode{
 	public List<FileNode> getChildren()
 	{
 		List<FileNode> list = new ArrayList<FileNode>(children.size() + 1);
-		list.addAll(children);
+		list.addAll(children.values());
 		Collections.sort(list);
 		return list;
 	}
@@ -93,7 +105,7 @@ public class DirectoryNode extends FileNode{
 		String cname = splitPath.pop();
 		while(cname.isEmpty()) cname = splitPath.pop();
 		//System.err.println("looking for child with name: " + cname);
-		for(FileNode child : children)
+		/*for(FileNode child : children)
 		{
 			if(cname.equals(child.getFileName()))
 			{
@@ -104,32 +116,69 @@ public class DirectoryNode extends FileNode{
 				}
 				else return null; //Files have no subfiles
 			}
+		}*/
+		FileNode child = children.get(cname);
+		if(child != null){
+			if(splitPath.isEmpty()) return child;
+			if(child.isDirectory())
+			{
+				return ((DirectoryNode)child).getNodeAt(splitPath);
+			}
+			else return null; //Files have no subfiles
 		}
 		
 		return null;
 	}
 	
+	public FileClass getFileClass(){
+		return fileclass;
+	}
+	
+	public boolean hasTypingMark(){
+		return (this.fileclass != null);
+	}
+	
 	/* --- Setters --- */
 	
-	protected void addChild(FileNode node){children.add(node);}
+	protected void changeChildName(FileNode child, String oldname){
+		children.remove(oldname);
+		children.put(child.getFileName(), child);
+	}
+	
+	protected void addChild(FileNode node){children.put(node.getFileName(), node);}
 	public void clearChildren(){children.clear();}
 	public void setEndIndex(int i){endIndex = i;}
 	
 	public FileNode removeChild(String childname)
 	{
-		Set<FileNode> new_children = new HashSet<FileNode>();
-		FileNode match = null;
-		for(FileNode child : children)
-		{
-			if(child.getFileName().equals(childname)) match = child;
-			else new_children.add(child);
-		}
-		return match;
+		return children.remove(childname);
 	}
 	
 	public boolean removeChild(FileNode child)
 	{
-		return children.remove(child);
+		FileNode match = children.remove(child.getFileName());
+		if(match != null) return true;
+		
+		//Look through values for it...
+		String rkey = null;
+		for(String k : children.keySet()){
+			match = children.get(k);
+			if(match == child){
+				rkey = k;
+				break;
+			}
+		}
+		
+		if(rkey != null){
+			children.remove(rkey);
+			return true;
+		}
+		
+		return false;
+	}
+	
+	public void setFileClass(FileClass fc){
+		fileclass = fc;
 	}
 	
 	/* --- TreeNode --- */
@@ -147,7 +196,7 @@ public class DirectoryNode extends FileNode{
 	@Override
 	public int getIndex(TreeNode node) 
 	{
-		if(children.contains(node))
+		if(children.containsValue(node))
 		{
 			List<FileNode> clist = this.getChildren();
 			int ccount = clist.size();
@@ -191,8 +240,9 @@ public class DirectoryNode extends FileNode{
 		copy.setSourcePath(this.getSourcePath());
 		copy.setEndIndex(this.getEndIndex());
 		
+		//TODO double check after fix FileNode
 		//Children
-		for(FileNode child : children) child.copy(copy);
+		for(FileNode child : children.values()) child.copy(copy);
 		
 		return copy;
 	}
@@ -210,7 +260,8 @@ public class DirectoryNode extends FileNode{
 		copy.setSourcePath(this.getSourcePath());
 		copy.setEndIndex(this.getEndIndex());
 		
-		for(FileNode child : children)
+		//TODO double check after fix FileNode
+		for(FileNode child : children.values())
 		{
 			if(child instanceof DirectoryNode) ((DirectoryNode)child).copyDirectoryTree(copy);
 		}
@@ -220,30 +271,20 @@ public class DirectoryNode extends FileNode{
 	
 	public boolean dumpTo(String path) throws IOException
 	{
-		if(path == null || path.isEmpty()) return false;
-		
-		if(!FileBuffer.directoryExists(path)) Files.createDirectories(Paths.get(path));
-		List<FileNode> children = getChildren();
+		return dumpTo(path, true, null);
+	}
 	
-		for(FileNode child : children)
-		{
-			String cpath = path + File.separator + child.getFileName();
-			if(child instanceof DirectoryNode)
-			{
-				((DirectoryNode)child).dumpTo(cpath);
-			}
-			else if(child instanceof LinkNode){}
-			else
-			{
-				FileBuffer buffer = child.loadDecompressedData();
-				buffer.writeFile(cpath);
-			}
-		}
-		
-		return true;
+	public boolean dumpTo(String path, TreeDumpListener listener) throws IOException
+	{
+		return dumpTo(path, true, listener);
 	}
 	
 	public boolean dumpTo(String path, boolean auto_decomp) throws IOException
+	{
+		return dumpTo(path, auto_decomp, null);
+	}
+	
+	public boolean dumpTo(String path, boolean auto_decomp, TreeDumpListener listener) throws IOException
 	{
 		if(path == null || path.isEmpty()) return false;
 		
@@ -252,10 +293,11 @@ public class DirectoryNode extends FileNode{
 	
 		for(FileNode child : children)
 		{
+			if(listener != null) listener.onStartNodeDump(child);
 			String cpath = path + File.separator + child.getFileName();
 			if(child instanceof DirectoryNode)
 			{
-				((DirectoryNode)child).dumpTo(cpath);
+				((DirectoryNode)child).dumpTo(cpath, auto_decomp, listener);
 			}
 			else if(child instanceof LinkNode){}
 			else

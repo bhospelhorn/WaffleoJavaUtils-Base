@@ -22,6 +22,11 @@ public class PCMSampleStream implements AudioSampleStream{
 	
 	public PCMSampleStream(RandomAccessSound src)
 	{
+		this(src, src.loops());
+	}
+	
+	public PCMSampleStream(RandomAccessSound src, boolean loopme)
+	{
 		source = src;
 		switch(source.getBitDepth())
 		{
@@ -34,7 +39,7 @@ public class PCMSampleStream implements AudioSampleStream{
 		}
 		
 		currentFrame = 0;
-		if(source.loops())
+		if(source.loops() && loopme)
 		{
 			loopStart = source.getLoopFrame();
 			loopEnd = source.getLoopEndFrame();
@@ -110,4 +115,9 @@ public class PCMSampleStream implements AudioSampleStream{
 		//Don't need to do anything
 	}
 
+	public boolean done(){
+		if(loopStart >= 0) return false; //Loops
+		return (currentFrame >= maxFrame);
+	}
+	
 }

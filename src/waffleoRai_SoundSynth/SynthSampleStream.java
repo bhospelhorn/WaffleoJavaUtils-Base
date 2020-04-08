@@ -58,6 +58,7 @@ public abstract class SynthSampleStream implements AudioSampleStream{
 	/*----- Pitch Manipulation -----*/
 	
 	public abstract byte getKeyPlayed();
+	public abstract void setPitchBendDirect(int cents);
 	public abstract void setPitchWheelLevel(int lvl);
 	public abstract void setLFO(Oscillator osc);
 	public abstract void removeLFO();
@@ -66,6 +67,10 @@ public abstract class SynthSampleStream implements AudioSampleStream{
 	
 	public abstract void releaseMe();
 	public abstract boolean releaseSamplesRemaining();
+	
+	public boolean done(){
+		return source.done();
+	}
 
 	/*----- ADSR/DAHDSR -----*/
 	

@@ -1167,4 +1167,11 @@ public class WAV implements RandomAccessSound{
 		return new PCMSampleStream(this);
 	}
 	
+	public AudioSampleStream createSampleStream(boolean loop){
+		return new PCMSampleStream(this, loop);
+	}
+	
+	public void setActiveTrack(int tidx){}
+	public int countTracks(){return 1;}
+	
 }

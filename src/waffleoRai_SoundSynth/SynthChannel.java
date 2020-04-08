@@ -16,6 +16,7 @@ public interface SynthChannel extends AudioSampleStream{
 	public void setVolume(byte vol);
 	public void setExpression(byte vol);
 	
+	public void setPitchBendDirect(int cents); //This adjusts range automatically!
 	public void setPitchWheelLevel(short value);
 	
 	public void allNotesOff();

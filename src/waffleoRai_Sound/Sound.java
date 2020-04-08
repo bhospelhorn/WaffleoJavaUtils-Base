@@ -10,7 +10,11 @@ public interface Sound {
 	public AudioFormat getFormat();
 	public AudioInputStream getStream();
 	public AudioSampleStream createSampleStream();
+	public AudioSampleStream createSampleStream(boolean loop);
 	//public AudioSampleStream createSampleStream(int sampleRateHz);
+	
+	public void setActiveTrack(int tidx);
+	public int countTracks();
 	
 	@Deprecated
 	public void jumpToFrame(int frame);
@@ -135,5 +139,4 @@ public interface Sound {
 		return (int)sl;
 	}
 
-	
 }
