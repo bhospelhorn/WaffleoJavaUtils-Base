@@ -628,8 +628,12 @@ public class FileTreeSaver {
 				child.scratch_field = off;
 				FileBuffer cname = new FileBuffer(3 + (child.getFileName().length()<< 1), true);
 				cname.addVariableLengthString(ENCODING, child.getFileName(), BinFieldSize.WORD, 2);
+				
+				FileBuffer meta = null;
 				if(child.hasMetadata()){
-					data.addVariableLengthString(ENCODING, serializeMetadata(child), BinFieldSize.DWORD, 2);
+					String str = serializeMetadata(child);
+					meta = new FileBuffer(5 + (str.length() << 1), true);
+					meta.addVariableLengthString(ENCODING, str, BinFieldSize.DWORD, 2);
 				}
 				
 				List<FileTypeNode> typechain = child.getTypeChainAsList();
@@ -640,11 +644,13 @@ public class FileTreeSaver {
 				if(child.sourceDataCompressed()){csz += (4 + (20 * ccsz)); flag |= 0x80;}
 				if(!typechain.isEmpty()){csz += (4 + (typechain.size() << 2)); flag |= 0x40;}
 				if(child.getEncryption() != null){csz += 12; flag |= 0x20;}
+				if(child.hasMetadata()){csz += meta.getFileSize(); flag |= 0x2000;}
 				//if(child.sourceDataCompressed()){csz += 8; flag |= 0x80;}
 				
 				FileBuffer cdat = new FileBuffer(csz, true);
 				cdat.addToFile((short)flag);
 				cdat.addToFile(cname);
+				if(meta != null) cdat.addToFile(meta);
 				
 				Integer srcidx = 0;
 				if(srcPathMap != null)
