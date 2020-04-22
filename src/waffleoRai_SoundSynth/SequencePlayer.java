@@ -1,5 +1,7 @@
 package waffleoRai_SoundSynth;
 
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -11,6 +13,8 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 
+import waffleoRai_SoundSynth.soundformats.WAVWriter;
+
 /*
  * UPDATES
  * 
@@ -19,7 +23,8 @@ import javax.sound.sampled.SourceDataLine;
  * 
  * 2020.04.06 | 1.1.0
  * 		Added done()
- * 
+ * 2020.04.21 | 1.2.0
+ * 		Implemented writeMixdownTo()
  */
 
 /**
@@ -37,8 +42,8 @@ import javax.sound.sampled.SourceDataLine;
  * can occur well before they are played back, noting the time coordinate of the event
  * relative to the current playback time coordinate is essential.
  * @author Blythe Hospelhorn
- * @version 1.1.0
- * @since April 6, 2020
+ * @version 1.2.0
+ * @since April 21, 2020
  */
 public abstract class SequencePlayer implements SynthPlayer{
 	
@@ -46,6 +51,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 	
 	private SourceDataLine playback_line;
 	private PlayerWorker worker;
+	private volatile boolean exporting = false;
 	
 	protected SynthChannel[] channels;
 	protected PlayerTrack[] tracks;
@@ -330,6 +336,16 @@ public abstract class SequencePlayer implements SynthPlayer{
 	protected void setTickResolution(int ticks_per_qn){
 		this.tpqn = ticks_per_qn;
 		updateTickRate();
+	}
+	
+	/**
+	 * Increment the number of times the sequence has looped.
+	 * This is for direct use of subclasses in case they want to bypass
+	 * the loop flag.
+	 * @since 1.2.0
+	 */
+	protected void incrementLoopNumber(){
+		myloops++;
 	}
 	
 	/*--- Listeners ---*/
@@ -848,6 +864,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 	 * @since 1.0.0
 	 */
 	public boolean isRunning(){
+		if(exporting) return true;
 		if(worker == null) return false;
 		return (worker.isRunning());
 	}
@@ -856,8 +873,99 @@ public abstract class SequencePlayer implements SynthPlayer{
 	
 	public void writeMixdownTo(String path, int loops) throws IOException
 	{
-		//TODO
+		//Uses current state of player (master vol and muted channels)
 		
+		//Check to make sure it is not running.
+		if(isRunning()) throw new IllegalStateException("Player cannot export while playing!");
+		
+		//Mark as active so another thread won't try to run it
+		synchronized(this){exporting = true;}
+		rewind();
+		
+		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(path));
+		WAVWriter writer = new WAVWriter(this, bos);
+		
+		double hzratio = (double)getSampleRate()/tickrate;
+		int nexttick = 0;
+		
+		boolean seqend = false;
+		while(!seqend && (myloops < loops))
+		{	
+			if(loopcount > 0){
+				if(myloops >= loopcount) break;
+			}
+			try{
+				//putNextSample(playback_line);
+				writer.write(1);
+
+				if(ctr_sampling++ >= nexttick)
+				{
+					//Do operations for this tick
+					for(int i = 0; i < tracks.length; i++){if(tracks[i] != null) tracks[i].onTick(tick);}
+					tick++;
+					
+					//Check flags set by MIDI operations...
+					//(Track end, tempo change, loop end)
+					for(int i = 0; i < tracks.length; i++){if(tracks[i] != null) {seqend = (seqend && tracks[i].trackEnd());};}
+					//for(PlayerTrack t : tracks){seqend = (seqend && t.trackEnd());};
+					if(seqend) break;
+					if(loopme)loopMe();
+					if(tempo_flag)
+					{
+						hzratio = (double)getSampleRate()/tickrate;
+						ctr_sampling = 0;
+						ctr_tick = 0;
+						tempo_flag = false;
+					}
+					else
+					{
+						//Find sampling coordinate of next tick
+						double nextraw = hzratio * (++ctr_tick);
+						nexttick = (int)Math.floor(nextraw);
+						if(nextraw == nexttick)
+						{
+							//Reset to 0
+							ctr_sampling = 0;
+							ctr_tick = 0;
+						}
+					}
+				}
+			}
+			catch(InterruptedException ex)
+			{
+				System.err.println("Unexpected interrupt occurred! Stopping synthesis!");
+				ex.printStackTrace();
+				bos.close();
+				synchronized(this){exporting = false;}
+				return;
+			}
+		}
+		
+		for(SynthChannel ch : channels) ch.allNotesOff();
+		boolean sremain = true;
+		while(sremain)
+		{
+			try{
+				//for (int i = 0; i < 16; i++) putNextSample(playback_line);
+				writer.write(1);
+			}
+			catch(InterruptedException ex)
+			{
+				System.err.println("Unexpected interrupt occurred! Stopping playback!");
+				ex.printStackTrace();
+				bos.close();
+				synchronized(this){exporting = false;}
+				return;
+			}
+			
+			sremain = false;
+			for(SynthChannel ch : channels){
+				if(ch.countActiveVoices() > 0) {sremain = true; break;}
+			}
+		}
+		
+		bos.close();
+		synchronized(this){exporting = false;}
 	}
 	
 	public void writeChannelTo(String pathPrefix, int loops, int ch) throws IOException

@@ -383,6 +383,7 @@ public class MidiMessageGenerator {
 	{
 		//System.err.println("Tempo: Input - " + bpm + " bpm | Beats Per QN: " + beatsPerQuarterNote);
 		int uspqn = MIDI.bpm2uspqn(bpm, beatsPerQuarterNote);
+		//System.err.println("Microseconds per quarter note: " + uspqn + " (0x" + Integer.toHexString(uspqn) + ")");
 		return genTempoSet(uspqn);
 	}
 	

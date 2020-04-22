@@ -9,5 +9,6 @@ public abstract class SoundbankDef implements FileTypeDefinition{
 	
 	public FileClass getFileClass(){return FileClass.SOUNDBANK;}
 	public abstract SynthBank getPlayableBank(FileNode file);
+	public abstract String getBankIDKey(FileNode file);
 
 }

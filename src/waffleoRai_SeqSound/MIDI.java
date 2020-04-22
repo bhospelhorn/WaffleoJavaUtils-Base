@@ -703,18 +703,18 @@ public class MIDI {
 	
 	public static int bpm2uspqn(int bpm, double beatsPerQuarterNote)
 	{
-		double n = 1.0/(double)bpm; 
-		n *= 60000000;
+		double n = 60000000.0/(double)bpm; 
 		//n is now us per beat
-		n /= beatsPerQuarterNote;
+		//n /= beatsPerQuarterNote;
 		return (int)Math.round(n);
 	}
 	
 	public static int uspqn2bpm(int uspqn, double beatsPerQuarterNote)
 	{
-		double n = uspqn * beatsPerQuarterNote;
-		n = n/60000000.0;
-		n = 1.0/n;
+		//double n = uspqn * beatsPerQuarterNote;
+		//n = n/60000000.0;
+		//n = 1.0/n;
+		double n = 60000000.0/(double)uspqn; 
 		return (int)Math.round(n);
 	}
 	

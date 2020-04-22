@@ -145,7 +145,7 @@ public class SoundbankNode implements TreeNode, Comparable<SoundbankNode>{
 	}
 
 	public boolean isLeaf() {
-		return !children.isEmpty();
+		return children.isEmpty();
 	}
 
 	public Enumeration<TreeNode> children() {
@@ -185,6 +185,20 @@ public class SoundbankNode implements TreeNode, Comparable<SoundbankNode>{
 	
 	public String getMetadataValue(String key){
 		return metadata.get(key);
+	}
+	
+	public void printMeToStderr(int tabs){
+		StringBuilder sb = new StringBuilder(tabs);
+		for(int i = 0; i < tabs; i++) sb.append('\t');
+		String tabstr = sb.toString();
+		
+		System.err.print(tabstr);
+		System.err.print(this.name);
+		System.err.println();
+		
+		for(SoundbankNode child : children.values()){
+			child.printMeToStderr(tabs+1);
+		}
 	}
 	
 }

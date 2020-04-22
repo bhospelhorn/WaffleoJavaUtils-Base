@@ -103,6 +103,14 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	
 	public FileTypeNode getTypeChainHead(){return type_chain;}
 	
+	public FileTypeNode getTypeChainTail(){
+		if(type_chain == null) return null;
+		FileTypeNode child = type_chain;
+		while(child.getChild() != null)child = child.getChild();
+		
+		return child;
+	}
+	
 	public List<FileTypeNode> getTypeChainAsList()
 	{
 		List<FileTypeNode> list = new LinkedList<FileTypeNode>();
