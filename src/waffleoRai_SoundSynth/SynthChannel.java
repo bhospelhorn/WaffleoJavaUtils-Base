@@ -22,6 +22,8 @@ public interface SynthChannel extends AudioSampleStream{
 	public void allNotesOff();
 	public int countActiveVoices();
 	
+	public void tagMe(boolean b, int i);
+	
 	//public int[] nextSample() throws InterruptedException;
 
 }

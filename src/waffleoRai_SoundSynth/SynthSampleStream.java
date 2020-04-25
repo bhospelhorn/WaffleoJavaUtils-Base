@@ -11,11 +11,14 @@ public abstract class SynthSampleStream implements AudioSampleStream{
 	
 	private int max_level;
 	
+	protected int debug_tag;
+	
 	/*----- Construction -----*/
 	
 	public SynthSampleStream(AudioSampleStream src)
 	{
 		source = src;
+		debug_tag = -1;
 		
 		switch(source.getBitDepth())
 		{
@@ -45,6 +48,12 @@ public abstract class SynthSampleStream implements AudioSampleStream{
 	
 	public int getMaxPossibleAmplitude(){
 		return max_level;
+	}
+	
+	public void tagMe(boolean b, int i){
+		//Debug method
+		if(b) debug_tag = i;
+		else debug_tag = -1;
 	}
 	
 	/*----- Volume Manipulation -----*/

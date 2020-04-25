@@ -677,6 +677,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 				}
 				try{
 					putNextSample(playback_line);
+					//System.err.println("sample");
 
 					if(ctr_sampling++ >= nexttick)
 					{
@@ -699,6 +700,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 							ctr_sampling = 0;
 							ctr_tick = 0;
 							tempo_flag = false;
+							nexttick = 0;
 						}
 						else
 						{
