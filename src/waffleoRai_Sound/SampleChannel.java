@@ -1,53 +1,22 @@
 package waffleoRai_Sound;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 
-public class SampleChannel implements Iterable<Integer>{
+public interface SampleChannel extends Iterable<Integer>{
 	
-	private List<Integer> samples;
+	public void addSample(int sample);
+	public void clearSamples();
+	public int countSamples();
+	public int getSample(int index);
+	public int getStorageBitDepth();
+	public int getUsedBitDepth();
 	
-	private SampleChannel(){}
+	public void setUsedBitDepth(int bits);
+	public void setSample(int idx, int value);
 	
-	public SampleChannel(SampleChannel src)
-	{
-		samples = new ArrayList<Integer>(src.samples.size() + 2);
-		samples.addAll(src.samples);
-	}
+	public int[] toArray();
+	public List<Integer> toList();
 	
-	public static SampleChannel createArrayChannel(int initSize)
-	{
-		SampleChannel c = new SampleChannel();
-		c.samples = new ArrayList<Integer>(initSize+1);
-		return c;
-	}
-	
-	public static SampleChannel createLinkedChannel()
-	{
-		SampleChannel c = new SampleChannel();
-		c.samples = new LinkedList<Integer>();
-		return c;
-	}
-	
-	@Override
-	public Iterator<Integer> iterator() 
-	{
-		return samples.iterator();
-	}
-
-	public void addSample(int sample){samples.add(sample);}
-	public void clearSamples(){samples.clear();}
-	public int countSamples(){return samples.size();}
-	public int getSample(int index){return samples.get(index);}
-	
-	public int[] toArray()
-	{
-		int[] arr = new int[samples.size()];
-		int i = 0;
-		for(Integer s : samples) {arr[i] = s; i++;}
-		return arr;
-	}
+	public SampleChannel copy();
 	
 }

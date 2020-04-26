@@ -12,20 +12,11 @@ public interface Sound {
 	public AudioSampleStream createSampleStream();
 	public AudioSampleStream createSampleStream(boolean loop);
 	//public AudioSampleStream createSampleStream(int sampleRateHz);
+
 	
 	public void setActiveTrack(int tidx);
 	public int countTracks();
 	
-	@Deprecated
-	public void jumpToFrame(int frame);
-	@Deprecated
-	public void rewind();
-	@Deprecated
-	public int nextSample(int channel);
-	@Deprecated
-	public int samplesLeft(int channel);
-	@Deprecated
-	public boolean hasSamplesLeft(int channel);
 	public int totalFrames();
 	public int totalChannels();
 	
@@ -44,7 +35,7 @@ public interface Sound {
 	public int getUnityNote();
 	public int getFineTune();
 	
-	public void flushBuffer();
+	//public void flushBuffer();
 	
 	public static int scaleSampleUp8Bits(int sample, BitDepth bits)
 	{

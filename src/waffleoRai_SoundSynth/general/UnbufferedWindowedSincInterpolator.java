@@ -12,7 +12,7 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 	
 	/*----- InstanceVariables -----*/
 	
-	private boolean use_target_samplerate;
+	//private boolean use_target_samplerate;
 	
 	private AudioSampleStream input;
 	
@@ -20,8 +20,10 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 	
 	private double input_samplerate;
 	private double target_samplerate;
+	private double output_samplerate;
 
 	private double sr_ratio; //outputSR/inputSR
+	private double inv_ratio; //Inverted
 	private int j_counter;
 	private int k_counter;
 	private SampleWindow[] swindows;
@@ -47,8 +49,11 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 		window_size = samplesPerSide;
 		
 		input_samplerate = in.getSampleRate();
+		output_samplerate = input_samplerate;
 		sr_ratio = SynthMath.cents2FreqRatio(initCents);
 		target_samplerate = (sr_ratio) * input_samplerate;
+		sr_ratio *= (output_samplerate/input_samplerate);
+		inv_ratio = 1.0/sr_ratio;
 		
 		j_counter = 0;
 		k_counter = 0;
@@ -67,8 +72,9 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 	
 	public float getSampleRate() 
 	{
-		if(use_target_samplerate) return (float)target_samplerate;
-		return (float) input_samplerate;
+		//if(use_target_samplerate) return (float)target_samplerate;
+		//return (float) input_samplerate;
+		return (float)output_samplerate;
 	}
 
 	public int getBitDepth() 
@@ -82,6 +88,11 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 	}
 		
 	/*----- Setters -----*/
+	
+	private void adjustSRRatio(){
+		sr_ratio = (target_samplerate/input_samplerate) * (output_samplerate/input_samplerate);
+		inv_ratio = 1.0/sr_ratio;
+	}
 	
 	public void setInput(AudioSampleStream input) 
 	{
@@ -97,6 +108,8 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 	{
 		sr_ratio = SynthMath.cents2FreqRatio(cents);
 		target_samplerate = sr_ratio * input_samplerate;
+		sr_ratio *= (output_samplerate/input_samplerate);
+		inv_ratio = 1.0/sr_ratio;
 		
 		//window.flushSavedValues();
 		j_counter = 0;
@@ -109,17 +122,12 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 
 	public void setOutputSampleRate(float sr)
 	{
-		target_samplerate = sr;
-		sr_ratio = target_samplerate/input_samplerate;
+		output_samplerate = sr;
+		adjustSRRatio();
 		
 		//window.flushSavedValues();
 		j_counter = 0;
 		k_counter = 0;
-	}
-	
-	public void setUseTargetSampleRate(boolean b)
-	{
-		this.use_target_samplerate = b;
 	}
 	
 	/*----- Filter -----*/
@@ -135,7 +143,8 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 	
 	public int[] nextSample() throws InterruptedException
 	{
-		double J = (double)j_counter * (input_samplerate/target_samplerate);
+		//double J = (double)j_counter * (input_samplerate/target_samplerate);
+		double J = (double)j_counter * inv_ratio;
 		double K = Math.round(J);
 		while(K < k_counter)K++; //Make sure K is present or future sample
 		

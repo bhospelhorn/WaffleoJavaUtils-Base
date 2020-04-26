@@ -149,6 +149,7 @@ public class DefaultSynthChannel implements SynthChannel{
 	
 	private void freeVoice(SynthSampleStream str)
 	{
+		if(str == null) return;
 		str.close();
 		vox_count--;
 	}
@@ -247,13 +248,19 @@ public class DefaultSynthChannel implements SynthChannel{
 	
 	public void setExpression(byte vol)
 	{
-		ch_exp = (double)vol/(double)0x7F;
+		double ratio = (double)vol/127.0;
+		//ch_exp = (ratio * ratio);
+		ch_exp = ratio;
+		//ch_exp = (double)vol/(double)0x7F;
 		//System.err.println("Channel volume set: " + ch_vol);
 	}
 	
 	public void setVolume(byte vol)
 	{
-		ch_vol = (double)vol/(double)0x7F;
+		double ratio = (double)vol/127.0;
+		//ch_vol = (ratio * ratio);
+		ch_vol = ratio;
+		//ch_vol = (double)vol/(double)0x7F;
 		//System.err.println("Channel volume set: " + ch_vol);
 	}
 	
@@ -318,7 +325,10 @@ public class DefaultSynthChannel implements SynthChannel{
 		double[] sum = new double[2];
 		for(SynthSampleStream voice : voices.values())
 		{
-			double mono = (double)voice.nextSample()[0];
+			if(voice == null) continue;
+			int[] s = voice.nextSample();
+			if(s == null) s = new int[0];
+			double mono = (double)s[0];
 			//System.err.println("Voice mono output: " + mono);
 			if(voice.getBitDepth() != bitDepth)
 			{

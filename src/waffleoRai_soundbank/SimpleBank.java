@@ -287,4 +287,6 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 		return null;
 	}
 	
+	public void free(){samples.clear();}
+	
 }

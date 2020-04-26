@@ -40,6 +40,9 @@ public class BasicSoundSampleMap implements SoundSampleMap{
 		return s.createSampleStream();
 	}
 	
-	
+	public void free(){
+		map.clear();
+		map = null;
+	}
 
 }

@@ -6,4 +6,6 @@ public interface SoundSampleMap {
 	public AudioSampleStream openSampleStream(int index);
 	public AudioSampleStream openSampleStream(int index0, int index1);
 
+	public void free();
+	
 }

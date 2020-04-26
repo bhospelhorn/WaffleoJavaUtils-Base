@@ -874,6 +874,26 @@ public class WAV implements RandomAccessSound{
 	
 	/* ----- Sound Interface ----- */
 	
+	public byte[] frame2Bytes(int frame){
+		int bypers = bitDepth >>> 3;
+		int fsz = totalChannels() * bypers;
+		if(fsz < 1) return null;
+		byte[] b = new byte[fsz];
+		
+		int i = 0;
+		for(int c = 0; c < data.length; c++){
+			int s = 0;
+			if(data[c] != null) s = data[c].getSample(frame);
+			int shift = 0;
+			for(int j = 0; j < bypers; j++){
+				b[i++] = (byte)((s >>> shift) & 0xFF);
+				shift += 8;
+			}
+		}
+		
+		return b;
+	}
+	
 	@Override
 	public AudioFormat getFormat() {
 		int ch = data.length;
@@ -892,7 +912,7 @@ public class WAV implements RandomAccessSound{
 		return ais;
 	}
 
-	@Override
+	@Deprecated
 	public void jumpToFrame(int frame) 
 	{
 		if (frame < 0) return;
@@ -902,7 +922,7 @@ public class WAV implements RandomAccessSound{
 		}
 	}
 
-	@Override
+	@Deprecated
 	public void rewind() 
 	{
 		for (Channel c : data)
@@ -911,7 +931,7 @@ public class WAV implements RandomAccessSound{
 		}
 	}
 
-	@Override
+	@Deprecated
 	public int nextSample(int channel) 
 	{
 		if (channel < 0) throw new IndexOutOfBoundsException();
@@ -940,7 +960,7 @@ public class WAV implements RandomAccessSound{
 		return sample;
 	}
 
-	@Override
+	@Deprecated
 	public int samplesLeft(int channel) 
 	{
 		if (this.loops()) return -1;
@@ -952,7 +972,7 @@ public class WAV implements RandomAccessSound{
 		return c.countSamples() - fi;
 	}
 
-	@Override
+	@Deprecated
 	public boolean hasSamplesLeft(int channel)
 	{
 		if (this.loops()) return true;
@@ -994,12 +1014,6 @@ public class WAV implements RandomAccessSound{
 		return sl.end;
 	}
 
-	@Override
-	public void flushBuffer() 
-	{
-		//Does nothing
-	}
-	
 	public int[] getRawSamples(int channel)
 	{
 		if (channel < 0) throw new IndexOutOfBoundsException();
