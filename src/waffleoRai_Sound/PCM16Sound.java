@@ -63,7 +63,6 @@ public class PCM16Sound implements PCMSound{
 		snd.constructCore(channels, frameAlloc);
 		snd.sampleRate = src.getSampleRate();
 		
-		
 		//Copy samples
 		for(int f = 0; f < frameAlloc; f++){
 			try {
@@ -108,10 +107,14 @@ public class PCM16Sound implements PCMSound{
 	public void setSampleRate(float sample_rate){sampleRate = sample_rate;}
 	public void setLoopStart(int pos){loopStart = pos;}
 	public void setLoopEnd(int pos){loopEnd = pos;}
-	public void setLoopPoints(int stpos, int edpos){loopStart = stpos; loopEnd = edpos;}
 	public void clearLoop(){loopStart = -1; loopEnd = -1;}
 	public void setUnityKey(byte note){unityKey = note;}
 	public void setFineTune(int cents){this.fineTune_cents = cents;}
+	
+	public void setLoopPoints(int stpos, int edpos){
+		loopStart = stpos; loopEnd = edpos;
+		//System.err.println("Loop points set: " + loopStart + " - " + loopEnd);
+	}
 	
 	/*----- Data Views/Transform -----*/
 	

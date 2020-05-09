@@ -66,6 +66,7 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 		//Slide window to frame first sample as current sample
 		for(int i = 0; i < window_size; i++) slideWindows();
 
+		//System.err.println("Input sample rate: " + input_samplerate);
 	}
 	
 	/*----- Getters -----*/
@@ -180,8 +181,10 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 			double shift = (double)window_size;
 			//Do K
 			double val = 0.0;
-			if(sr_ratio < 1.0) val = SynthMath.quicksinc(sr_ratio * diff);
-			else val = SynthMath.quicksinc(diff);
+			//if(sr_ratio < 1.0) val = SynthMath.quicksinc(sr_ratio * diff);
+			//else val = SynthMath.quicksinc(diff);
+			if(sr_ratio < 1.0) val = SynthMath.sinc(sr_ratio * diff);
+			else val = SynthMath.sinc(diff);
 			val *= (double)swindows[c].getCurrentSample();
 			val *= window.getMultiplier(diff + shift);
 			sum += val;

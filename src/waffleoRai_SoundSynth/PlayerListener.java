@@ -5,6 +5,8 @@ package waffleoRai_SoundSynth;
  * 
  * 2020.03.19 | 1.0.0
  * 		Initial Documentation
+ * 2020.04.27 | 1.1.0
+ * 		Added onSequenceEnd()
  * 
  */
 
@@ -12,8 +14,8 @@ package waffleoRai_SoundSynth;
  * An interface for an object that listens to state changes and events fired
  * by the activity of a SynthPlayer.
  * @author Blythe Hospelhorn
- * @version 1.0.0
- * @since March 19, 2020
+ * @version 1.1.0
+ * @since April 27, 2020
  *
  */
 public interface PlayerListener{
@@ -45,5 +47,12 @@ public interface PlayerListener{
 	 * @since 1.0.0
 	 */
 	public void sendLevel(int[] level, long time);
+	
+	/**
+	 * This method should be called when the player finishes playing a
+	 * non-looping sequence and the player worker thread terminates.
+	 * @since 1.1.0
+	 */
+	public void onSequenceEnd();
 
 }

@@ -33,16 +33,17 @@ public class BlackmanWindow implements FunctionWindow{
 		//Double check = precalculated.get(n);
 		//if(check != null) return check;
 		
-		/*double val = 0.42;
+		double val = 0.42;
 		double twopin = 2.0 * Math.PI * n;
 		val -= 0.5 * Math.cos(twopin/Nm1);
-		val += 0.08 * Math.cos((twopin * 2.0)/Nm1);*/
+		val += 0.08 * Math.cos((twopin * 2.0)/Nm1);
+		return val;
 		//precalculated.put(n, val);
 		
-		double frac = n/Nm1;
+		/*double frac = n/Nm1;
 		frac -= (long)frac;
 		int idx = Math.abs((int)Math.round(frac * 255.0));
-		return coeff_tbl[idx];
+		return coeff_tbl[idx];*/
 	}
 
 }

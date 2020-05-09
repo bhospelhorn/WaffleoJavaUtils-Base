@@ -10,6 +10,8 @@ public class Attack {
 	
 	private int tblSR;
 	private int[] iTable;
+	
+	private double start_lvl;
 
 	protected Attack()
 	{
@@ -33,6 +35,10 @@ public class Attack {
 		return eMode;
 	}
 	
+	public double getStartLevel(){
+		return start_lvl;
+	}
+	
 	public void setTime(int millis)
 	{
 		iTime = millis;
@@ -43,6 +49,10 @@ public class Attack {
 	{
 		eMode = mode;
 		iTable = null;
+	}
+	
+	public void setStartLevel(double lvl){
+		start_lvl = lvl;
 	}
 	
 	public static Attack getDefault()
@@ -118,11 +128,11 @@ public class Attack {
 		int samps = (int)Math.round(((double)sampleRate * (double)iTime) / 1000.0);
 		if(eMode == ADSRMode.LINEAR_ENVELOPE)
 		{
-			return new ADSRLinearAmpRamper(true, 0.0, 1.0, samps);
+			return new ADSRLinearAmpRamper(true, start_lvl, 1.0, samps);
 		}
 		else if(eMode == ADSRMode.LINEAR_DB)
 		{
-			return new ADSRLinearDBRamper(true, 0.0, 1.0, samps);
+			return new ADSRLinearDBRamper(true, start_lvl, 1.0, samps);
 		}
 		
 		return null;

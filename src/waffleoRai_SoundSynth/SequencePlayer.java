@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
@@ -25,6 +26,8 @@ import waffleoRai_SoundSynth.soundformats.WAVWriter;
  * 		Added done()
  * 2020.04.21 | 1.2.0
  * 		Implemented writeMixdownTo()
+ * 2020.04.22 | 1.2.1
+ * 		Oopsy doopsy, worker wasn't closing audio line before terminating :P
  */
 
 /**
@@ -42,8 +45,8 @@ import waffleoRai_SoundSynth.soundformats.WAVWriter;
  * can occur well before they are played back, noting the time coordinate of the event
  * relative to the current playback time coordinate is essential.
  * @author Blythe Hospelhorn
- * @version 1.2.0
- * @since April 21, 2020
+ * @version 1.2.1
+ * @since April 27, 2020
  */
 public abstract class SequencePlayer implements SynthPlayer{
 	
@@ -493,6 +496,16 @@ public abstract class SequencePlayer implements SynthPlayer{
 		for(ChannelStateListener l : list) l.onVolumeSet(val, time_coord);
 	}
 	
+	/**
+	 * Notify listeners that the sequence playback has ended
+	 * (end of sequence was reached) and playback has auto-terminated.
+	 * @since 1.2.1
+	 */
+	protected void notifyListenersOfSeqEnd(){
+		if(listeners == null) return;
+		for(PlayerListener l : listeners) l.onSequenceEnd();
+	}
+	
 	public void addChannelListener(int ch_idx, ChannelStateListener l){
 		if(ch_listeners == null) ch_listeners = new HashMap<Integer, List<ChannelStateListener>>();
 		List<ChannelStateListener> list = ch_listeners.get(ch_idx);
@@ -552,7 +565,9 @@ public abstract class SequencePlayer implements SynthPlayer{
 		loopme = false;
 		tick = looptick;
 		myloops++;
-		for(PlayerTrack t : tracks) t.resetTo(looptick);
+		for(PlayerTrack t : tracks){
+			if(t!= null) t.resetTo(looptick);
+		}
 	}
 	
 	public void rewind()
@@ -646,12 +661,15 @@ public abstract class SequencePlayer implements SynthPlayer{
 		@Override
 		public void run() 
 		{
+			//System.err.println("Player worker starting!");
 			running = true;
 			try{playback_line.open();}
 			catch(LineUnavailableException ex)
 			{
 				ex.printStackTrace();
 				end();
+				notifyListenersOfSeqEnd();
+				//System.err.println("Player worker returning (cp 1)");
 				return;
 			}
 			
@@ -659,6 +677,8 @@ public abstract class SequencePlayer implements SynthPlayer{
 			
 			double hzratio = (double)getSampleRate()/tickrate;
 			int nexttick = 0;
+			//System.err.println("sample rate = " + getSampleRate());
+			//System.err.println("tickrate = " + tickrate);
 			//System.err.println("hzratio = " + hzratio);
 			//System.err.println("nexttick = " + nexttick);
 			
@@ -678,7 +698,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 				try{
 					putNextSample(playback_line);
 					//System.err.println("sample");
-
+					//System.err.println("nexttick = " + nexttick);
 					if(ctr_sampling++ >= nexttick)
 					{
 						//Do operations for this tick
@@ -701,6 +721,9 @@ public abstract class SequencePlayer implements SynthPlayer{
 							ctr_tick = 0;
 							tempo_flag = false;
 							nexttick = 0;
+							//System.err.println("sample rate = " + getSampleRate());
+							//System.err.println("tickrate = " + tickrate);
+							//System.err.println("hzratio = " + hzratio);
 						}
 						else
 						{
@@ -713,6 +736,9 @@ public abstract class SequencePlayer implements SynthPlayer{
 								ctr_sampling = 0;
 								ctr_tick = 0;
 							}
+							//System.err.println("sample rate = " + getSampleRate());
+							//System.err.println("tickrate = " + tickrate);
+							//System.err.println("hzratio = " + hzratio);
 							//System.err.println("nexttick = " + nexttick);
 						}
 					}
@@ -721,24 +747,33 @@ public abstract class SequencePlayer implements SynthPlayer{
 				{
 					System.err.println("Unexpected interrupt occurred! Stopping playback!");
 					ex.printStackTrace();
-					end(); return;
+					end();
+					notifyListenersOfSeqEnd();
+					//System.err.println("Player worker returning (cp 2)");
+					return;
 				}
 			}
 			
+			//System.err.println("Player worker-- terminate command received!");
 			for(SynthChannel ch : channels) ch.allNotesOff();
 			boolean sremain = true;
 			while(sremain)
 			{
 				try{
-					for (int i = 0; i < 16; i++) putNextSample(playback_line);
+					//Copy a handful of samples
+					for(int i = 0; i < 128; i++) putNextSample(playback_line);
 				}
 				catch(InterruptedException ex)
 				{
 					System.err.println("Unexpected interrupt occurred! Stopping playback!");
 					ex.printStackTrace();
-					end(); return;
+					end(); 
+					notifyListenersOfSeqEnd();
+					//System.err.println("Player worker returning (cp 3)");
+					return;
 				}
 				
+				//Check to see if channels are clear
 				sremain = false;
 				for(SynthChannel ch : channels)
 				{
@@ -746,6 +781,9 @@ public abstract class SequencePlayer implements SynthPlayer{
 				}
 			}
 			
+			end();
+			if(seqend)notifyListenersOfSeqEnd();
+			//System.err.println("Player worker returning (cp 4)");
 		}
 		
 		private void end()
@@ -820,7 +858,8 @@ public abstract class SequencePlayer implements SynthPlayer{
 		
 		worker = new PlayerWorker();
 		Thread t = new Thread(worker);
-		t.setName("SeqpPlayer_WorkerThread");
+		Random r = new Random();
+		t.setName("SeqpPlayer_WorkerThread_0x" + Integer.toHexString(r.nextInt()));
 		t.start();
 	}
 	
@@ -966,6 +1005,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 			}
 		}
 		
+		writer.complete();
 		bos.close();
 		synchronized(this){exporting = false;}
 	}

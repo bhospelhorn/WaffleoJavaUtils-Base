@@ -2,6 +2,9 @@ package waffleoRai_SoundSynth;
 
 public class SynthMath {
 	
+	private static int SINTABLE_RES = 0x100000;
+	private static double SINTABLE_RES_D = (double)SINTABLE_RES;
+	
 	private static double[] sin_table;
 	//private static double[] factor_table;
 	
@@ -13,14 +16,57 @@ public class SynthMath {
 		return Math.sin(pix)/pix;
 	}
 	
+	//Indexes up to 1/4 the period (so up to pi/2)
 	private static void buildSinTable(){
-		sin_table = new double[0x8000];
-		
-		for(int i = 0; i < 0x8000; i++){
-			double frac = (double)i / (double)0x7FFF;
+
+		sin_table = new double[SINTABLE_RES];
+		for(int i = 0; i < SINTABLE_RES; i++){
+			double frac = (double)i/SINTABLE_RES_D/4.0;
 			double val = frac * 2.0 * Math.PI;
 			sin_table[i] = Math.sin(val);
 		}
+		
+	}
+	
+	/**
+	 * Get the sine of the input from a precalculated table.
+	 * <br><b>IMPORTANT:</b> Input must be in sine cycles, NOT radians!
+	 * The purpose of this is for simple indexing and to reduce calculation
+	 * time!
+	 * @param in Input value in sine cycles ie. 1.0 is the end of one period, or
+	 * 2*PI in a plain sine function.
+	 * @return The estimated sine value at that cycle point. In other words,
+	 * sin(2*PI*in).
+	 */
+	public static double quicksin(double in){
+		if(sin_table == null) buildSinTable();
+
+		//Get just the fraction
+		double frac = in - (long)in;
+		//Flip if negative
+		if (in < 0) frac += 1.0;
+		//Derive index
+		boolean n = false;
+		if(frac > 0.5){
+			n = true;
+			frac -= 0.5;
+		}
+		if(frac > 0.25) frac = 0.5 - frac;
+		
+		int idx = (int)(Math.round(frac * SINTABLE_RES_D));
+		
+		double sin = sin_table[idx];
+		if(n) sin *= -1.0;
+		return sin;
+		
+		/*long whole = (long)in;
+		double frac = in - whole;
+		//int idx = (int)Math.round(frac * (double)0x4000);
+		//if(whole % 2 != 0) idx += 0x3FFF;
+		int idx = (int)Math.round(frac * (double)0x7FFF);
+		double sin = sin_table[idx];
+		
+		return sin;*/
 	}
 	
 	public static double quicksinc(double in){
@@ -28,11 +74,17 @@ public class SynthMath {
 		if(sin_table == null) buildSinTable();
 		
 		in = Math.abs(in);
-		long whole = (long)in;
-		double frac = in - whole;
-		int idx = (int)Math.round(frac * (double)0x4000);
+		
+		//long whole = (long)in;
+		//double frac = in - whole;
+		/*int idx = (int)Math.round(frac * (double)0x4000);
 		if(whole % 2 != 0) idx += 0x3FFF;
 		double sin = sin_table[idx];
+	
+		return sin/(Math.PI * in);*/
+		
+		double val = in/2.0;
+		double sin = quicksin(val);
 		
 		return sin/(Math.PI * in);
 	}
@@ -43,5 +95,35 @@ public class SynthMath {
 		return Math.pow(2.0, exp);
 	}
 
+	public static double quickTriangle(double in){
+
+		double frac = (long)in - in;
+		if(frac <= 0.25){
+			return frac * 4.0;
+		}
+		else if(frac <= 0.75){
+			return (frac * -4.0) + 2.0;
+		}
+		else{
+			return (frac * 4.0) - 4.0;
+		}
+		
+	}
+	
+	public static double quickSaw(double in){
+		double frac = (long)in - in;
+		if(frac <= 0.5){
+			return frac * 2.0;
+		}
+		else{
+			return (frac * 2.0) - 2.0;
+		}
+	}
+	
+	public static double quickSquare(double in){
+		double frac = (long)in - in;
+		if(frac <= 0.5) return 1.0;
+		else return -1.0;
+	}
 
 }

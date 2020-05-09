@@ -1,14 +1,14 @@
 package waffleoRai_SoundSynth.general;
 
+import java.util.Collection;
 import java.util.Deque;
 import java.util.LinkedList;
-import java.util.Map;
-import java.util.TreeMap;
 
 import waffleoRai_SoundSynth.PanUtils;
 import waffleoRai_SoundSynth.SynthChannel;
 import waffleoRai_SoundSynth.SynthProgram;
 import waffleoRai_SoundSynth.SynthSampleStream;
+import waffleoRai_SoundSynth.VoiceMap;
 
 public class DefaultSynthChannel implements SynthChannel{
 	
@@ -23,10 +23,13 @@ public class DefaultSynthChannel implements SynthChannel{
 	
 	private boolean closed = false;
 	
-	private Map<Byte, SynthSampleStream> voices;
+	//private Map<Byte, SynthSampleStream> voices;
 	//private Map<Byte, Deque<SynthSampleStream>> releasedVoices;
-	private Deque<SynthSampleStream> releasedVoices;
+	//private Deque<SynthSampleStream> releasedVoices;
 	//private Deque<Byte> onnotes;
+	
+	private VoiceMap voices;
+	private Deque<SynthSampleStream> releasedVoices;
 	
 	private int max_vox;
 	private int vox_count;
@@ -46,14 +49,24 @@ public class DefaultSynthChannel implements SynthChannel{
 	private boolean polyphonic;
 	
 	private int debug_tag;
+	private Thread ctrlthread;
+	
+	/*private int[][] ct_table; //For each note, counts note on, note off, and how many are on right now
+	private int tot_on;
+	private int tot_off;
+	private int tot_freed;*/
 	
 	/* ----- Constants ----- */
 	
 	public DefaultSynthChannel(int outSampleRate, int bitDepth)
 	{
 		debug_tag = -1;
-		voices = new TreeMap<Byte, SynthSampleStream>();
+		//ct_table = new int[128][3];
+		
+		//voices = new TreeMap<Byte, SynthSampleStream>();
 	//	releasedVoices = new TreeMap<Byte, Deque<SynthSampleStream>>();
+		voices = new TreeVoiceMap();
+		//voices = new ArrayVoiceMap();
 		releasedVoices = new LinkedList<SynthSampleStream>();
 		//onnotes = new LinkedList<Byte>();
 		ch_vol = 1.0;
@@ -88,36 +101,50 @@ public class DefaultSynthChannel implements SynthChannel{
 		}
 	}
 	
+	/* ----- Debug ----- */
+	
+	protected void threadCheck(){
+		Thread me = Thread.currentThread();
+		if(ctrlthread == null){
+			ctrlthread = me;
+			System.err.println("Primary thread for this channel: " + ctrlthread.getName());
+		}
+		else{
+			if(ctrlthread != me){
+				System.err.println("Unauthorized thread access: " + me.getName());
+			}
+		}
+	}
+	
+	protected void printCountTables(){
+		//System.err.println("Total Note On: " + tot_on);
+		//System.err.println("Total Note Off: " + tot_off);
+		//System.err.println("Total Voices Freed: " + tot_freed);
+		System.err.println("Current Notes On: " + voices.countVoices());
+		System.err.println("Release Pending: " + releasedVoices.size());
+		System.err.println("Vox Count: " + vox_count);
+		//System.err.println("Map Recorded Notes On: " + voices.getTotalAdded());
+		//System.err.println("Map Recorded Notes Off: " + voices.getTotalRemoved());
+		//System.err.println("Map Recorded Net Turnover: " + voices.getNetVoiceTurnover());
+		System.err.println("\nNOTE\tOn\tOff\tPlaying");
+		for(int i = 0; i < 128; i++){
+			//System.err.println(i + "\t" + ct_table[i][0] + "\t" + ct_table[i][1] + "\t" + ct_table[i][2]);
+		}
+	}
+	
 	/* ----- Getters ----- */
 	
-	public int getChannelCount()
-	{
-		return 2;
-	}
-	
-	public int getCurrentBankIndex()
-	{
-		return bidx;
-	}
-	
-	public float getSampleRate() 
-	{
-		return sample_rate;
-	}
-
-	public int getBitDepth() {
-		return bitDepth;
-	}
-	
-	public int getDebugTag(){
-		return debug_tag;
-	}
+ 	public int getChannelCount(){return 2;}
+	public int getCurrentBankIndex(){return bidx;}
+	public float getSampleRate() {return sample_rate;}
+	public int getBitDepth() {return bitDepth;}
+	public int getDebugTag(){return debug_tag;}
 	
 	/* ----- Setters ----- */
 	
 	public void tagMe(boolean b, int i){
 		//Debug method
-		if(b) debug_tag = i;
+		if(b) {debug_tag = i;}
 		else debug_tag = -1;
 	}
 	
@@ -135,33 +162,26 @@ public class DefaultSynthChannel implements SynthChannel{
 		else{
 			//We're gonna have to find a note to turn off
 			//For now, just take the lowest note
-			for(byte i = 0; i < 128; i++){
-				if(voices.containsKey(i)){
-					SynthSampleStream voice = voices.remove(i);	
-					//It does not get a release.
-					//This method only called when max voices hit
-					freeVoice(voice);
-					break;
-				}
-			}
+			//printCountTables();
+			SynthSampleStream voice = voices.removeOneVoice();
+			freeVoice(voice);
 		}
 	}
 	
 	private void freeVoice(SynthSampleStream str)
 	{
-		if(str == null) return;
+		//if(str == null) return;
 		str.close();
 		vox_count--;
+		//tot_freed++;
 	}
 	
 	private void stopAllVoices()
 	{
 		//For monophony
-		for(SynthSampleStream voice : voices.values()) freeVoice(voice);
-		voices.clear();
-		/*for(Deque<SynthSampleStream> vlist : releasedVoices.values()){
-			for(SynthSampleStream voice : vlist) freeVoice(voice);
-		}*/
+		Collection<SynthSampleStream> played = voices.removeAll();
+		for(SynthSampleStream voice : played) freeVoice(voice);
+		
 		for(SynthSampleStream voice : releasedVoices) freeVoice(voice);
 		releasedVoices.clear();
 	}
@@ -193,47 +213,61 @@ public class DefaultSynthChannel implements SynthChannel{
 	
 	public void setProgram(SynthProgram program)
 	{
+		//threadCheck();
 		this.program = program;
 		//if(debug_tag >= 0) System.err.println("Tag " + debug_tag + ": Program Change!");
 	}
 	
 	public void noteOn(byte note, byte velocity) throws InterruptedException
 	{
+		//threadCheck();
 		//if(debug_tag >= 0) System.err.println("Tag " + debug_tag + ": Note on -- " + note);
 		
 		//Do nothing if there is no program.
+		//System.err.println("DefaultSynthChannel.noteOn || Called!");
 		if(program == null) return;
 		
 		//Check if already playing
-		if(voices.containsKey(note)) return;
+		if(voices.hasVoice(note)) return;
 		if(!polyphonic) stopAllVoices();
-		/*else //Actually let's not
-		{
-			SynthSampleStream v = releasedVoices.remove(note);
-			if(v != null) freeVoice(v);	
-		}*/
 		
+		//System.err.println("DefaultSynthChannel.noteOn || Getting sample stream!");
 		SynthSampleStream v = program.getSampleStream(note, velocity, sample_rate);
+		//if(v == null) System.err.println("Hold up a hot second, this voice is null!");
+		if(v == null) return; //Program is empty?
+		//System.err.println("DefaultSynthChannel.noteOn || Sample stream got!");
 		/*if(debug_tag >= 0){
 			OffsetDateTime now = OffsetDateTime.now();
 			v.tagMe(true, (int)now.toEpochSecond() ^ now.getNano());
 		}*/
-		voices.put(note, v);
+		//voices.put(note, v);
+		voices.setVoice(note, v);
 		vox_count++;
+		
+		//tot_on++;
+		//ct_table[note][0]++; ct_table[note][2]++;
 		
 		if(vox_count > max_vox) freeOldestVoice();
 	}
 	
 	public void noteOff(byte note, byte velocity)
 	{
+		//threadCheck();
 		//System.err.println("Note Off!");
 		//if(debug_tag >= 0) System.err.println("Tag " + debug_tag + ": Note off -- " + note);
-		SynthSampleStream v = voices.remove(note);
-		if(v == null) return; //Nothing to do
+		//SynthSampleStream v = voices.remove(note);
+		SynthSampleStream v = voices.removeVoice(note);
+		if(v == null){
+			System.err.println("DefaultSynthChannel.noteOff || WARNING: Note off requested for note that is not on! -- " + note);
+			return; //Nothing to do
+		}
 		v.releaseMe();
 		//releasedVoices.put(note, v);
 		//putReleasedVoice(note, v);
 		releasedVoices.add(v);
+		
+		//tot_off++;
+		//ct_table[note][1]++; ct_table[note][2]--;
 	}
 	
 	public void setPolyphony(boolean b)
@@ -249,8 +283,8 @@ public class DefaultSynthChannel implements SynthChannel{
 	public void setExpression(byte vol)
 	{
 		double ratio = (double)vol/127.0;
-		//ch_exp = (ratio * ratio);
-		ch_exp = ratio;
+		ch_exp = (ratio * ratio);
+		//ch_exp = ratio;
 		//ch_exp = (double)vol/(double)0x7F;
 		//System.err.println("Channel volume set: " + ch_vol);
 	}
@@ -258,8 +292,8 @@ public class DefaultSynthChannel implements SynthChannel{
 	public void setVolume(byte vol)
 	{
 		double ratio = (double)vol/127.0;
-		//ch_vol = (ratio * ratio);
-		ch_vol = ratio;
+		ch_vol = (ratio * ratio);
+		//ch_vol = ratio;
 		//ch_vol = (double)vol/(double)0x7F;
 		//System.err.println("Channel volume set: " + ch_vol);
 	}
@@ -267,7 +301,7 @@ public class DefaultSynthChannel implements SynthChannel{
 	public void setPitchWheelLevel(short value)
 	{
 		pitch_wheel = value;
-		for(SynthSampleStream voice : voices.values()) voice.setPitchWheelLevel((int)pitch_wheel);
+		for(SynthSampleStream voice : voices) voice.setPitchWheelLevel((int)pitch_wheel);
 		//Collection<SynthSampleStream> released = getReleasedVoices();
 		//for(SynthSampleStream voice : releasedVoices.values()) voice.setPitchWheelLevel((int)pitch_wheel);
 		for(SynthSampleStream voice : releasedVoices) voice.setPitchWheelLevel((int)pitch_wheel);
@@ -276,7 +310,7 @@ public class DefaultSynthChannel implements SynthChannel{
 	public void setPitchBendDirect(int cents){
 		//Always scales to 12 semis for pitch wheel...
 		pitch_wheel = (short)Math.round(((double)cents/1200.0) * (double)0x7FFF);
-		for(SynthSampleStream voice : voices.values()) voice.setPitchBendDirect(cents);
+		for(SynthSampleStream voice : voices) voice.setPitchBendDirect(cents);
 		//for(SynthSampleStream voice : releasedVoices.values()) voice.setPitchBendDirect(cents);
 		//Collection<SynthSampleStream> released = getReleasedVoices();
 		for(SynthSampleStream voice : releasedVoices) voice.setPitchBendDirect(cents);
@@ -284,12 +318,17 @@ public class DefaultSynthChannel implements SynthChannel{
 	
 	public void allNotesOff()
 	{
-		for(Byte k : voices.keySet())
-		{
-			SynthSampleStream v = voices.get(k);
+		//threadCheck();
+		//for(SynthSampleStream v : voices.values())
+		/*Collection<Integer> notes = voices.allCurrentNotes();
+		for(Integer n : notes){
+			tot_off++;
+			ct_table[n][1]++; ct_table[n][2]--;
+		}*/
+		
+		Collection<SynthSampleStream> vlist = voices.removeAll();
+		for(SynthSampleStream v : vlist){
 			v.releaseMe();
-			//releasedVoices.put(k, v);
-			//putReleasedVoice(k,v);
 			releasedVoices.add(v);
 		}
 		voices.clear();
@@ -300,6 +339,9 @@ public class DefaultSynthChannel implements SynthChannel{
 		//return voices.size() + releasedVoices.size();
 		/*Collection<SynthSampleStream> released = getReleasedVoices();
 		return voices.size() + released.size();*/
+		//System.err.println("Notes On: " + voices.countVoices());
+		//System.err.println("Release Pending: " + releasedVoices.size());
+		//System.err.println("Vox Count: " + vox_count);
 		return vox_count;
 	}
 	
@@ -314,6 +356,8 @@ public class DefaultSynthChannel implements SynthChannel{
 	
 	public int[] nextSample() throws InterruptedException
 	{
+		//System.err.println("nextSample() || Entered");
+		//threadCheck();
 		/*int[] out = new int[2];
 		for(SynthSampleStream voice : voices.values())
 		{
@@ -322,9 +366,11 @@ public class DefaultSynthChannel implements SynthChannel{
 		}
 		return out;*/
 		
+		//int d = 0;
 		double[] sum = new double[2];
-		for(SynthSampleStream voice : voices.values())
+		for(SynthSampleStream voice : voices)
 		{
+			//System.err.println("Voice " + d++);
 			if(voice == null) continue;
 			int[] s = voice.nextSample();
 			if(s == null) s = new int[0];
@@ -406,6 +452,7 @@ public class DefaultSynthChannel implements SynthChannel{
 		//out[0] = saturate((int)Math.round(sum[0]));
 		//out[1] = saturate((int)Math.round(sum[1]));
 		
+		//System.err.println("nextSample() || Returning");
 		return out;
 	}
 

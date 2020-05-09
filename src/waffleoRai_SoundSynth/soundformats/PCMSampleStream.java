@@ -48,8 +48,9 @@ public class PCMSampleStream implements AudioSampleStream{
 		else
 		{
 			loopStart = -1;
-			loopEnd = -1;
+			//loopEnd = -1;
 			maxFrame = source.totalFrames();
+			loopEnd = maxFrame;
 		}
 	}
 
@@ -96,7 +97,7 @@ public class PCMSampleStream implements AudioSampleStream{
 	{
 		int ccount = source.totalChannels();
 		int[] samps = new int[ccount];
-		if(currentFrame >= maxFrame)
+		if(currentFrame >= loopEnd)
 		{
 			if(loopStart < 0) return samps; //All zeroes
 			currentFrame = loopStart;
