@@ -19,9 +19,10 @@ public class SynthMath {
 	//Indexes up to 1/4 the period (so up to pi/2)
 	private static void buildSinTable(){
 
-		sin_table = new double[SINTABLE_RES];
-		for(int i = 0; i < SINTABLE_RES; i++){
-			double frac = (double)i/SINTABLE_RES_D/4.0;
+		sin_table = new double[SINTABLE_RES+1];
+		for(int i = 0; i < SINTABLE_RES+1; i++){
+			double frac = (double)i/SINTABLE_RES_D;
+			frac /= 4.0;
 			double val = frac * 2.0 * Math.PI;
 			sin_table[i] = Math.sin(val);
 		}
@@ -53,7 +54,7 @@ public class SynthMath {
 		}
 		if(frac > 0.25) frac = 0.5 - frac;
 		
-		int idx = (int)(Math.round(frac * SINTABLE_RES_D));
+		int idx = (int)(Math.round((frac*4.0) * SINTABLE_RES_D));
 		
 		double sin = sin_table[idx];
 		if(n) sin *= -1.0;
@@ -69,11 +70,26 @@ public class SynthMath {
 		return sin;*/
 	}
 	
+	/**
+	 * Get the cosine of the input from a precalculated table.
+	 * <br><b>IMPORTANT:</b> Input must be in sine cycles, NOT radians!
+	 * The purpose of this is for simple indexing and to reduce calculation
+	 * time!
+	 * @param in Input value in sine cycles ie. 1.0 is the end of one period, or
+	 * 2*PI in a plain sine function.
+	 * @return The estimated sine value at that cycle point. In other words,
+	 * sin(2*PI*in).
+	 */
+	public static double quickcos(double in){
+		return quicksin(in+0.25);
+	}
+	
 	public static double quicksinc(double in){
 		if(in == 0.0) return 1.0;
 		if(sin_table == null) buildSinTable();
 		
 		in = Math.abs(in);
+		if(in <= 0.000000001) return 1.0;
 		
 		//long whole = (long)in;
 		//double frac = in - whole;
@@ -126,4 +142,34 @@ public class SynthMath {
 		else return -1.0;
 	}
 
+	public static void main(String[] args){
+		//TEST
+		//-2 cycles to 2 cycles (-4PI to 4PI)
+		//Every 0.01
+		
+		/*System.out.println("x(Cycles)\tx(Radians)\tMath.sin\tquicksin");
+		for(double v = -2.0; v <= 2.0; v+=0.001){
+			double rads = v*(2.0*Math.PI);
+			double sin = Math.sin(rads);
+			double qsin = quicksin(v);
+			System.out.println(v + "\t" + rads + "\t" + sin + "\t" + qsin);
+		}*/
+		
+		/*System.out.println("x(Cycles)\tsinc\tquicksinc");
+		for(double v = -5.0; v <= 5.0; v+=0.01){
+			double sinc = sinc(v);
+			double qsinc = quicksinc(v);
+			System.out.println(v + "\t" + sinc + "\t" + qsinc);
+		}*/
+		
+		System.out.println("x(Cycles)\tx(Radians)\tMath.cos\tquickcos");
+		for(double v = -2.0; v <= 2.0; v+=0.001){
+			double rads = v*(2.0*Math.PI);
+			double sin = Math.cos(rads);
+			double qsin = quickcos(v);
+			System.out.println(v + "\t" + rads + "\t" + sin + "\t" + qsin);
+		}
+		
+	}
+	
 }
