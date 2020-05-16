@@ -24,6 +24,8 @@ public interface SynthChannel extends AudioSampleStream{
 	
 	public void tagMe(boolean b, int i);
 	
+	public void clear();
+	
 	//public int[] nextSample() throws InterruptedException;
 
 }

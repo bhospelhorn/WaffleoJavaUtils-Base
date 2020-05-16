@@ -5,7 +5,8 @@ package waffleoRai_SoundSynth;
  * 
  * 2020.03.20 | 1.0.0
  * 		Initial Documentation
- * 
+ * 2020.05.10 | 1.1.0
+ * 		Added clearPlaybackResources()
  */
 
 /**
@@ -13,8 +14,8 @@ package waffleoRai_SoundSynth;
  * implementation should be responsible for interpreting and
  * handling sequencer commands.
  * @author Blythe Hospelhorn
- * @version 1.0.0
- * @since March 20, 2020
+ * @version 1.1.0
+ * @since May 10, 2020
  */
 public interface PlayerTrack {
 
@@ -35,9 +36,10 @@ public interface PlayerTrack {
 	 * time coordinates or don't allow for random access to sequence events
 	 * may only be capable of resetting to zero or a loop point!
 	 * @param tick Tick to reset track to.
+	 * @param loop Is this a loop reset?
 	 * @since 1.0.0
 	 */
-	public void resetTo(long tick);
+	public void resetTo(long tick, boolean loop);
 	
 	/**
 	 * Check whether the track has ended (eg. a track end
@@ -64,5 +66,12 @@ public interface PlayerTrack {
 	 * @since 1.0.0
 	 */
 	public boolean isMuted();
+	
+	/**
+	 * Dispose of any playback specific resources contained within this
+	 * track when no longer needed to free up memory and clear references.
+	 * @since 1.1.0
+	 */
+	public void clearPlaybackResources();
 	
 }

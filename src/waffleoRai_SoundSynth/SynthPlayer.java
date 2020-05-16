@@ -13,14 +13,17 @@ import javax.sound.sampled.SourceDataLine;
  * 2020.03.19 | 1.0.0
  * 		Initial Documentation
  * 
+ * 2020.05.10 | 1.1.0
+ * 		Added removeListener(Object o) and dispose()
+ * 
  */
 
 /**
  * An interface for players that generate sound from synthesizers,
  * soundbanks, and/or sequence data.
  * @author Blythe Hospelhorn
- * @version 1.0.0
- * @since March 19, 2020
+ * @version 1.1.0
+ * @since May 10, 2020
  */
 public interface SynthPlayer extends AudioSampleStream{
 	
@@ -194,6 +197,15 @@ public interface SynthPlayer extends AudioSampleStream{
 	public void addListener(PlayerListener l);
 	
 	/**
+	 * Remove a listener from this player. Listener will only be removed
+	 * if REFERENCE of provided object matches a listener in the listener
+	 * list.
+	 * @param o Listener to remove
+	 * @since 1.1.0
+	 */
+	public void removeListener(Object o);
+	
+	/**
 	 * Clear all player listeners from this player.
 	 * @since 1.0.0
 	 */
@@ -326,4 +338,13 @@ public interface SynthPlayer extends AudioSampleStream{
 	 */
 	public void writeChannelsTo(String pathPrefix, int loops) throws IOException;
 
+	/**
+	 * Clear all resources unique to this player instance to free up memory
+	 * and remove references.
+	 * Whether or not the player is usable again after this method is called
+	 * depends upon the implementation. It's best to assume that it is not.
+	 * @since 1.1.0
+	 */
+	public void dispose();
+	
 }

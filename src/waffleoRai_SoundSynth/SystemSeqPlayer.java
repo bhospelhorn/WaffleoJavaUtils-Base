@@ -356,7 +356,7 @@ public abstract class SystemSeqPlayer implements SynthPlayer{
 				return;
 			}
 		}
-		for(PlayerTrack t : tracks)t.resetTo(looptick);
+		for(PlayerTrack t : tracks)t.resetTo(looptick, true);
 	}
 	
 	public void start() throws MidiUnavailableException
@@ -430,6 +430,10 @@ public abstract class SystemSeqPlayer implements SynthPlayer{
 	public void close() {
 		stop();
 		timer = null;
+	}
+	
+	public void dispose(){
+		close();
 	}
 	
 	/*--- Writers ---*/

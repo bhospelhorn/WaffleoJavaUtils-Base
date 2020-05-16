@@ -28,6 +28,8 @@ import waffleoRai_SoundSynth.soundformats.WAVWriter;
  * 		Implemented writeMixdownTo()
  * 2020.04.22 | 1.2.1
  * 		Oopsy doopsy, worker wasn't closing audio line before terminating :P
+ * 2020.05.10 | 1.3.0
+ * 		Added removeListener(Object o) and dispose()
  */
 
 /**
@@ -45,8 +47,8 @@ import waffleoRai_SoundSynth.soundformats.WAVWriter;
  * can occur well before they are played back, noting the time coordinate of the event
  * relative to the current playback time coordinate is essential.
  * @author Blythe Hospelhorn
- * @version 1.2.1
- * @since April 27, 2020
+ * @version 1.3.0
+ * @since May 10, 2020
  */
 public abstract class SequencePlayer implements SynthPlayer{
 	
@@ -359,6 +361,10 @@ public abstract class SequencePlayer implements SynthPlayer{
 		listeners.add(l);
 	}
 	
+	public void removeListener(Object o){
+		listeners.remove(o);
+	}
+	
 	public void clearListeners()
 	{
 		listeners.clear();
@@ -566,7 +572,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 		tick = looptick;
 		myloops++;
 		for(PlayerTrack t : tracks){
-			if(t!= null) t.resetTo(looptick);
+			if(t!= null) t.resetTo(looptick, true);
 		}
 	}
 	
@@ -577,7 +583,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 		myloops = 0;
 		ctr_sampling = 0;
 		ctr_tick = 0;
-		for(int i = 0; i < tracks.length; i++){if(tracks[i] != null) tracks[i].resetTo(0);}
+		for(int i = 0; i < tracks.length; i++){if(tracks[i] != null) tracks[i].resetTo(0, false);}
 		//for(PlayerTrack t : tracks)t.resetTo(0);
 	}
 	
@@ -622,10 +628,53 @@ public abstract class SequencePlayer implements SynthPlayer{
 		return out;
 	}
 	
-	public void close()
-	{
-		for(SynthChannel ch : channels) ch.allNotesOff();
+	public void close(){
+		dispose();
+	}
+	
+	public void dispose(){
+		//Stop playback
+		//Clear all channels and tracks
 		stop();
+		
+		//If worker is not null, wait for it to stop.
+		if(worker != null){
+			while(worker.isRunning()){
+				try {
+					Thread.sleep(10);
+				} catch (InterruptedException e) {
+					System.err.println("SequencePlayer.dispose || Unexpected interrupt occurred while waiting for worker to terminate!");
+					e.printStackTrace();
+					return;
+				}
+			}
+		}
+		
+		worker = null;
+		playback_line = null;
+		if(listeners != null) listeners.clear();
+		if(ch_listeners != null){
+			for(List<ChannelStateListener> list : ch_listeners.values()){
+				if(list != null) list.clear();
+			}
+			ch_listeners.clear();	
+		}
+		
+		if(channels != null){
+			for(int i = 0; i < channels.length; i++){
+				if(channels[i] != null) channels[i].clear();
+				channels[i] = null;
+			}
+			channels = null;
+		}
+		
+		if(tracks != null){
+			for(int i = 0; i < tracks.length; i++){
+				if(tracks[i] != null) tracks[i].clearPlaybackResources();
+				tracks[i] = null;
+			}
+			tracks = null;
+		}
 	}
 	
 	/*--- Realtime Playback ---*/

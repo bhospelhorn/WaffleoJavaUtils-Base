@@ -56,7 +56,7 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 		target_samplerate = (sr_ratio) * input_samplerate;
 		sr_ratio *= (output_samplerate/input_samplerate);
 		inv_ratio = 1.0/sr_ratio;
-		//adjustLPF();
+		adjustLPF();
 		
 		j_counter = 0;
 		k_counter = 0;
@@ -91,21 +91,10 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 	/*----- Setters -----*/
 	
 	protected void adjustLPF(){
-		//TODO
 		//Am I being downsampled or upsampled?
 		//If upsampling, need output LPF
 		if(sr_ratio > 1.0){
-			if(target_samplerate > input_samplerate){
-				double inv_eff = input_samplerate/sr_ratio;
-				//System.err.println("SR Ratio: " + sr_ratio);
-				//System.err.println("Inverted Effective SR: " + inv_eff);
-				lpf = new UnbufferedEllipticO2LPF(new InnerStream(), (float)(inv_eff/2.0), Filter.LPF_MODE_BIQUAD_DIRECT_1);	
-			}
-			else{
-				//TODO
-				//System.err.println("Target SR: " + target_samplerate);
-				lpf = new UnbufferedEllipticO2LPF(new InnerStream(), (float)(target_samplerate/4.0), Filter.LPF_MODE_BIQUAD_DIRECT_1);	
-			}
+			lpf = new UnbufferedEllipticO2LPF(new InnerStream(), (float)(input_samplerate/2.0), Filter.LPF_MODE_BIQUAD_DIRECT_1);
 		}
 		else if(sr_ratio < 1.0){
 			//Downsampling
@@ -118,7 +107,7 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 	private void adjustSRRatio(){
 		sr_ratio = (target_samplerate/input_samplerate) * (output_samplerate/input_samplerate);
 		inv_ratio = 1.0/sr_ratio;
-		//adjustLPF();
+		adjustLPF();
 	}
 	
 	public void setInput(AudioSampleStream input) 
@@ -139,7 +128,7 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 		//System.err.println("Target SR: " + target_samplerate + " | Input SR: " + input_samplerate);
 		sr_ratio *= (output_samplerate/input_samplerate);
 		inv_ratio = 1.0/sr_ratio;
-		//adjustLPF();
+		adjustLPF();
 		
 		//window.flushSavedValues();
 		j_counter = 0;

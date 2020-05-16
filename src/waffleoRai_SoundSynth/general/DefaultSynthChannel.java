@@ -345,6 +345,12 @@ public class DefaultSynthChannel implements SynthChannel{
 		return vox_count;
 	}
 	
+	public void clear(){
+		voices.clear();
+		releasedVoices.clear();
+		program = null;
+	}
+	
 	/* ----- Stream ----- */
 	
 	private int saturate(int in)
