@@ -20,6 +20,7 @@ import waffleoRai_Compression.definitions.CompDefNode;
 import waffleoRai_Compression.definitions.CompressionInfoNode;
 import waffleoRai_Files.EncryptionDefinition;
 import waffleoRai_Files.FileTypeNode;
+import waffleoRai_Files.NodeMatchCallback;
 
 public class FileNode implements TreeNode, Comparable<FileNode>{
 
@@ -413,9 +414,16 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		return sb.toString();
 	}
 	
+	/* --- Scan --- */
+	
+	public String findNodeThat(NodeMatchCallback cond){
+		if(parent != null) return parent.findNodeThat(cond);
+		else return null;
+	}
+	
 	/* --- Load --- */
 	
-	public FileBuffer loadData() throws IOException
+ 	public FileBuffer loadData() throws IOException
 	{
 		String path = getSourcePath();
 		long stoff = getOffset();

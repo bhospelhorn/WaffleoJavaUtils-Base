@@ -1,5 +1,7 @@
 package waffleoRai_Image;
 
+import java.awt.image.BufferedImage;
+
 public class EightBitPalette implements Palette {
 
 	private Pixel[] values;
@@ -90,4 +92,32 @@ public class EightBitPalette implements Palette {
 		}
 	}
 
+	public BufferedImage renderVisual(){
+		
+		final int SAMPLE_WIDTH = 10;
+		final int IMG_DIM = SAMPLE_WIDTH << 4; //*16
+		
+		BufferedImage img = new BufferedImage(IMG_DIM, IMG_DIM, BufferedImage.TYPE_INT_ARGB);
+		int x = 0; int y = 0;
+		
+		for(int i = 0; i < 256; i++){
+			Pixel p = values[i];
+			int argb = p.getARGB();
+			
+			for(int r = 0; r < SAMPLE_WIDTH; r++){
+				for(int l = 0; l < SAMPLE_WIDTH; l++){
+					img.setRGB(x+l, y+r, argb);
+				}
+			}
+			
+			x+= SAMPLE_WIDTH;
+			if(x >= IMG_DIM){
+				x = 0; y += SAMPLE_WIDTH;
+			}
+			
+		}
+		
+		return img;
+	}
+	
 }

@@ -28,8 +28,14 @@ public class ADSRLinearAmpRamper implements EnvelopeStreamer{
 	@Override
 	public double getNextAmpRatio() {
 		current = next;
-		if(direction) next += slope;
-		else next -= slope;
+		if(direction){
+			if(next >= end) return end;
+			next += slope;
+		}
+		else{
+			if(next <= end) return end;
+			next -= slope;
+		}
 		
 		return current;
 	}

@@ -55,6 +55,10 @@ public class Sustain {
 		return (int)Math.round(prop * (double)0x7FFF);
 	}
 	
+	public double getLevelDbl(){
+		return (double)iLevel/ (double)0x7FFFFFFF;
+	}
+	
 	public boolean rampUp()
 	{
 		return bDirection;
@@ -161,9 +165,18 @@ public class Sustain {
 	
 	public EnvelopeStreamer openStream(int sampleRate)
 	{
-		//TODO
 		if(eMode == ADSRMode.STATIC){
-			return new ADSRStaticEnv((double)iLevel/ (double)0x7FFFFFFF);
+			return new ADSRStaticEnv(getLevelDbl());
+		}
+		else if(eMode == ADSRMode.LINEAR_ENVELOPE){
+			int samps = (int)Math.round(((double)sampleRate * (double)iTime) / 1000.0);
+			if(bDirection)return new ADSRLinearAmpRamper(true, getLevelDbl(), 1.0, samps);
+			else return new ADSRLinearAmpRamper(false, getLevelDbl(), 0.0, samps);
+		}
+		else if(eMode == ADSRMode.LINEAR_DB){
+			int samps = (int)Math.round(((double)sampleRate * (double)iTime) / 1000.0);
+			if(bDirection) return new ADSRLinearDBRamper(true, getLevelDbl(), 1.0, samps);
+			else return new ADSRLinearDBFullRampdown(samps);
 		}
 		return null;
 	}

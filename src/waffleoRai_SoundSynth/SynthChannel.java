@@ -2,14 +2,21 @@ package waffleoRai_SoundSynth;
 
 public interface SynthChannel extends AudioSampleStream{
 	
+	public static final int OP_RESULT_FAIL = 0;
+	public static final int OP_RESULT_SUCCESS = 1;
+	public static final int OP_RESULT_NOTEON_OVERLAP = 2;
+	public static final int OP_RESULT_NOTEOFF_NOTON = 3;
+	public static final int OP_RESULT_NOPROG = 4;
+	public static final int OP_RESULT_NOREG = 5;
+	
 	//public int getChannelCount();
 	
 	public void setBankIndex(int idx);
 	public int getCurrentBankIndex();
 	public void setProgram(SynthProgram program);
 	
-	public void noteOn(byte note, byte velocity) throws InterruptedException;
-	public void noteOff(byte node, byte velocity);
+	public int noteOn(byte note, byte velocity) throws InterruptedException;
+	public int noteOff(byte node, byte velocity);
 	public void setPolyphony(boolean b);
 	
 	public void setPan(byte pan);

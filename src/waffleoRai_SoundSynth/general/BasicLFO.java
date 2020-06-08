@@ -57,9 +57,9 @@ public abstract class BasicLFO implements Oscillator{
 	}
 	
 	private double getCoord(){
-		double c = srratio * (double)ctr++;
-		if(((double)(int)c) == c) ctr = 0; //Is an int
-		return srratio * (double)ctr;
+		double c = srratio * (double)(ctr++);
+		if(c!= 0.0 && (((double)((long)c)) == c)) ctr = 0; //Is an int
+		return c;
 	}
 
 	public double getNextValue() {

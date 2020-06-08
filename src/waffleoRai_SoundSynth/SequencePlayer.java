@@ -589,6 +589,8 @@ public abstract class SequencePlayer implements SynthPlayer{
 	
 	public int[] nextSample() throws InterruptedException
 	{
+		//System.err.println("get sample cycle - start");
+		
 		//Mixdown sample
 		int ccount = getChannelCount();
 		double[] sum = new double[ccount];
@@ -596,9 +598,11 @@ public abstract class SequencePlayer implements SynthPlayer{
 		int chmask = 1;
 		for(int i = 0; i < channels.length; i++)
 		{
+			//System.err.println("get sample cycle - channel " + i + " start");
 			//Determine if channel muted
 			SynthChannel ch = channels[i];
 			int[] chsamps = ch.nextSample();
+			//System.err.println("get sample cycle - channel " + i + " sample got");
 			if(!playChannel(chmask))
 			{
 				//Don't play this channel, (but save 0 samples)
@@ -616,15 +620,20 @@ public abstract class SequencePlayer implements SynthPlayer{
 			}	
 			sendChannelLevelToListeners(i, chsamps);
 			chmask = chmask << 1;
+			//System.err.println("get sample cycle - channel " + i + " end");
 		}
 		
+		//System.err.println("get sample cycle - master adjust");
 		int[] out = new int[ccount];
 		for(int j = 0; j < ccount; j++) out[j] = saturate((int)Math.round(sum[j] * master));
 		//lastMasterLevel = out;
 		
+		//System.err.println("get sample cycle - send to listeners");
 		sendLevelToListeners(out);
 		time_coord++;
 		//if(out[0] != 0) System.err.println("Output: " + out[0] + " | " + out[1]);
+		
+		//System.err.println("get sample cycle - end");
 		return out;
 	}
 	
@@ -734,20 +743,24 @@ public abstract class SequencePlayer implements SynthPlayer{
 			boolean seqend = false;
 			while(!seqend && !tflag)
 			{
+				//System.err.println("player cycle - start");
 				if(pause_flag)
 				{
 					try {synchronized(locker){locker.wait();}} 
 					catch (InterruptedException e){continue;}
 				}
 				
+				//System.err.println("player cycle - loopcheck");
 				if(loopcount > 0)
 				{
 					if(myloops >= loopcount) break;
 				}
 				try{
+					//System.err.println("player cycle - pull sample");
 					putNextSample(playback_line);
 					//System.err.println("sample");
 					//System.err.println("nexttick = " + nexttick);
+					//System.err.println("player cycle - tick check");
 					if(ctr_sampling++ >= nexttick)
 					{
 						//Do operations for this tick
@@ -801,6 +814,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 					//System.err.println("Player worker returning (cp 2)");
 					return;
 				}
+				//System.err.println("player cycle - end");
 			}
 			
 			//System.err.println("Player worker-- terminate command received!");

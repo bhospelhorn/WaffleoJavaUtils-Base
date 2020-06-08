@@ -113,7 +113,7 @@ public class SynthMath {
 
 	public static double quickTriangle(double in){
 
-		double frac = (long)in - in;
+		double frac = in - (long)in;
 		if(frac <= 0.25){
 			return frac * 4.0;
 		}
@@ -127,7 +127,7 @@ public class SynthMath {
 	}
 	
 	public static double quickSaw(double in){
-		double frac = (long)in - in;
+		double frac = in - (long)in;
 		if(frac <= 0.5){
 			return frac * 2.0;
 		}
@@ -137,7 +137,7 @@ public class SynthMath {
 	}
 	
 	public static double quickSquare(double in){
-		double frac = (long)in - in;
+		double frac = in - (long)in;
 		if(frac <= 0.5) return 1.0;
 		else return -1.0;
 	}

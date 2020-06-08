@@ -56,7 +56,7 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 		target_samplerate = (sr_ratio) * input_samplerate;
 		sr_ratio *= (output_samplerate/input_samplerate);
 		inv_ratio = 1.0/sr_ratio;
-		adjustLPF();
+		//adjustLPF(); //LPF doesn't currently work
 		
 		j_counter = 0;
 		k_counter = 0;
@@ -107,7 +107,7 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 	private void adjustSRRatio(){
 		sr_ratio = (target_samplerate/input_samplerate) * (output_samplerate/input_samplerate);
 		inv_ratio = 1.0/sr_ratio;
-		adjustLPF();
+		//adjustLPF(); //LPF doesn't currently work
 	}
 	
 	public void setInput(AudioSampleStream input) 
@@ -128,7 +128,7 @@ public class UnbufferedWindowedSincInterpolator implements Filter{
 		//System.err.println("Target SR: " + target_samplerate + " | Input SR: " + input_samplerate);
 		sr_ratio *= (output_samplerate/input_samplerate);
 		inv_ratio = 1.0/sr_ratio;
-		adjustLPF();
+		//adjustLPF(); //LPF doesn't currently work
 		
 		//window.flushSavedValues();
 		j_counter = 0;

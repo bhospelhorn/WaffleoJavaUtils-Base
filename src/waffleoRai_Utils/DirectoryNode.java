@@ -17,6 +17,7 @@ import java.util.Map;
 import javax.swing.tree.TreeNode;
 
 import waffleoRai_Files.FileClass;
+import waffleoRai_Files.NodeMatchCallback;
 
 public class DirectoryNode extends FileNode{
 
@@ -320,6 +321,43 @@ public class DirectoryNode extends FileNode{
 	public boolean copyDataTo(OutputStream out, boolean decompress) throws IOException
 	{
 		return false;
+	}
+	
+	private String findNodeThat(String pstem, NodeMatchCallback cond){
+
+		List<DirectoryNode> cdirs = new LinkedList<DirectoryNode>();
+		List<FileNode> children = getChildren();
+		
+		//Search this level first
+		for(FileNode child : children){
+			if(child instanceof DirectoryNode){
+				cdirs.add((DirectoryNode)child);
+			}
+			else{
+				if(cond.meetsCondition(child)) return pstem + child.getFileName();
+			}
+		}
+		
+		//Search dirs if nothing found
+		for(DirectoryNode child : cdirs){
+			String result = child.findNodeThat(pstem + child.getFileName() + "/", cond);
+			if(result != null) return result;
+		}
+		
+		return null;
+	}
+	
+	public String findNodeThat(NodeMatchCallback cond){
+		
+		String path = "";
+		DirectoryNode dir = this;
+		while(dir != null){
+			String match = dir.findNodeThat(path, cond);
+			if(match != null) return match;
+			path = "../" + path;
+			dir = dir.getParent();
+		}
+		return null;
 	}
 	
 	/* --- Debug --- */

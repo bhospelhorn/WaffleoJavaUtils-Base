@@ -1,5 +1,7 @@
 package waffleoRai_Image;
 
+import java.awt.image.BufferedImage;
+
 public class FourBitPalette implements Palette{
 
 	private Pixel[] values;
@@ -87,6 +89,35 @@ public class FourBitPalette implements Palette{
 			System.out.print(String.format("0x%02x", p.getAlpha()));
 			System.out.println();
 		}
+	}
+	
+	public BufferedImage renderVisual(){
+		
+		final int SAMPLE_WIDTH = 20;
+		final int IMG_DIM = SAMPLE_WIDTH << 2;
+		
+		BufferedImage img = new BufferedImage(IMG_DIM, IMG_DIM, BufferedImage.TYPE_INT_ARGB);
+		int x = 0; int y = 0;
+		
+		for(int i = 0; i < 16; i++){
+			//System.err.println("Writing color " + i);
+			Pixel p = values[i];
+			int argb = p.getARGB();
+			
+			for(int r = 0; r < SAMPLE_WIDTH; r++){
+				for(int l = 0; l < SAMPLE_WIDTH; l++){
+					img.setRGB(x+l, y+r, argb);
+				}
+			}
+			
+			x+= SAMPLE_WIDTH;
+			if(x >= IMG_DIM){
+				x = 0; y += SAMPLE_WIDTH;
+			}
+			
+		}
+		
+		return img;
 	}
 
 }

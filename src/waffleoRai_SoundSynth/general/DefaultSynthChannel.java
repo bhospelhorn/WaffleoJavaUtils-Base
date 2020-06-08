@@ -51,6 +51,8 @@ public class DefaultSynthChannel implements SynthChannel{
 	private int debug_tag;
 	private Thread ctrlthread;
 	
+	private boolean square_vol; //Square the volume to scale
+	
 	/*private int[][] ct_table; //For each note, counts note on, note off, and how many are on right now
 	private int tot_on;
 	private int tot_off;
@@ -152,6 +154,8 @@ public class DefaultSynthChannel implements SynthChannel{
 		max_vox = max;
 	}
 	
+	public void setSquareVol(boolean b){square_vol = b;}
+	
 	/* ----- Management ----- */
 	
 	private void freeOldestVoice(){
@@ -218,29 +222,38 @@ public class DefaultSynthChannel implements SynthChannel{
 		//if(debug_tag >= 0) System.err.println("Tag " + debug_tag + ": Program Change!");
 	}
 	
-	public void noteOn(byte note, byte velocity) throws InterruptedException
+	public int noteOn(byte note, byte velocity) throws InterruptedException
 	{
 		//threadCheck();
 		//if(debug_tag >= 0) System.err.println("Tag " + debug_tag + ": Note on -- " + note);
 		
 		//Do nothing if there is no program.
 		//System.err.println("DefaultSynthChannel.noteOn || Called!");
-		if(program == null) return;
+		if(program == null) return OP_RESULT_NOPROG;
 		
+		boolean replace = false;
 		//Check if already playing
-		if(voices.hasVoice(note)) return;
+		if(voices.hasVoice(note)){
+			//Cancel existing note and replace with this one
+			//return OP_RESULT_NOTEON_OVERLAP;
+			replace = true;
+			SynthSampleStream v = voices.removeVoice(note);
+			freeVoice(v);
+			System.err.println("DefaultSynthChannel.noteOn || WARNING: Note overlap! -- " + note);
+		}
 		if(!polyphonic) stopAllVoices();
 		
 		//System.err.println("DefaultSynthChannel.noteOn || Getting sample stream!");
 		SynthSampleStream v = program.getSampleStream(note, velocity, sample_rate);
 		//if(v == null) System.err.println("Hold up a hot second, this voice is null!");
-		if(v == null) return; //Program is empty?
+		if(v == null) return OP_RESULT_NOREG; //Program is empty?
 		//System.err.println("DefaultSynthChannel.noteOn || Sample stream got!");
 		/*if(debug_tag >= 0){
 			OffsetDateTime now = OffsetDateTime.now();
 			v.tagMe(true, (int)now.toEpochSecond() ^ now.getNano());
 		}*/
 		//voices.put(note, v);
+		v.setPitchWheelLevel((int)pitch_wheel);
 		voices.setVoice(note, v);
 		vox_count++;
 		
@@ -248,9 +261,11 @@ public class DefaultSynthChannel implements SynthChannel{
 		//ct_table[note][0]++; ct_table[note][2]++;
 		
 		if(vox_count > max_vox) freeOldestVoice();
+		if(replace) return OP_RESULT_NOTEON_OVERLAP;
+		return OP_RESULT_SUCCESS;
 	}
 	
-	public void noteOff(byte note, byte velocity)
+	public int noteOff(byte note, byte velocity)
 	{
 		//threadCheck();
 		//System.err.println("Note Off!");
@@ -259,7 +274,7 @@ public class DefaultSynthChannel implements SynthChannel{
 		SynthSampleStream v = voices.removeVoice(note);
 		if(v == null){
 			System.err.println("DefaultSynthChannel.noteOff || WARNING: Note off requested for note that is not on! -- " + note);
-			return; //Nothing to do
+			return OP_RESULT_NOTEOFF_NOTON; //Nothing to do
 		}
 		v.releaseMe();
 		//releasedVoices.put(note, v);
@@ -268,6 +283,7 @@ public class DefaultSynthChannel implements SynthChannel{
 		
 		//tot_off++;
 		//ct_table[note][1]++; ct_table[note][2]--;
+		return OP_RESULT_SUCCESS;
 	}
 	
 	public void setPolyphony(boolean b)
@@ -283,19 +299,15 @@ public class DefaultSynthChannel implements SynthChannel{
 	public void setExpression(byte vol)
 	{
 		double ratio = (double)vol/127.0;
-		ch_exp = (ratio * ratio);
-		//ch_exp = ratio;
-		//ch_exp = (double)vol/(double)0x7F;
-		//System.err.println("Channel volume set: " + ch_vol);
+		ch_exp = ratio;
+		if(square_vol) ch_exp *= ratio;
 	}
 	
 	public void setVolume(byte vol)
 	{
 		double ratio = (double)vol/127.0;
-		ch_vol = (ratio * ratio);
-		//ch_vol = ratio;
-		//ch_vol = (double)vol/(double)0x7F;
-		//System.err.println("Channel volume set: " + ch_vol);
+		ch_vol = ratio;
+		if(square_vol) ch_vol *= ratio;
 	}
 	
 	public void setPitchWheelLevel(short value)

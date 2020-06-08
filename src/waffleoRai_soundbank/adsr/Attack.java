@@ -17,12 +17,14 @@ public class Attack {
 	{
 		iTime = 0;
 		eMode = ADSRMode.LINEAR_ENVELOPE;
+		start_lvl = 0.0;
 	}
 	
 	public Attack(int millis, ADSRMode mode)
 	{
 		iTime = millis;
 		eMode = mode;
+		start_lvl = 0.0;
 	}
 	
 	public int getTime()
