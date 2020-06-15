@@ -8,5 +8,7 @@ public abstract class PaletteFileDef implements FileTypeDefinition{
 	
 	public FileClass getFileClass(){return FileClass.IMG_PALETTE;}
 	public abstract Palette getPalette(FileNode src, int pidx);
-
+	public abstract Palette[] getPalette(FileNode src);
+	public abstract int countPalettes(FileNode src);
+	
 }
