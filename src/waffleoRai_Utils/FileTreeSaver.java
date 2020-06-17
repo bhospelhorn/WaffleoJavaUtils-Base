@@ -23,6 +23,7 @@ import waffleoRai_Files.FileDefinitions;
 import waffleoRai_Files.FileTypeDefNode;
 import waffleoRai_Files.FileTypeDefinition;
 import waffleoRai_Files.FileTypeNode;
+import waffleoRai_Files.ISOFileNode;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
 
 public class FileTreeSaver {
@@ -50,6 +51,7 @@ public class FileTreeSaver {
 	 * 		15 - Is Directory?
 	 * 		14 - Is Link?
 	 * 		13 - Has metadata? (V3+)
+	 * 		12 - Is CD Node? (V5+)
 	 * 		 7 - Source compressed? (If file)
 	 * 		 6 - Has type chain [file]/file class[dir] (V2+)(V4+ for dir)
 	 * 		 5 - Has encryption (V2+)
@@ -60,6 +62,10 @@ public class FileTreeSaver {
 	 * 	Source Path Index [4]
 	 * 	Offset [8]
 	 * 	Length [8]
+	 *  Sector Size Data [8] (If applicable) (V5+)
+	 *  	Data Size [4]
+	 *  	Header Size [2]
+	 *  	Footer Size [2]
 	 *  Encryption Def ID [4] (If applicable) (V2+)
 	 *  Encryption Start [8] (If applicable) (V4+)
 	 *  Encryption Region Size [8] (If applicable) (V4+)
@@ -93,7 +99,7 @@ public class FileTreeSaver {
 	public static final String MAGIC_TABLE = "SPBt";
 	public static final String MAGIC_TREE = "eert";
 	
-	public static final int CURRENT_VERSION = 4;
+	public static final int CURRENT_VERSION = 5;
 	
 	public static final String ENCODING = "UTF8";
 	
@@ -151,11 +157,16 @@ public class FileTreeSaver {
 	
 	private static int parseFileNode(FileBuffer in, DirectoryNode parent, long stpos, Map<Integer, FileNode> offmap, int version)
 	{
-		FileNode fn = new FileNode(parent, "");
-		offmap.put((int)stpos, fn);
-		
 		long cpos = stpos;
 		int flags = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos+=2;
+		
+		//Mark CD node...
+		FileNode fn = null;
+		if(version >= 5 && (flags & 0x1000) != 0){
+			fn = new ISOFileNode(parent, "");
+		}
+		else fn = new FileNode(parent, "");
+		offmap.put((int)stpos, fn);
 		
 		SerializedString ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.WORD, 2);
 		cpos += ss.getSizeOnDisk();
@@ -179,6 +190,13 @@ public class FileTreeSaver {
 		fn.scratch_field = in.intFromFile(cpos); cpos+=4;
 		fn.setOffset(in.longFromFile(cpos)); cpos += 8;
 		fn.setLength(in.longFromFile(cpos)); cpos+=8;
+		
+		if(version >= 5 && (flags & 0x1000) != 0){
+			int dsize = in.intFromFile(cpos); cpos += 4;
+			int hsize = in.shortFromFile(cpos); cpos += 2;
+			int fsize = in.shortFromFile(cpos); cpos += 2;
+			((ISOFileNode)fn).setSectorDataSizes(hsize, dsize, fsize);
+		}
 		
 		if((flags & 0x20) != 0)
 		{
@@ -647,6 +665,8 @@ public class FileTreeSaver {
 				if(child.hasMetadata()){csz += meta.getFileSize(); flag |= 0x2000;}
 				//if(child.sourceDataCompressed()){csz += 8; flag |= 0x80;}
 				
+				if(child instanceof ISOFileNode) flag |= 0x1000;
+				
 				FileBuffer cdat = new FileBuffer(csz, true);
 				cdat.addToFile((short)flag);
 				cdat.addToFile(cname);
@@ -661,6 +681,14 @@ public class FileTreeSaver {
 				cdat.addToFile(srcidx);
 				cdat.addToFile(child.getOffset());
 				cdat.addToFile(child.getLength());
+				
+				if(child instanceof ISOFileNode){
+					ISOFileNode isochild = (ISOFileNode)child;
+					cdat.addToFile(isochild.getSectorDataSize());
+					cdat.addToFile((short)isochild.getSectorHeadSize());
+					cdat.addToFile((short)isochild.getSectorFootSize());
+				}
+				
 				if(child.getEncryption() != null)
 				{
 					cdat.addToFile(child.getEncryption().getID());

@@ -298,7 +298,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	
 	/* --- Other --- */
 	
-	private void copyDataTo(FileNode copy){
+	protected void copyDataTo(FileNode copy){
 		
 		copy.length = this.length;
 		copy.offset = this.offset;

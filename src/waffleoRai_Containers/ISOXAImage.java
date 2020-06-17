@@ -1,14 +1,16 @@
 package waffleoRai_Containers;
 
 import java.io.IOException;
+import java.util.Collection;
 
 import waffleoRai_Containers.CDTable.CDInvalidRecordException;
 import waffleoRai_Containers.XATable.XAEntry;
 import waffleoRai_Containers.XATable.XASectorHeader;
-import waffleoRai_Utils.CompositeBuffer;
+import waffleoRai_Files.ISOFileNode;
 import waffleoRai_Utils.FileBuffer;
 //import waffleoRai_jpsx.PSXCDTable;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
+import waffleoRai_Utils.MultiFileBuffer;
 
 /*
  * UPDATES
@@ -19,14 +21,16 @@ import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
  * 	Added empty constructor for child classes
  * 2017.11.05 | 1.2.1 -> 1.3.0
  * 	Added further accessibility, especially for child classes
+ * 2020.06.16 | 1.3.0 -> 2.0.0
+ * 	Updated to use DirectoryNode instead of VirDirectory
  */
 
 /**
  * Child class of ISO9660 image extended to include information from the eXtended Architecture
  * specification. Includes specialized handling of Mode 2 sectors.
  * @author Blythe Hospelhorn
- * @version 1.3.0
- * @since November 5, 2017
+ * @version 2.0.0
+ * @since June 16, 2020
  */
 public class ISOXAImage extends ISO9660Image {
 
@@ -46,7 +50,7 @@ public class ISOXAImage extends ISO9660Image {
 		super();
 		this.table = new XATable(myISO);
 		super.readInformation(myISO);
-		super.generateRootDirectory(myISO, this.table);
+		//generateRootDirectory(myISO, this.table);
 	}
 	
 	/**
@@ -57,6 +61,27 @@ public class ISOXAImage extends ISO9660Image {
 	{
 		super();
 		table = new XATable();
+	}
+	
+	protected void generateRootDirectory(ISO myISO) throws IOException
+	{
+		Collection<XAEntry> c = table.getXAEntries();
+		//if (eventContainer != null) eventContainer.fireNewEvent(EventType.IMG9660_TBLLISTED, c.size());
+		for (XAEntry e : c)
+		{
+			if (!e.isDirectory() && e.getStartBlock() < myISO.getNumberSectorsRelative()) 
+			{
+				//Uses full paths in name
+				ISOFileNode node = new ISOFileNode(null, "");
+				node.setOffset(e.getStartBlock());
+				node.setLength(e.getSizeInSectors());
+				if(e.isMode2()){
+					if(e.isForm2()) node.setMode2Form2();
+					else node.setMode2Form1();
+				}
+				root.addChildAt(e.getName(), node);
+			}
+		}
 	}
 	
 	/* --- Getters --- */
@@ -123,7 +148,8 @@ public class ISOXAImage extends ISO9660Image {
 		for (int i = 0; i < tailSize; i++) secTail.addToFile(ISO.ZERO);
 		
 		//Composite
-		FileBuffer mySector = new CompositeBuffer(3);
+		//FileBuffer mySector = new CompositeBuffer(3);
+		FileBuffer mySector = new MultiFileBuffer(3);
 		mySector.addToFile(secHeader);
 		mySector.addToFile(getSectorData(relativeSector));
 		mySector.addToFile(secTail);
@@ -135,8 +161,7 @@ public class ISOXAImage extends ISO9660Image {
 	 * XATable required.
 	 * @return Internal table as an XATable.
 	 */
-	public XATable getXATable()
-	{
+	public XATable getXATable(){
 		return this.table;
 	}
 

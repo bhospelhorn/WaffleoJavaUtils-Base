@@ -11,7 +11,6 @@ import javax.sound.midi.Instrument;
 import javax.sound.midi.Patch;
 import javax.sound.midi.Soundbank;
 
-import waffleoRai_SoundSynth.SynthProgram;
 
 public class SimplePreset extends Instrument{
 	

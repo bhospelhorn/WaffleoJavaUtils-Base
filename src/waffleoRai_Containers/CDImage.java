@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import javax.swing.tree.TreeModel;
 
+import waffleoRai_Utils.DirectoryNode;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.VirDirectory;
 
@@ -12,6 +13,9 @@ import waffleoRai_Utils.VirDirectory;
  * 
  * 2017.11.05 | 1.0.0 -> 1.1.0
  * 	Added a "get raw sector" method.
+ * 
+ * 2020.06.15 | 1.1.0 -> 2.0.0
+ * 	Please don't use VirDirectory! DirectoryNode is better!!
  */
 
 /**
@@ -19,9 +23,10 @@ import waffleoRai_Utils.VirDirectory;
  * of extracted files and a table containing information on how the files were stored on the image,
  * at minimum.
  * @author Blythe Hospelhorn
- * @version 1.1.0
- * @since November 5, 2017
+ * @version 2.0.0
+ * @since June 15, 2020
  */
+@SuppressWarnings("deprecation")
 public interface CDImage {
 
 	/**
@@ -56,6 +61,7 @@ public interface CDImage {
 	 * @return VirDirectory containing all of the files from the image and mirroring the
 	 * file structure of the original image.
 	 */
+	@Deprecated
 	public VirDirectory getRootDirectory();
 	
 	/**
@@ -73,5 +79,13 @@ public interface CDImage {
 	 * set in a JTree.
 	 */
 	public TreeModel getDirectoryTree();
+	
+	/**
+	 * Get the root directory as a DirectoryNode.
+	 * @return Directory structure of CD Image as a FileNode tree.
+	 * @since 2.0.0
+	 */
+	public DirectoryNode getRootNode();
+	
 	
 }

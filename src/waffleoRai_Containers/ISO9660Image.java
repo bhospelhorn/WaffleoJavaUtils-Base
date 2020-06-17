@@ -5,17 +5,18 @@ import java.util.Collection;
 import java.util.GregorianCalendar;
 import java.util.TimeZone;
 
+import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeModel;
 
 import waffleoRai_Containers.CDTable.CDInvalidRecordException;
-import waffleoRai_Containers.ISO.Sector;
 import waffleoRai_Containers.ISO9660Table.ISO9660Entry;
-import waffleoRai_Utils.CompositeBuffer;
-import waffleoRai_Utils.FDBuffer;
+import waffleoRai_Files.ISOFileNode;
+import waffleoRai_Utils.DirectoryNode;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
+import waffleoRai_Utils.FileNode;
+import waffleoRai_Utils.MultiFileBuffer;
 import waffleoRai_Utils.VirDirectory;
-import waffleoRai_Utils.VirFile;
 
 /*
  * UPDATES
@@ -33,6 +34,9 @@ import waffleoRai_Utils.VirFile;
  * 	Added accessibility methods, especially for child classes
  * 2017.11.18 | 1.3.0 -> 1.4.0
  * 	For compatibility with Java 9, took out all Observer/Observable usage
+ * 2020.06.15 | 1.4.0 -> 2.0.0
+ * 	Internal dir structure overhaul to use DirectoryNode instead of VirDirectory
+ * 
  */
 
 /**
@@ -41,14 +45,16 @@ import waffleoRai_Utils.VirFile;
  * <br>This class allows for quick access to contents of CD by referencing either the file path or
  * the sector index.
  * @author Blythe Hospelhorn
- * @version 1.4.0
- * @since November 18, 2017
+ * @version 2.0.0
+ * @since June 15, 2020
  *
  */
+@SuppressWarnings("deprecation")
 public class ISO9660Image implements CDImage{
 	
 	private ISO9660Table table;
-	protected VirDirectory rootDir;
+	//protected VirDirectory rootDir;
+	protected DirectoryNode root;
 	
 	private String stdIdent;
 	private String sysIdent;
@@ -82,7 +88,8 @@ public class ISO9660Image implements CDImage{
 	protected ISO9660Image()
 	{
 		table = null;
-		rootDir = new VirDirectory("", '\\');
+		//rootDir = new VirDirectory("", '\\');
+		root = new DirectoryNode(null, "");
 	}
 	
 	/**
@@ -131,7 +138,8 @@ public class ISO9660Image implements CDImage{
 		table = new ISO9660Table(myISO);
 		//if (eventContainer != null) eventContainer.fireNewEvent(EventType.IMG9660_TABLEGENERATED, 0);
 		System.out.println("ISO9660Image.constructorCore || Image table parsed.");
-		rootDir = new VirDirectory("", '\\');
+		//rootDir = new VirDirectory("", '\\');
+		root = new DirectoryNode(null, "");
 		this.generateRootDirectory(myISO, table);
 		//if (eventContainer != null) eventContainer.fireNewEvent(EventType.IMG9660_VIRDIRPOPULATED, 0);
 		System.out.println("ISO9660Image.constructorCore || Image directory tree parsed.");
@@ -156,52 +164,11 @@ public class ISO9660Image implements CDImage{
 		{
 			if (!e.isDirectory() && e.getStartBlock() < myISO.getNumberSectorsRelative()) 
 			{
-				//System.out.println("ISO9660Image.generateRootDirectory || File " + e.getName() + " is not a directory.");
-				//Generate new file
-				//FileBuffer compFile = FileBuffer.createWritableBuffer("ISO9660Image.generateRootDirectory", e.getFileSize(), true);
-				CompositeBuffer compBuffer = new CompositeBuffer(e.sizeInSectors());
-				int s = e.getStartBlock();
-				//System.out.println("ISO9660Image.generateRootDirectory || Start block: " + s);
-				long left = e.getFileSize();
-				Sector sec = myISO.getSectorRelative(s);
-				//Nab full sectors
-				//System.out.println("ISO9660Image.generateRootDirectory || Entry information... ");
-				e.printMe();
-				//System.out.println("ISO9660Image.generateRootDirectory || s = " + s + " left = " + left);
-				while (left >= sec.getData().getFileSize())
-				{
-					//System.out.println("ISO9660Image.generateRootDirectory || While loop: s = " + s + " left = " + left);
-					//compFile.addToFile(sec.getData());
-					compBuffer.addToFile(sec.getData());
-					//System.out.println("ISO9660Image.generateRootDirectory || Sector added to composite.");
-					s++;
-					//left = e.getFileSize() - compFile.getFileSize();
-					left = e.getFileSize() - compBuffer.getFileSize();
-					
-					if (s < myISO.getNumberSectorsRelative()) sec = myISO.getSectorRelative(s);
-					else break;
-					//System.out.println("ISO9660Image.generateRootDirectory || Next sector retrieved.");
-				}
-				//System.out.println("ISO9660Image.generateRootDirectory || Full sectors copied...");
-				//System.out.println("ISO9660Image.generateRootDirectory || Last sector: " + s);
-				/*If the amount left is less than a full sector (breaking above loop,
-				 * but the amount currently copied to the buffer is still less than the full file size.
-				 * ie. if there is a partial sector at the end*/
-				//if (compFile.getFileSize() < e.getFileSize())
-				if (compBuffer.getFileSize() < e.getFileSize())
-				{
-					//System.out.println("Current comp size: " + compFile.getFileSize() + " Target size: " + e.getFileSize());
-					FileBuffer lastDat = myISO.getSectorRelative(e.lastSector()).getData();
-					long lastPos = e.getFileSize() - compBuffer.getFileSize();
-					FileBuffer subSec = lastDat.createReadOnlyCopy(0, lastPos);
-					compBuffer.addToFile(subSec);
-				}
-				//System.out.println("ISO9660Image.generateRootDirectory || Partial sectors copied...");
-				//this.rootDir.addItem(compFile, e.getName());
-				compBuffer.updateFileSize();
-				this.rootDir.addItem(compBuffer, e.getName());
-				//if (eventContainer != null) eventContainer.fireNewEvent(EventType.IMG9660_FILEADDED, 0, e.getName());
-				//System.out.println("ISO9660Image.generateRootDirectory || File " + e.getName() + " added to virtual directory.");
+				//Uses full paths in name
+				ISOFileNode node = new ISOFileNode(null, "");
+				node.setOffset(e.getStartBlock());
+				node.setLength(e.getSizeInSectors());
+				root.addChildAt(e.getName(), node);
 			}
 		}
 	}
@@ -330,11 +297,18 @@ public class ISO9660Image implements CDImage{
 	
 	public FileBuffer getFile(String path)
 	{
-		FDBuffer f = this.rootDir.getItem(path);
+		/*FDBuffer f = this.rootDir.getItem(path);
 		if (f == null) return null;
 		if (!(f instanceof VirFile)) return null;
 		VirFile vf = (VirFile)f;	
-		return vf.getFile();
+		return vf.getFile();*/
+		FileNode f = root.getNodeAt(path.replace("\\", "/"));
+		if(f == null) return null;
+		try {return f.loadDecompressedData();} 
+		catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		}
 	}
 	
 	public FileBuffer getSectorData(int sector) throws IOException
@@ -367,16 +341,21 @@ public class ISO9660Image implements CDImage{
 		int tailSize = 0x04 + 0x08 + 0x114;
 		FileBuffer secTail = new FileBuffer(tailSize);
 		for (int i = 0; i < tailSize; i++) secTail.addToFile(ISO.ZERO);
-		FileBuffer mySector = new CompositeBuffer(3);
+		//FileBuffer mySector = new CompositeBuffer(3);
+		FileBuffer mySector = new MultiFileBuffer(3);
 		mySector.addToFile(secHeader);
 		mySector.addToFile(getSectorData(relativeSector));
 		mySector.addToFile(secTail);
 		return mySector;
 	}
 	
-	public VirDirectory getRootDirectory()
-	{
-		return this.rootDir;
+	public VirDirectory getRootDirectory(){
+		//return this.rootDir;
+		return null;
+	}
+	
+	public DirectoryNode getRootNode(){
+		return root;
 	}
 	
 		//---------------------------------------
@@ -589,6 +568,7 @@ public class ISO9660Image implements CDImage{
 	 * @return Entry for file if successful. 
 	 * <br>null if addition was not successful.
 	 */
+	@Deprecated
 	public ISO9660Entry addFile(FileBuffer myFile, ISO9660Entry myEntry, String path)
 	{
 		myEntry.setName(path);
@@ -601,15 +581,15 @@ public class ISO9660Image implements CDImage{
 		}
 		table.putInMainMap(myEntry, path);
 		table.putInSectorMap(myEntry);
-		rootDir.addItem(myFile, path);
+		//rootDir.addItem(myFile, path);
 		return myEntry;
 	}
 	
 	/* --- Checks --- */
 	
- 	public boolean fileExists(String path)
-	{
-		return this.rootDir.itemExists(path);
+ 	public boolean fileExists(String path){
+ 		FileNode node = root.getNodeAt(path.replace("\\", "/"));
+		return node != null;
 	}
 	
  	protected void printMyBasicInfo()
@@ -646,10 +626,11 @@ public class ISO9660Image implements CDImage{
  	
  	protected void printMyDirectory()
  	{
- 		System.out.println("----- FILE HIERARCHY ----- ");
- 		System.out.println();
- 		this.rootDir.printTree(0);
- 		System.out.println();
+ 		System.err.println("----- FILE HIERARCHY ----- ");
+ 		System.err.println();
+ 		//this.rootDir.printTree(0);
+ 		root.printMeToStdErr(0);
+ 		System.err.println();
  	}
  	
  	public void printMe()
@@ -662,10 +643,10 @@ public class ISO9660Image implements CDImage{
  	
  	/* --- Conversion --- */
  	
- 	public TreeModel getDirectoryTree()
- 	{
- 		if (this.rootDir == null) return null;
- 		return this.rootDir.toTreeModel();
+ 	public TreeModel getDirectoryTree(){
+ 		//if (this.rootDir == null) return null;
+ 		//return this.rootDir.toTreeModel();
+ 		return new DefaultTreeModel(root);
  	}
  	
 }

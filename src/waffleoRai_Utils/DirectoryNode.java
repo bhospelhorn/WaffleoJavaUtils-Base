@@ -182,6 +182,54 @@ public class DirectoryNode extends FileNode{
 		fileclass = fc;
 	}
 	
+	public boolean addChildAt(String targetpath, FileNode node){
+		//Move slashes
+		String slash = "/";
+		targetpath = targetpath.replace("\\", "/");
+		
+		String[] paths = targetpath.split(slash);
+		if(paths == null) return false;
+		//Isolate name
+		node.setFileName(paths[paths.length-1]);
+		if(paths.length == 1){
+			node.setParent(this);
+			return true;
+		}
+		
+		//Put in a nicer structure
+		Deque<String> pathdeque = new LinkedList<String>();
+		for(int i = 0; i < paths.length-1; i++) pathdeque.add(paths[i]);
+		
+		//Navigate dirs and make any subdirectories needed.
+		DirectoryNode p = this;
+		while(!pathdeque.isEmpty()){
+			if(p == null) return false;
+			String dname = pathdeque.pop();
+			//Look for directory
+			if(dname.isEmpty()) continue;
+			if(dname.equals(".")) continue;
+			if(dname.equals("..")){
+				p = p.getParent();
+			}
+			
+			FileNode child = p.children.get(dname);
+			if(child == null){
+				//Make
+				DirectoryNode d = new DirectoryNode(p, dname);
+				p = d;
+			}
+			else{
+				if(child instanceof DirectoryNode){
+					p = (DirectoryNode)child;
+				}
+				else return false;	
+			}
+		}
+		
+		node.setParent(p);
+		return true;
+	}
+	
 	/* --- TreeNode --- */
 	
 	@Override

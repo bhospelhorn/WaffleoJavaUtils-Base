@@ -9,6 +9,7 @@ import javax.swing.tree.TreeNode;
  * @since November 1, 2017
  *
  */
+@Deprecated
 public interface FDBuffer extends Comparable<FDBuffer>, TreeNode{
 
 	public static enum FDBufferType

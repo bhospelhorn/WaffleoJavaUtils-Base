@@ -532,7 +532,6 @@ public class ISO9660Table implements CDTable
 		return sectorMap;
 	}
 
-	
 	/* --- Setters --- */
 	
 	protected void putInSectorMap(ISO9660Entry e)

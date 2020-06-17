@@ -13,6 +13,7 @@ import javax.swing.tree.TreeNode;
  * @since February 17, 2019
  *
  */
+@Deprecated
 public class VirFile implements FDBuffer{
 
 	private FileBuffer file;

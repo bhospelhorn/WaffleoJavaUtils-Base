@@ -46,6 +46,7 @@ import javax.swing.tree.TreePath;
  * @version 1.3.1
  * @since February 17, 2019
  */
+@Deprecated
 public class VirDirectory implements FDBuffer{
 
 	private Map<String, FDBuffer> contents;

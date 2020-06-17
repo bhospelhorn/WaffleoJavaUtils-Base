@@ -1,6 +1,9 @@
 package waffleoRai_Containers;
 
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import waffleoRai_Containers.ISO.Sector;
@@ -16,14 +19,17 @@ import waffleoRai_Utils.FileBuffer;
  * 
  * 2017.11.05 | 1.2.0 -> 1.3.0
  * 	Allow checking of mode for sectors.
+ * 
+ * 2020.06.16 | 1.3.0 -> 1.4.0
+ * 	Method to return list of cast XAEntries
  */
 
 /**
  * A child class of the ISO9660Table for parsing a subtype of ISO9660 image - eXtended Architecture,
  * which utilizes Mode 2 sectors and real time streaming.
  * @author Blythe Hospelhorn
- * @version 1.2.0
- * @since November 2, 2017
+ * @version 1.4.0
+ * @since June 16, 2020
  */
 public class XATable extends ISO9660Table{
 
@@ -1018,6 +1024,20 @@ public class XATable extends ISO9660Table{
 		XAEntry e = this.getXAEntry(sector);
 		if (e == null) return false;
 		return e.isForm2();
+	}
+	
+	/**
+	 * Get all XA entries in this table as XAEntries.
+	 * @return Collection containing all XAEntries in table.
+	 * @since 1.4.0
+	 */
+	public Collection<XAEntry> getXAEntries(){
+		List<XAEntry> list = new LinkedList<XAEntry>();
+		Collection<ISO9660Entry> superlist = super.getAllEntries();
+		for(ISO9660Entry e : superlist){
+			if(e instanceof XAEntry) list.add((XAEntry)e);
+		}
+		return list;
 	}
 	
 	/* --- Setters --- */
