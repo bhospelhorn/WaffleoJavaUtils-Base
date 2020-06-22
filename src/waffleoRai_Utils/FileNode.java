@@ -423,13 +423,13 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	
 	/* --- Load --- */
 	
- 	public FileBuffer loadData() throws IOException
-	{
+	public FileBuffer loadData(long stpos, long len) throws IOException{
 		String path = getSourcePath();
-		long stoff = getOffset();
-		long edoff = stoff + getLength();
+		long stoff = getOffset() + stpos;
+		long maxed = getOffset() + getLength();
+		long edoff = stoff + len;
+		if(edoff > maxed) edoff = maxed;
 		
-		//System.err.println("Loading data for node -- " + getSourcePath() + " 0x" + Long.toHexString(getOffset()) + ": 0x" + Long.toHexString(getLength()));
 		if(comp_chain != null)
 		{
 			//System.err.println("Non-null compression chain!");
@@ -460,6 +460,10 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		//System.err.println("File loaded! Size = 0x" + Long.toHexString(file.getFileSize()));
 
 		return file;
+	}
+	
+ 	public FileBuffer loadData() throws IOException{
+		return loadData(0, getLength());
 	}
 	
 	public FileBuffer loadDecompressedData() throws IOException

@@ -12,7 +12,10 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 
  * 2020.06.15 | 1.0.0
  * 		Initial Documentation
- * 
+ * 2020.06.17 | 1.1.0
+ * 		Size should be in bytes, not sectors. (Might not fill last sector).
+ * 2020.06.21 | 1.2.0
+ * 		Added data loaders that only load file part
  */
 
 /**
@@ -20,8 +23,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * references offsets by sector (noting sector type) instead of byte offset.
  * This way, sector checksum data can be included or excluded as needed.
  * @author Blythe Hospelhorn
- * @version 1.0.0
- * @since June 15, 2020
+ * @version 1.2.0
+ * @since June 21, 2020
  */
 public class ISOFileNode extends FileNode{
 	
@@ -85,6 +88,20 @@ public class ISOFileNode extends FileNode{
 	 */
 	public int getSectorFootSize(){return sector_foot_size;}
 	
+	/**
+	 * Get the number of sectors required to hold this file.
+	 * @return File size in CD sectors.
+	 * @since 1.1.0
+	 */
+	public int getLengthInSectors(){
+		int raw_bytelen = (int)super.getLength(); //Size in bytes
+		int sec_size = this.getSectorDataSize();
+		int sec_len = raw_bytelen/sec_size;
+		if(raw_bytelen % sec_size != 0) sec_len++;
+		
+		return sec_len;
+	}
+	
 	/* --- Setters --- */
 	
 	/**
@@ -143,22 +160,94 @@ public class ISOFileNode extends FileNode{
 		}
 	}
 	
-	public FileBuffer loadData() throws IOException{
-		//This strips any header/footer data
-		FileBuffer raw = loadRawData();
-		if(sector_head_size == 0 && sector_foot_size == 0) return raw;
+	public FileBuffer loadData(long stpos, long len) throws IOException{
 		
-		//Strip
-		int sec_count = (int)super.getLength(); //Size in sectors
+		//Recalculate to sector coordinates
 		int sec_size = this.getSectorTotalSize();
-		long cpos = 0; long datend = sector_head_size + sector_data_size;
-		MultiFileBuffer dat = new MultiFileBuffer(sec_count);
-		for(int s = 0; s < sec_count; s++){
-			dat.addToFile(raw, cpos + sector_head_size, cpos + datend);
+		int sec_dat_size = this.getSectorDataSize();
+		long stsec = stpos/sec_dat_size; //Start sector index
+		long sec_stoff = stpos%sec_dat_size; // Position relative to sector data start
+		
+		long edoff = stpos + len;
+		long edsec = edoff/sec_dat_size; //Index of sector that contains end position
+		long sec_edoff = edoff%sec_dat_size; // Position relative to sector data start
+		
+		long seccount = edsec - stsec;
+		if(sec_edoff != 0) seccount++;
+		
+		FileBuffer rawsecs = loadRawData(stsec, seccount);
+		MultiFileBuffer dat = new MultiFileBuffer((int)seccount);
+		long cpos = 0;
+		for(int s = 0; s < seccount; s++){
+			long st = 0;
+			long ed = sec_dat_size;
+			if(s == 0) st = sec_stoff;
+			if(s == (seccount - 1)) ed= sec_edoff;
+			if(ed == 0) break;
+			
+			st += this.getSectorHeadSize(); ed += this.getSectorHeadSize();
+			dat.addToFile(rawsecs, cpos + st, cpos + ed);
 			cpos += sec_size;
 		}
 		
 		return dat;
+	}
+	
+	public FileBuffer loadData() throws IOException{
+		//This strips any header/footer data
+		//System.err.println("ISOFileNode.loadData || Called!");
+		FileBuffer raw = loadRawData();
+		if(sector_head_size == 0 && sector_foot_size == 0) return raw;
+		
+		//Calculate data end
+		int seclen = this.getLengthInSectors();
+		long fulldat = (seclen-1) * this.getSectorDataSize();
+		long bytelen = this.getLength();
+		long partdat = bytelen - fulldat; //Number of data bytes in final sector
+		
+		//Strip
+		int sec_size = this.getSectorTotalSize();
+		long cpos = 0; long datend = sector_head_size + sector_data_size;
+		MultiFileBuffer dat = new MultiFileBuffer(seclen);
+		for(int s = 0; s < seclen-1; s++){
+			long st = cpos + sector_head_size;
+			long ed = cpos + datend;
+			//System.err.println("Extracting sector " + s + ": 0x" + Long.toHexString(st) + " - 0x" + Long.toHexString(ed));
+			dat.addToFile(raw, st, ed);
+			cpos += sec_size;
+		}
+		
+		long st = cpos + sector_head_size;
+		long ed = st + partdat;
+		//System.err.println("Extracting sector " + (seclen-1) + " (final): 0x" + Long.toHexString(st) + " - 0x" + Long.toHexString(ed));
+		dat.addToFile(raw, st, ed);
+		cpos += sec_size;
+		//System.err.println("ISOFileNode.loadData || Size of buffer returned: 0x" + Long.toHexString(dat.getFileSize()));
+		return dat;
+	}
+	
+	 /** Load ALL data in the specified sectors, including sector header/footer data, referenced by this node
+	 * into a single FileBuffer.
+	 * @param sec_off Offset in sectors relative to the start of this file to begin reading.
+	 * @param sec_len Number of sectors to load. If this added to the offset sector exceeds the length
+	 * of the file, this method will return only what is in this file.
+	 * @return FileBuffer containing raw data referenced by file - all full sectors sequential.
+	 * @throws IOException If the data cannot be loaded from disk.
+	 * @since 1.2.0
+	 */
+	public FileBuffer loadRawData(long sec_off, long sec_len) throws IOException{
+		if(sec_len <= 0) return null;
+		String path = getSourcePath();
+		
+		//Chain together desired sectors.
+		int sec_size = this.getSectorTotalSize();
+		long maxlen = this.getLengthInSectors() - sec_off;
+		if(sec_len > maxlen) sec_len = maxlen;
+		
+		long stpos = sec_size * (this.getOffset() + sec_off);
+		long edpos = stpos + (sec_size*sec_len);
+		
+		return FileBuffer.createBuffer(path, stpos, edpos);
 	}
 	
 	/**
@@ -174,14 +263,38 @@ public class ISOFileNode extends FileNode{
 		//ISO iso = new ISO(imgdat, true);
 		
 		//Chain together desired sectors.
-		int sec_count = (int)super.getLength(); //Size in sectors
 		int sec_size = this.getSectorTotalSize();
-		int bytelen = sec_count * sec_size;
+		int sec_len = getLengthInSectors();
 		
 		long stpos = sec_size * this.getOffset();
-		long edpos = stpos + bytelen;
+		long edpos = stpos + (sec_size*sec_len);
+		
+		//System.err.println("Loading... 0x" + Long.toHexString(stpos) + " - 0x" + Long.toHexString(edpos));
 		
 		return FileBuffer.createBuffer(path, stpos, edpos);
+	}
+	
+	/* --- View --- */
+	
+	public String getLocationString(){
+		int endsec = (int)getOffset() + this.getLengthInSectors();
+		return "sec " + this.getOffset() + " - " + endsec;
+	}
+	
+	/* --- Debug --- */
+	
+	public void printMeToStdErr(int indents)
+	{
+		StringBuilder sb = new StringBuilder(128);
+		for(int i = 0; i < indents; i++) sb.append("\t");
+		String tabs = sb.toString();
+		
+		long bytelen = this.getLength();
+		long secsize = this.getSectorDataSize();
+		long secct = bytelen/secsize;
+		if(bytelen % secsize != 0) secct++;
+		
+		System.err.println(tabs + "->" + this.getFileName() + " (sec " + this.getOffset() + " - " + (this.getOffset() + secct - 1) + " -- 0x" + Long.toHexString(bytelen) + " bytes)");
 	}
 	
 	

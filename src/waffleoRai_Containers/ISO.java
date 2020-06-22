@@ -644,8 +644,7 @@ public class ISO {
 	 * @param rawMode Whether to look at only data in sectors or full sectors.
 	 * @throws IOException If there is an error creating the read-only references for sector data.
 	 */
-	public ISO(FileBuffer myISO, boolean rawMode) throws IOException
-	{
+	public ISO(FileBuffer myISO, boolean rawMode) throws IOException{
 		this(myISO, 0, rawMode);
 	}
 	
@@ -656,8 +655,7 @@ public class ISO {
 	 * @param rawMode Whether to look at only data in sectors or full sectors.
 	 * @throws IOException If there is an error creating the read-only references for sector data.
 	 */
-	public ISO(FileBuffer myISO, long stPos, boolean rawMode) throws IOException
-	{
+	public ISO(FileBuffer myISO, long stPos, boolean rawMode) throws IOException{
 		this.constructorCore();
 		if (rawMode) this.parseRAW(myISO, stPos);
 		else this.parseISO(myISO, stPos);
@@ -666,8 +664,7 @@ public class ISO {
 	private void constructorCore()
 	{
 		this.loosedata = false;	
-		if (zeroSector == null)
-		{
+		if (zeroSector == null){
 			zeroSector = new FileBuffer(0x920);
 			for (int i = 0; i < 0x920; i++) zeroSector.addToFile(ZERO);
 		}
@@ -876,16 +873,18 @@ public class ISO {
 		
 		if ((myISO.getFileSize() - stPos) % F1SIZE == 0) secSize = F1SIZE;
 		else secSize = SECSIZE;
+		//System.err.println("ISO.parseRAW || File Size: 0x" + Long.toHexString(myISO.getFileSize()));
+		//System.err.println("ISO.parseRAW || Sector Size: 0x" + Long.toHexString(secSize));
 		
 		numSecs = (int)((myISO.getFileSize() - stPos)/ Integer.toUnsignedLong(secSize));
 		if ((myISO.getFileSize() - stPos) % secSize != 0) this.loosedata = true;
+		//System.err.println("ISO.parseRAW || Sector Count: " + numSecs);
 		
 		this.firstSector = 0;
 		this.sectors = new Sector[numSecs];
 		//if (this.eventContainer != null) this.eventContainer.fireNewEvent(EventType.ISO_NUMSECSCALCULATED, this.getNumberSectorsRelative());
 		
-		for (int s = 0; s < numSecs; s++)
-		{
+		for (int s = 0; s < numSecs; s++){
 			long sSt = stPos + (s * secSize);
 			this.sectors[s] = new RawSector();
 			this.sectors[s].setData(myISO.createReadOnlyCopy(sSt, sSt + secSize));

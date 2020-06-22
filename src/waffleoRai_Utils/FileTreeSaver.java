@@ -107,6 +107,7 @@ public class FileTreeSaver {
 	
 	private static int parseDirNode(FileBuffer in, DirectoryNode parent, long stpos, Map<Integer, FileNode> offmap, int version)
 	{
+		//System.err.println("FileTreeSaver.parseDirNode || Directory found -- stpos = 0x " + Long.toHexString(stpos));
 		DirectoryNode dir = new DirectoryNode(parent, "");
 		offmap.put((int)stpos, dir);
 		
@@ -118,6 +119,7 @@ public class FileTreeSaver {
 		SerializedString ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.WORD, 2);
 		cpos += ss.getSizeOnDisk();
 		dir.setFileName(ss.getString());
+		//System.err.println("FileTreeSaver.parseDirNode || Dir Name: " + dir.getFileName());
 		
 		if(version >= 3 && (flags & 0x2000) != 0)
 		{
@@ -157,6 +159,7 @@ public class FileTreeSaver {
 	
 	private static int parseFileNode(FileBuffer in, DirectoryNode parent, long stpos, Map<Integer, FileNode> offmap, int version)
 	{
+		//System.err.println("FileTreeSaver.parseFileNode || File found -- stpos = 0x " + Long.toHexString(stpos));
 		long cpos = stpos;
 		int flags = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos+=2;
 		
@@ -171,6 +174,7 @@ public class FileTreeSaver {
 		SerializedString ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.WORD, 2);
 		cpos += ss.getSizeOnDisk();
 		fn.setFileName(ss.getString());
+		//System.err.println("FileTreeSaver.parseFileNode || File Name: " + fn.getFileName());
 		
 		if(version >= 3 && (flags & 0x2000) != 0)
 		{
@@ -377,15 +381,39 @@ public class FileTreeSaver {
 	
 	private static DirectoryNode parseRootDir(FileBuffer in, long stoff, Map<Integer, FileNode> offmap, int version)
 	{
+		//System.err.println("FileTreeSaver.parseRootDir || Root start -- stpos = 0x" + Long.toHexString(stoff));
 		DirectoryNode root = new DirectoryNode(null, "");
 		offmap.put((int)stoff, root);
-		//Skip flags and name
-		long cpos = stoff + 4;
+		//Read whatever is there for the root node.
+		long cpos = stoff;
+		int flags = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos+=2;
+		int nlen = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos+=2;
+		//System.err.println("FileTreeSaver.parseRootDir || Root flags: 0x" + String.format("%04x", flags));
+		//Skip name.
+		cpos += nlen;
+		if(cpos % 2 != 0) cpos++;
+		//Read metadata, if present
+		if(version >= 3 && (flags & 0x2000) != 0)
+		{
+			SerializedString ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.DWORD, 2);
+			cpos += ss.getSizeOnDisk();
+			String metastr = ss.getString();
+			
+			String[] fields = metastr.split(";");
+			for(String pair : fields)
+			{
+				String[] split = pair.split("=");
+				if(split.length < 2) continue;
+				root.setMetadataValue(split[0], split[1]);
+			}
+		}
+		
 		int ccount = in.intFromFile(cpos); cpos += 4;
 		
 		for(int i = 0; i < ccount; i++)
 		{
-			int flags = Short.toUnsignedInt(in.shortFromFile(cpos));
+			flags = Short.toUnsignedInt(in.shortFromFile(cpos));
+			//System.err.println("FileTreeSaver.parseRootDir || Node found -- cpos = 0x" + Long.toHexString(cpos) + " | flags = 0x" + String.format("%04x", flags));
 			if((flags & 0x4000) != 0) cpos += parseLinkNode(in, root, cpos, offmap, version);
 			else if((flags & 0x8000) != 0) cpos += parseDirNode(in, root, cpos, offmap, version);
 			else cpos += parseFileNode(in, root, cpos, offmap, version);
@@ -492,7 +520,8 @@ public class FileTreeSaver {
 		
 		public void writeToStream(OutputStream out) throws IOException
 		{
-			out.write(dat.getBytes());
+			//out.write(dat.getBytes());
+			dat.writeToStream(out);
 			for(DatNode child : children) child.writeToStream(out);
 		}
 		

@@ -14,8 +14,10 @@ import java.util.List;
  * UPDATES ----
  * 
  * 2020.02.14 | Initial 1.0.0 Documentation
- * 
- * 
+ * 2020.06.18 | 1.0.0 -> 1.0.1
+ * 		Debugging
+ * 2020.06.21 | 1.0.1 -> 1.1.0
+ * 		createCopy(long,long) should be only copying between points, was copying whole damn thing.
  */
 
 /**
@@ -25,8 +27,8 @@ import java.util.List;
  * <br>This can be handy for serializing into an object to hold in memory.
  * <br>CachedFileBuffer utilizes very similar logic and can be used in the same way.
  * @author Blythe Hospelhorn
- * @version 1.0.0
- * @since February 14, 2020
+ * @version 1.1.0
+ * @since June 21, 2020
  *
  */
 public class MultiFileBuffer extends FileBuffer{
@@ -164,6 +166,10 @@ public class MultiFileBuffer extends FileBuffer{
 	
 	private Page getPage(long offset)
 	{
+		if(last_read == null) {
+			if(list.isEmpty()) return null;
+			last_read = list.get(0);
+		}
 		if(last_read.onPage(offset)) return last_read;
 		
 		Page page = root_page;
@@ -394,6 +400,29 @@ public class MultiFileBuffer extends FileBuffer{
   		return bb;
   	}
   	
+  	public FileBuffer createCopy(){
+  		MultiFileBuffer copy = new MultiFileBuffer(list.size()+1);
+  		copy.current_file_size = this.current_file_size;
+  		//System.err.println("MultiFileBuffer.createCopy || File Size: 0x" + Long.toHexString(copy.current_file_size));
+  		
+  		//int c = 0;
+  		for(Page p : list){
+  			//System.err.println("MultiFileBuffer.createCopy || copying page: " + c++);
+  			Page pcopy = new Page(p.offset);
+  			FileBuffer dat = p.data;
+  			if(dat instanceof ROSubFileBuffer){
+  				//System.err.println("MultiFileBuffer.createCopy || page is reference ");
+  				pcopy.data = ((ROSubFileBuffer)dat).copyReference();
+  			}
+  			else pcopy.data = dat.createReadOnlyCopy(0, dat.getFileSize());
+  			copy.list.add(pcopy);
+  		}
+  		
+  		copy.rebuildTree();
+  		//System.err.println("MultiFileBuffer.createCopy || File Size (after rebuild): 0x" + Long.toHexString(copy.current_file_size));
+  		return copy;
+  	}
+  	
   	public FileBuffer createCopy(int stPos, int edPos)
   	{
   		return createCopy(Integer.toUnsignedLong(stPos), Integer.toUnsignedLong(edPos));
@@ -401,21 +430,62 @@ public class MultiFileBuffer extends FileBuffer{
   	
   	public FileBuffer createCopy(long stPos, long edPos)
   	{
-  		MultiFileBuffer copy = new MultiFileBuffer(list.size()+1);
-  		copy.current_file_size = this.current_file_size;
+  		//Sanity checks
+  		if(stPos < 0) throw new IndexOutOfBoundsException("Start position must be at least 0!");
+  		if(edPos > current_file_size) throw new IndexOutOfBoundsException("End position cannot exceed 0x" + Long.toHexString(current_file_size));
+  		if(stPos >= edPos) throw new IndexOutOfBoundsException("End position must be greater than start position!");
   		
-  		for(Page p : list)
-  		{
-  			Page pcopy = new Page(p.offset);
-  			FileBuffer dat = p.data;
-  			if(dat instanceof ROSubFileBuffer)
-  			{
-  				pcopy.data = ((ROSubFileBuffer)dat).copyReference();
+  		MultiFileBuffer copy = new MultiFileBuffer(list.size()+1);
+  		copy.current_file_size = edPos - stPos;
+  		//System.err.println("MultiFileBuffer.createCopy || Target Size: 0x" + Long.toHexString(copy.current_file_size));
+
+  		boolean copying = false;
+  		long cpos = 0;
+  		for(Page p : list){
+  			//System.err.println("MultiFileBuffer.createCopy || cpos: 0x" + Long.toHexString(cpos));
+  			boolean wholepage = true;
+  			long st = 0;
+  			if(!copying){
+  				if(!p.onPage(stPos)) continue;
+  				else{
+  					copying = true;
+  					st = stPos - p.offset;
+  					if(st != 0) wholepage = false;
+  				}
   			}
-  			else pcopy.data = dat.createReadOnlyCopy(0, dat.getFileSize());
+  			
+  			//Check end
+  			long ed = p.data.getFileSize();
+  			if(p.onPage(edPos)){
+  				copying = false;
+  				ed = edPos - p.offset;
+  				if(ed == 0) break;
+  				wholepage = false;
+  			}
+  			
+  			Page pcopy = new Page(cpos);
+  			if(wholepage){
+  				FileBuffer dat = p.data;
+  	  			if(dat instanceof ROSubFileBuffer){
+  	  				pcopy.data = ((ROSubFileBuffer)dat).copyReference();
+  	  			}
+  	  			else pcopy.data = dat.createReadOnlyCopy(0, dat.getFileSize());
+  	  			copy.list.add(pcopy);
+  	  			cpos += dat.getFileSize();
+  			}
+  			else{
+  				//System.err.println("MultiFileBuffer.createCopy || Copying page: 0x" + Long.toHexString(st) + " - 0x" + Long.toHexString(ed));
+  				//System.err.println("MultiFileBuffer.createCopy || Page size: 0x" + Long.toHexString(p.data.getFileSize()));
+  				pcopy.data = p.data.createReadOnlyCopy(st, ed);
+  	  			copy.list.add(pcopy);
+  	  			cpos += pcopy.data.getFileSize();
+  			}
+  			
+  			if(!copying) break;
   		}
   		
   		copy.rebuildTree();
+  		//System.err.println("MultiFileBuffer.createCopy || File Size (after rebuild): 0x" + Long.toHexString(copy.current_file_size));
   		return copy;
   	}
   	

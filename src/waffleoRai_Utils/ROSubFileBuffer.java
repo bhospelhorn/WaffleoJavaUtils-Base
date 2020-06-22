@@ -476,8 +476,7 @@ public class ROSubFileBuffer extends FileBuffer{
 	  
 	  /* --- Other --- */
 	  
-	  public ROSubFileBuffer copyReference()
-	  {
+	  public ROSubFileBuffer copyReference(){
 		  return new ROSubFileBuffer(parent, posZero, posEnd);
 	  }
 	  

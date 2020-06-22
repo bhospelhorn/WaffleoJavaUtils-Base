@@ -137,15 +137,15 @@ public class ISO9660Image implements CDImage{
 	{
 		table = new ISO9660Table(myISO);
 		//if (eventContainer != null) eventContainer.fireNewEvent(EventType.IMG9660_TABLEGENERATED, 0);
-		System.out.println("ISO9660Image.constructorCore || Image table parsed.");
+		System.err.println("ISO9660Image.constructorCore || Image table parsed.");
 		//rootDir = new VirDirectory("", '\\');
 		root = new DirectoryNode(null, "");
 		this.generateRootDirectory(myISO, table);
 		//if (eventContainer != null) eventContainer.fireNewEvent(EventType.IMG9660_VIRDIRPOPULATED, 0);
-		System.out.println("ISO9660Image.constructorCore || Image directory tree parsed.");
+		System.err.println("ISO9660Image.constructorCore || Image directory tree parsed.");
 		this.readInformation(myISO);
 		//if (eventContainer != null) eventContainer.fireNewEvent(EventType.IMG9660_INFOREAD, 0, this.volIdent);
-		System.out.println("ISO9660Image.constructorCore || Information read.");
+		System.err.println("ISO9660Image.constructorCore || Information read.");
 	}
 	
 	/**
@@ -167,7 +167,8 @@ public class ISO9660Image implements CDImage{
 				//Uses full paths in name
 				ISOFileNode node = new ISOFileNode(null, "");
 				node.setOffset(e.getStartBlock());
-				node.setLength(e.getSizeInSectors());
+				//node.setLength(e.getSizeInSectors());
+				node.setLength(e.getFileSize());
 				root.addChildAt(e.getName(), node);
 			}
 		}

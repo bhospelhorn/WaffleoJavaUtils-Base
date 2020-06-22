@@ -79,6 +79,8 @@ import java.util.TimeZone;
  * 				Replaced StreamBuffer with CacheFileBuffer
  * 				Added dispose()
  * 				Added stream position & methods (much needed!)
+ * 2020.06.21
+ * 	3.7.0 -> 3.7.1 | Added IOException messages to one of the constructors
  * */
 
 /**
@@ -90,8 +92,8 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.7.0
- * @since February 14, 2020
+ * @version 3.7.1
+ * @since June 21, 2020
  */
 public class FileBuffer 
 {
@@ -221,7 +223,10 @@ public class FileBuffer
 	public FileBuffer(String fPath, long stOff, long edOff, boolean isBigEndian) throws IOException
 	{
 		  /*ARGS CHECK*/
-		  if (fPath == null || !fileExists(fPath) || edOff <= stOff) throw new IOException();
+		  if (fPath == null)throw new IOException("File path is null!");
+		  if (!fileExists(fPath))throw new IOException("File \"" + fPath + "\" does not exist!");
+		  if (edOff <= stOff)throw new IOException("Start position 0x" + Long.toHexString(stOff) + " exceeds end position 0x" + Long.toHexString(edOff));
+		  
 		  if (stOff < 0) stOff = 0;
 		  if (edOff > fileSize(fPath)) edOff = (int)fileSize(fPath);
 		  
@@ -4223,8 +4228,7 @@ public class FileBuffer
   	 * @return Number of bytes remaining in buffer stream view.
   	 * @since 3.7.0
   	 */
-  	public long bytesRemaining()
-  	{
+  	public long bytesRemaining(){
   		return (getFileSize() - position);
   	}
   	

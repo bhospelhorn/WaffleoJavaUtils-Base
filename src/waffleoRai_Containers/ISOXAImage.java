@@ -33,6 +33,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * @since June 16, 2020
  */
 public class ISOXAImage extends ISO9660Image {
+	
+	public static final String METAKEY_VOLUMEIDENT = "ISO_VOL_IDENT";
 
 	private XATable table;
 	
@@ -49,8 +51,10 @@ public class ISOXAImage extends ISO9660Image {
 	{
 		super();
 		this.table = new XATable(myISO);
+		//table.printMe();
 		super.readInformation(myISO);
 		//generateRootDirectory(myISO, this.table);
+		generateRootDirectory(myISO);
 	}
 	
 	/**
@@ -67,19 +71,29 @@ public class ISOXAImage extends ISO9660Image {
 	{
 		Collection<XAEntry> c = table.getXAEntries();
 		//if (eventContainer != null) eventContainer.fireNewEvent(EventType.IMG9660_TBLLISTED, c.size());
+		String vident = getVolumeIdent().replace(" ", "");
+		root.setMetadataValue(METAKEY_VOLUMEIDENT, vident);
+		String raw_dir = "cdraw";
 		for (XAEntry e : c)
 		{
-			if (!e.isDirectory() && e.getStartBlock() < myISO.getNumberSectorsRelative()) 
+			//if (!e.isDirectory() && e.getStartBlock() < myISO.getNumberSectorsRelative()) 
+			if (!e.isDirectory()) 
 			{
 				//Uses full paths in name
 				ISOFileNode node = new ISOFileNode(null, "");
 				node.setOffset(e.getStartBlock());
-				node.setLength(e.getSizeInSectors());
+				//node.setLength(e.getSizeInSectors());
+				node.setLength(e.getFileSize());
 				if(e.isMode2()){
 					if(e.isForm2()) node.setMode2Form2();
 					else node.setMode2Form1();
 				}
-				root.addChildAt(e.getName(), node);
+				if(e.isCDDA()) node.setAudioMode();
+				//System.err.println("Found entry: " + e.getName());
+				String addpath = null;
+				if(e.isRawFile()) addpath = raw_dir + "\\" + e.getName();
+				else addpath = vident + "\\" + e.getName();
+				root.addChildAt(addpath, node);
 			}
 		}
 	}

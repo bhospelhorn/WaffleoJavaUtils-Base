@@ -6,6 +6,9 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -78,6 +81,13 @@ public class CompressionDefs {
 	{
 		if(def_map == null) buildDefinitionMap();
 		return def_map.get(comp_def_id);
+	}
+	
+	public static Collection<AbstractCompDef> getAllRegisteredDefinitions(){
+		if(def_map == null) buildDefinitionMap();
+		List<AbstractCompDef> list = new LinkedList<AbstractCompDef>();
+		list.addAll(def_map.values());
+		return list;
 	}
 	
 }
