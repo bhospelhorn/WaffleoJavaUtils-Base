@@ -7,6 +7,7 @@ public class SimpleAnimation implements Animation{
 	
 	//public static final int DEFO_MILLIS = 33;
 	
+	private int mode;
 	private AnimationFrame[] frames;
 	
 	public SimpleAnimation(int frameCount){
@@ -66,5 +67,11 @@ public class SimpleAnimation implements Animation{
 		if(index < 0 || frames == null || index >= frames.length) throw new IndexOutOfBoundsException("Index " + index + " invalid.");
 		frames[index] = frame;
 	}
+	
+	public void setAnimationMode(int mode){
+		this.mode = mode;
+	}
 
+	public int getAnimationMode(){return mode;}
+	
 }

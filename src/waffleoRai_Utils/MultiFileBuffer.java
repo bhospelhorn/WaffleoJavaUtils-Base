@@ -18,6 +18,8 @@ import java.util.List;
  * 		Debugging
  * 2020.06.21 | 1.0.1 -> 1.1.0
  * 		createCopy(long,long) should be only copying between points, was copying whole damn thing.
+ * 2020.06.23 | 1.1.0 -> 1.1.1
+ * 		Debugging toByteBuffer()
  */
 
 /**
@@ -27,8 +29,8 @@ import java.util.List;
  * <br>This can be handy for serializing into an object to hold in memory.
  * <br>CachedFileBuffer utilizes very similar logic and can be used in the same way.
  * @author Blythe Hospelhorn
- * @version 1.1.0
- * @since June 21, 2020
+ * @version 1.1.1
+ * @since June 23, 2020
  *
  */
 public class MultiFileBuffer extends FileBuffer{
@@ -171,13 +173,19 @@ public class MultiFileBuffer extends FileBuffer{
 			last_read = list.get(0);
 		}
 		if(last_read.onPage(offset)) return last_read;
-		
 		Page page = root_page;
 		while(page != null)
 		{
+			//System.err.println("Checking page 0x" + Long.toHexString(page.offset) + " - 0x" + Long.toHexString(page.offset + page.data.getFileSize()));
 			if(page.onPage(offset)) return page;
-			if(offset < page.offset) page = page.child_l;
-			else page = page.child_r;
+			if(offset < page.offset){
+				//System.err.println("Going left...");
+				page = page.child_l;
+			}
+			else{
+				//System.err.println("Going right...");
+				page = page.child_r;
+			}
 		}
 		
 		return null;
@@ -198,7 +206,7 @@ public class MultiFileBuffer extends FileBuffer{
 	public byte getByte(long position)
 	{
 		Page p = getPage(position);
-		if(p == null) throw new IndexOutOfBoundsException();
+		if(p == null) throw new IndexOutOfBoundsException("Page not found for position 0x" + Long.toHexString(position));
 		
 		last_read = p;
 		long poff = position - p.offset;
@@ -268,14 +276,22 @@ public class MultiFileBuffer extends FileBuffer{
  
 	public void addToFile(FileBuffer addition, long stPos, long edPos)
 	{
+		//Get previous page, if present
+		Page last = null;
+		if(!list.isEmpty()) last = list.get(list.size()-1);
+		
 		Page pg = new Page(current_file_size);
 		pg.data = addition.createReadOnlyCopy(stPos, edPos);
 		current_file_size += pg.data.getFileSize();
 		list.add(pg);
-		Page last = list.get(list.size()-1);
-		while(last.child_r != null) last = last.child_r;
-		last.child_r = pg;
-		pg.parent = last;
+		
+		//Tack onto last page added...
+		if(last != null){
+			while(last.child_r != null) last = last.child_r;
+			last.child_r = pg;
+			pg.parent = last;
+		}
+		else rebuildTree();
 		
 		restruct_counter++;
 		if(restruct_counter >= RESTRUCT_AFTER) rebuildTree();
@@ -378,22 +394,24 @@ public class MultiFileBuffer extends FileBuffer{
   		if(sz > 0x7FFFFFFF) throw new IndexOutOfBoundsException();
   		ByteBuffer bb = ByteBuffer.allocate((int)sz);
   		
-  		long cpos = 0;
-  		
-  		for(Page p : list)
-  		{
-  			long epos = cpos + p.data.getFileSize();
-  			if(epos < stPos){cpos = epos; continue;}
-  			
+  		boolean copying = false;
+  		for(Page p : list){
   			long st = 0;
-  			if(stPos > cpos) st = stPos-cpos;
+  			if(!copying){
+  				if(p.onPage(stPos)){
+  					copying = true;
+  					st = stPos - p.offset;
+  				}
+  				else continue;
+  			}
+
   			long ed = p.data.getFileSize();
-  			if(ed > edPos) ed = edPos;
+  			if(p.onPage(edPos)){
+  				copying = false;
+  				ed = edPos - p.offset;
+  			}
   			
   			bb.put(p.data.getBytes(st, ed));
-  			
-  			cpos = epos;
-  			if(cpos >= edPos) break;
   		}
   		
   		bb.rewind();
