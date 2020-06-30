@@ -1283,27 +1283,30 @@ public class CacheFileBuffer extends FileBuffer{
 	{
 		long sz = edOff - stOff;
 		if(sz > 0x7FFFFFFFL) throw new IndexOutOfBoundsException("Cannot have byte array of > 2GB!");
+		//System.err.println("stOff = 0x" + Long.toHexString(stOff));
+		//System.err.println("edOff = 0x" + Long.toHexString(edOff));
 		
 		byte[] arr = new byte[(int)sz];
 		
 		try
 		{
 			CachePage page = getLoadedPage(stOff);
+			if(page == null){
+				throw new IndexOutOfBoundsException("Page could not be found for offset 0x" + Long.toHexString(stOff));
+			}
 			
 			long cpos = 0;
-			for(int i = 0; i < arr.length; i++)
-			{
+			for(int i = 0; i < arr.length; i++){
+				//System.err.println("Page -- start offset = 0x" + Long.toHexString(page.src_offset));
 				arr[i] = page.getDataBuffer().getByte(cpos); cpos++;
-				if(cpos >= page.size)
-				{
+				if(cpos >= page.size){
 					cpos = 0;
 					page = page.getNextPage();
 				}
 			}
 			
 		}
-		catch(IOException x)
-		{
+		catch(IOException x){
 			x.printStackTrace();
 			return null;
 		}

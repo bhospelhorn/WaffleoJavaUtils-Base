@@ -230,6 +230,17 @@ public class DirectoryNode extends FileNode{
 		return true;
 	}
 	
+	public void setSourcePathForTree(String path){
+		super.setSourcePath(path);
+		List<FileNode> clist = this.getChildren();
+		for(FileNode c : clist){
+			if(c instanceof DirectoryNode){
+				((DirectoryNode)c).setSourcePathForTree(path);
+			}
+			else c.setSourcePath(path);
+		}
+	}
+	
 	/* --- TreeNode --- */
 	
 	@Override
