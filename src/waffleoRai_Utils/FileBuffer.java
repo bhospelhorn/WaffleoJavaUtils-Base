@@ -81,6 +81,12 @@ import java.util.TimeZone;
  * 				Added stream position & methods (much needed!)
  * 2020.06.21
  * 	3.7.0 -> 3.7.1 | Added IOException messages to one of the constructors
+ * 2020.07.03
+ * 	3.7.1 -> 3.7.2 | Method that reads encoded string between positions
+ * 			trims output to first null character.
+ * 2020.07.03
+ * 	3.7.2 -> 3.8.0 | Added wrap()
+ * 
  * */
 
 /**
@@ -92,8 +98,8 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.7.1
- * @since June 21, 2020
+ * @version 3.8.0
+ * @since July 3, 2020
  */
 public class FileBuffer 
 {
@@ -336,8 +342,7 @@ public class FileBuffer
 		  this.fSize = 0;
 	}
   
-	private void newWriteCore(int initialCap, boolean isBigEndian)
-	{
+	private void newWriteCore(int initialCap, boolean isBigEndian){
 		this.capacity = initialCap;
 		this.fSize = 0;
 		this.isFileFormatBE = isBigEndian;
@@ -350,8 +355,7 @@ public class FileBuffer
 		this.readOnly = false;
 	}
   
-	private void setEmpty()
-	{
+	private void setEmpty(){
 		this.contents = null;
 		this.capacity = 0;
 		this.fSize = 0;
@@ -363,7 +367,7 @@ public class FileBuffer
 		this.readOnly = true;
 		this.children = new LinkedList<ROSubFileBuffer>();
 	}
-  
+	
 	/* ----- STATIC CREATORS ----- */
   
 	/**
@@ -515,6 +519,32 @@ public class FileBuffer
 	public static long getCurrentMemoryThreshold()
 	{
 		return SIZE_THRESHOLD;
+	}
+	
+	/**
+	 * Generate a new FileBuffer wrapped around an existing byte array.
+	 * This method takes the byte array and sets it directly as the FileBuffer's
+	 * source. Changes made to the byte array after creating this FileBuffer
+	 * will be reflected in the data underlying the buffer!
+	 * @param bytes Byte array to wrap
+	 * @return A new FileBuffer of base capacity bytes.length, or null if either
+	 * there is an issue creating the buffer or parameter is null.
+	 * @since 3.8.0
+	 */
+	public static FileBuffer wrap(byte[] bytes){
+		if(bytes == null) return null;
+		
+		FileBuffer buff = new FileBuffer(bytes.length);
+		buff.capacity = bytes.length;
+		buff.fSize = bytes.length;
+		buff.isFileFormatBE = true;
+		buff.readOnly = false;
+		buff.contents = bytes;
+		
+		buff.overflow = new LinkedList<byte[]>();
+		buff.children = new LinkedList<ROSubFileBuffer>();
+		
+		return buff;
 	}
 	
   /* ----- BASIC GETTERS ----- */
@@ -3639,6 +3669,9 @@ public class FileBuffer
   		Charset mySet = Charset.forName(charset);
   		CharBuffer cb = mySet.decode(this.toByteBuffer(stPos, edPos));
   		String s = cb.toString();
+  		//Chop at any null terminators...
+  		int nullchar = s.indexOf('\0');
+  		if(nullchar >= 0) s = s.substring(0, nullchar);
   		return s;
   	}
   

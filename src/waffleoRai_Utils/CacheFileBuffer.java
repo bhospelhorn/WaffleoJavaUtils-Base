@@ -25,6 +25,9 @@ import java.util.Random;
  * 
  * 1.1.0 | February 7, 2020
  * 	Actually started writing functions...
+ * 
+ * 1.1.1 | July 3, 2020
+ * 	getBytes(long, long) debug. Was always reading from start of first page.
  */
 
 /**
@@ -34,8 +37,8 @@ import java.util.Random;
  * <br>The size of each page and the number of pages (with data in memory) can be modified.
  * <br>WARNING: This class is not threadsafe.
  * @author Blythe Hospelhorn
- * @version 1.1.0
- * @since February 7, 2020
+ * @version 1.1.1
+ * @since July 3, 2020
  */
 public class CacheFileBuffer extends FileBuffer{
 	
@@ -1288,20 +1291,22 @@ public class CacheFileBuffer extends FileBuffer{
 		
 		byte[] arr = new byte[(int)sz];
 		
-		try
-		{
+		try{
 			CachePage page = getLoadedPage(stOff);
 			if(page == null){
 				throw new IndexOutOfBoundsException("Page could not be found for offset 0x" + Long.toHexString(stOff));
 			}
+			if(page.getDataBuffer() == null) page.loadToCache();
+
+			long cpos = stOff - page.offset_value;
 			
-			long cpos = 0;
 			for(int i = 0; i < arr.length; i++){
 				//System.err.println("Page -- start offset = 0x" + Long.toHexString(page.src_offset));
 				arr[i] = page.getDataBuffer().getByte(cpos); cpos++;
 				if(cpos >= page.size){
 					cpos = 0;
 					page = page.getNextPage();
+					if(page.getDataBuffer() == null) page.loadToCache();
 				}
 			}
 			
