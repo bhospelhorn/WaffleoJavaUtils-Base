@@ -86,7 +86,8 @@ import java.util.TimeZone;
  * 			trims output to first null character.
  * 2020.07.03
  * 	3.7.2 -> 3.8.0 | Added wrap()
- * 
+ * 2020.07.04
+ * 	3.8.0 -> 3.8.1 | Added exception messages to checkOffsetPair() throws
  * */
 
 /**
@@ -98,8 +99,8 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.8.0
- * @since July 3, 2020
+ * @version 3.8.1
+ * @since July 4, 2020
  */
 public class FileBuffer 
 {
@@ -3436,9 +3437,9 @@ public class FileBuffer
   	public boolean checkOffsetPair(long stOff, long edOff)
   	{
   		long fSz = this.getFileSize();
-  		if (stOff >= edOff) throw new IndexOutOfBoundsException();
-  		if (stOff < 0) throw new IndexOutOfBoundsException();
-  		if (edOff > fSz) throw new IndexOutOfBoundsException();
+  		if (stOff >= edOff) throw new IndexOutOfBoundsException("Start offset is greater than end offset -- stOff = 0x" + Long.toHexString(stOff) + ", edOff = 0x" + Long.toHexString(edOff));
+  		if (stOff < 0) throw new IndexOutOfBoundsException("Start offset is < 0 (stOff = " + stOff + ")");
+  		if (edOff > fSz) throw new IndexOutOfBoundsException("End offset (0x" + Long.toHexString(edOff) + ") beyond end of file (size = 0x" + Long.toHexString(fSz) + ")");
   		if (edOff == fSz) return false;
   		return true;
   	}

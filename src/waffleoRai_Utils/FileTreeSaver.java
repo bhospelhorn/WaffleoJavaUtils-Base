@@ -23,6 +23,7 @@ import waffleoRai_Files.FileDefinitions;
 import waffleoRai_Files.FileTypeDefNode;
 import waffleoRai_Files.FileTypeDefinition;
 import waffleoRai_Files.FileTypeNode;
+import waffleoRai_Files.FragFileNode;
 import waffleoRai_Files.ISOFileNode;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
 
@@ -52,6 +53,7 @@ public class FileTreeSaver {
 	 * 		14 - Is Link?
 	 * 		13 - Has metadata? (V3+)
 	 * 		12 - Is CD Node? (V5+)
+	 * 		11 - Is fragmented node? (V6+)
 	 * 		 7 - Source compressed? (If file)
 	 * 		 6 - Has type chain [file]/file class[dir] (V2+)(V4+ for dir)
 	 * 		 5 - Has encryption (V2+)
@@ -62,6 +64,8 @@ public class FileTreeSaver {
 	 * 	Source Path Index [4]
 	 * 	Offset [8]
 	 * 	Length [8]
+	 * 	Block count [4] (If applicable) (V6+)
+	 *	Block location data [16*blocks] (If applicable) (V6+)
 	 *  Sector Size Data [8] (If applicable) (V5+)
 	 *  	Data Size [4]
 	 *  	Header Size [2]
@@ -99,7 +103,7 @@ public class FileTreeSaver {
 	public static final String MAGIC_TABLE = "SPBt";
 	public static final String MAGIC_TREE = "eert";
 	
-	public static final int CURRENT_VERSION = 5;
+	public static final int CURRENT_VERSION = 6;
 	
 	public static final String ENCODING = "UTF8";
 	
@@ -168,6 +172,9 @@ public class FileTreeSaver {
 		if(version >= 5 && (flags & 0x1000) != 0){
 			fn = new ISOFileNode(parent, "");
 		}
+		else if(version >= 6 && (flags & 0x800) != 0){
+			fn = new FragFileNode(parent, "");
+		}
 		else fn = new FileNode(parent, "");
 		offmap.put((int)stpos, fn);
 		
@@ -194,6 +201,16 @@ public class FileTreeSaver {
 		fn.scratch_field = in.intFromFile(cpos); cpos+=4;
 		fn.setOffset(in.longFromFile(cpos)); cpos += 8;
 		fn.setLength(in.longFromFile(cpos)); cpos+=8;
+		
+		if(version >= 6 && (flags & 0x800) != 0){
+			FragFileNode ffn = (FragFileNode)fn;
+			int block_count = in.intFromFile(cpos); cpos+=4;
+			for(int i = 0; i < block_count; i++){
+				long off = in.longFromFile(cpos); cpos+=8;
+				long len = in.longFromFile(cpos); cpos+=8;
+				ffn.addBlock(off, len);
+			}
+		}
 		
 		if(version >= 5 && (flags & 0x1000) != 0){
 			int dsize = in.intFromFile(cpos); cpos += 4;
@@ -695,6 +712,7 @@ public class FileTreeSaver {
 				//if(child.sourceDataCompressed()){csz += 8; flag |= 0x80;}
 				
 				if(child instanceof ISOFileNode) flag |= 0x1000;
+				if(child instanceof FragFileNode) flag |= 0x800;
 				
 				FileBuffer cdat = new FileBuffer(csz, true);
 				cdat.addToFile((short)flag);
@@ -710,6 +728,16 @@ public class FileTreeSaver {
 				cdat.addToFile(srcidx);
 				cdat.addToFile(child.getOffset());
 				cdat.addToFile(child.getLength());
+				
+				if(child instanceof FragFileNode){
+					FragFileNode ffn = (FragFileNode)child;
+					List<long[]> blocks = ffn.getBlocks();
+					cdat.addToFile(blocks.size());
+					for(long[] block : blocks){
+						cdat.addToFile(block[0]);
+						cdat.addToFile(block[1]);
+					}
+				}
 				
 				if(child instanceof ISOFileNode){
 					ISOFileNode isochild = (ISOFileNode)child;

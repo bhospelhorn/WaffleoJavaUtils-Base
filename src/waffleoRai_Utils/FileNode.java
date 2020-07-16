@@ -23,8 +23,12 @@ import waffleoRai_Files.FileTypeNode;
 import waffleoRai_Files.NodeMatchCallback;
 
 public class FileNode implements TreeNode, Comparable<FileNode>{
+	
+	public static final int SORT_ORDER_NORMAL = 0; //Dir alpha, then file alpha
+	public static final int SORT_ORDER_LOCATION = 1; //Dir alpha, file src alpha, file offset
 
 	private static boolean TOSTRING_FULLPATH = true;
+	private static int SORT_BY = SORT_ORDER_NORMAL;
 	
 	/* --- Instance Variables --- */
 	
@@ -222,6 +226,10 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		FileNode.TOSTRING_FULLPATH = b;
 	}
 	
+	public static void setSortOrder(int sort_order){
+		SORT_BY = sort_order;
+	}
+	
 	/* --- Comparable --- */
 	
 	public boolean isDirectory()
@@ -258,6 +266,21 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 			if(!this.hasTypingMark() && other.hasTypingMark()) return -1;
 		}
 		
+		if(SORT_BY == SORT_ORDER_LOCATION){
+			String tsrcpath = this.getSourcePath();
+			String osrcpath = other.getSourcePath();
+			
+			if(tsrcpath == null){
+				if(osrcpath != null) return -1;
+				return (int)(this.getOffset() - other.getOffset());
+			}
+			else{
+				if(!tsrcpath.equals(osrcpath)) return tsrcpath.compareTo(osrcpath);
+				return (int)(this.getOffset() - other.getOffset());
+			}
+		}
+		
+		//Default: normal sort order
 		return this.fileName.compareTo(other.fileName);
 	}
 	
