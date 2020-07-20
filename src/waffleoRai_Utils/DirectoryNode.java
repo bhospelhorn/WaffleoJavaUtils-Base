@@ -6,6 +6,7 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Enumeration;
@@ -54,6 +55,23 @@ public class DirectoryNode extends FileNode{
 		List<FileNode> list = new ArrayList<FileNode>(children.size() + 1);
 		list.addAll(children.values());
 		Collections.sort(list);
+		return list;
+	}
+	
+	private void getDescendants(Collection<FileNode> col, boolean includeDirectories){
+		for(FileNode child : children.values()){
+			if(child instanceof DirectoryNode){
+				if(includeDirectories)col.add(child);
+				((DirectoryNode)child).getDescendants(col, includeDirectories);
+			}
+			else col.add(child);
+		}
+	}
+	
+	public Collection<FileNode> getAllDescendants(boolean includeDirectories){
+		List<FileNode> list = new LinkedList<FileNode>();
+		getDescendants(list, includeDirectories);
+		
 		return list;
 	}
 	
@@ -238,6 +256,31 @@ public class DirectoryNode extends FileNode{
 				((DirectoryNode)c).setSourcePathForTree(path);
 			}
 			else c.setSourcePath(path);
+		}
+	}
+	
+	public void incrementTreeOffsetsBy(long value){
+		List<FileNode> clist = this.getChildren();
+		for(FileNode c : clist){
+			if(c instanceof DirectoryNode){
+				((DirectoryNode)c).incrementTreeOffsetsBy(value);
+			}
+			else{
+				long off = c.getOffset();
+				c.setOffset(off + value);
+			}
+		}
+	}
+	
+	public void setMetaValueForTree(String key, String value){
+		List<FileNode> clist = this.getChildren();
+		for(FileNode c : clist){
+			if(c instanceof DirectoryNode){
+				((DirectoryNode)c).setMetaValueForTree(key, value);
+			}
+			else{
+				c.setMetadataValue(key, value);
+			}
 		}
 	}
 	

@@ -1,6 +1,7 @@
 package waffleoRai_Utils;
 
 import java.io.BufferedOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -18,6 +19,8 @@ import javax.swing.tree.TreePath;
 import waffleoRai_Compression.definitions.AbstractCompDef;
 import waffleoRai_Compression.definitions.CompDefNode;
 import waffleoRai_Compression.definitions.CompressionInfoNode;
+import waffleoRai_Encryption.StaticDecryption;
+import waffleoRai_Encryption.StaticDecryptor;
 import waffleoRai_Files.EncryptionDefinition;
 import waffleoRai_Files.FileTypeNode;
 import waffleoRai_Files.NodeMatchCallback;
@@ -57,6 +60,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	
 	//Scratch
 	protected int scratch_field;
+	protected long uid;
 	
 	/* --- Construction --- */
 	
@@ -163,7 +167,11 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		return (type_chain != null);
 	}
 	
+	public long getUID(){return uid;}
+	
 	/* --- Setters --- */
+	
+	public void setUID(long id){uid = id;}
 	
 	public void setFileName(String name){
 		String oldname = fileName;
@@ -230,6 +238,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		SORT_BY = sort_order;
 	}
 	
+	
 	/* --- Comparable --- */
 	
 	public boolean isDirectory()
@@ -272,11 +281,15 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 			
 			if(tsrcpath == null){
 				if(osrcpath != null) return -1;
-				return (int)(this.getOffset() - other.getOffset());
+				long offdiff = this.getOffset() - other.getOffset();
+				if(offdiff >= 0L) return 1;
+				else return -1;
 			}
 			else{
 				if(!tsrcpath.equals(osrcpath)) return tsrcpath.compareTo(osrcpath);
-				return (int)(this.getOffset() - other.getOffset());
+				long offdiff = this.getOffset() - other.getOffset();
+				if(offdiff >= 0L) return 1;
+				else return -1;
 			}
 		}
 		
@@ -452,6 +465,15 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		long maxed = getOffset() + getLength();
 		long edoff = stoff + len;
 		if(edoff > maxed) edoff = maxed;
+		
+		//Handle encryption if present, and possible
+		if(encryption != null){
+			StaticDecryptor decryptor = StaticDecryption.getDecryptorState();
+			if(decryptor != null){
+				File f = decryptor.decrypt(this);
+				if(f != null) path = f.getAbsolutePath();
+			}
+		}
 		
 		if(comp_chain != null)
 		{

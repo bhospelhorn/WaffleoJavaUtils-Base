@@ -28,6 +28,9 @@ import java.util.Random;
  * 
  * 1.1.1 | July 3, 2020
  * 	getBytes(long, long) debug. Was always reading from start of first page.
+ * 
+ * 1.1.2 | July 16, 2020
+ * 	If read in from a path, should save that path.
  */
 
 /**
@@ -37,8 +40,8 @@ import java.util.Random;
  * <br>The size of each page and the number of pages (with data in memory) can be modified.
  * <br>WARNING: This class is not threadsafe.
  * @author Blythe Hospelhorn
- * @version 1.1.1
- * @since July 3, 2020
+ * @version 1.1.2
+ * @since July 16, 2020
  */
 public class CacheFileBuffer extends FileBuffer{
 	
@@ -554,8 +557,14 @@ public class CacheFileBuffer extends FileBuffer{
 	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, int pageCount, long stPos, long edPos, boolean bigEndian) throws IOException
 	{
 		CacheFileBuffer buffer = new CacheFileBuffer(pageSize, pageCount, false);
+		
+		buffer.setDir(FileBuffer.chopPathToDir(filepath));
+		buffer.setName(FileBuffer.chopPathToFName(filepath));
+		buffer.setExt(FileBuffer.chopPathToExt(filepath));
+		
 		buffer.setEndian(bigEndian);
 		buffer.loadReadOnlyCacheBuffer(filepath, stPos, edPos);
+		
 		return buffer;
 	}
 	
@@ -1286,10 +1295,9 @@ public class CacheFileBuffer extends FileBuffer{
 	{
 		long sz = edOff - stOff;
 		if(sz > 0x7FFFFFFFL) throw new IndexOutOfBoundsException("Cannot have byte array of > 2GB!");
-		//System.err.println("stOff = 0x" + Long.toHexString(stOff));
-		//System.err.println("edOff = 0x" + Long.toHexString(edOff));
 		
 		byte[] arr = new byte[(int)sz];
+		long mySize = this.getFileSize();
 		
 		try{
 			CachePage page = getLoadedPage(stOff);
@@ -1298,14 +1306,25 @@ public class CacheFileBuffer extends FileBuffer{
 			}
 			if(page.getDataBuffer() == null) page.loadToCache();
 
-			long cpos = stOff - page.offset_value;
+			long ppos = stOff - page.offset_value;
 			
 			for(int i = 0; i < arr.length; i++){
 				//System.err.println("Page -- start offset = 0x" + Long.toHexString(page.src_offset));
-				arr[i] = page.getDataBuffer().getByte(cpos); cpos++;
-				if(cpos >= page.size){
-					cpos = 0;
+				arr[i] = page.getDataBuffer().getByte(ppos++);
+				if(ppos >= page.size){
+					//Check to make sure this isn't the end of the buffer...
+					if((stOff + i + 1) >= mySize) break;
+					ppos = 0;
 					page = page.getNextPage();
+					//We're getting null pages here. Why?
+					if(page == null){
+						System.err.println("Premature linked list end?");
+						System.err.println("stOff = 0x" + Long.toHexString(stOff));
+						System.err.println("edOff = 0x" + Long.toHexString(edOff));
+						System.err.println("fileSize = 0x" + Long.toHexString(this.getFileSize()));
+						System.err.println("Position = 0x" + Long.toHexString(stOff + i + 1));
+					}
+					
 					if(page.getDataBuffer() == null) page.loadToCache();
 				}
 			}
