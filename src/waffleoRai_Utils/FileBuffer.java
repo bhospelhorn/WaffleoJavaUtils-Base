@@ -88,6 +88,8 @@ import java.util.TimeZone;
  * 	3.7.2 -> 3.8.0 | Added wrap()
  * 2020.07.04
  * 	3.8.0 -> 3.8.1 | Added exception messages to checkOffsetPair() throws
+ * 2020.08.03
+ * 	3.8.1 -> 3.8.2 | Rewrote getASCII_string(long, char)
  * */
 
 /**
@@ -99,8 +101,8 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.8.1
- * @since July 4, 2020
+ * @version 3.8.2
+ * @since August 3, 2020
  */
 public class FileBuffer 
 {
@@ -3581,8 +3583,7 @@ public class FileBuffer
   	 * @return String which is an ASCII representation of the bytes in question
   	 * @throws IndexOutOfBoundsException If position or length are invalid
   	 */
-  	public String getASCII_string(int pos, char endmarker)
-  	{
+  	public String getASCII_string(int pos, char endmarker){
   		return this.getASCII_string((long)pos, endmarker);
   	}
   
@@ -3598,26 +3599,24 @@ public class FileBuffer
   	 * @return String which is an ASCII representation of the bytes in question
   	 * @throws IndexOutOfBoundsException If position or length are invalid
   	 */
-  	public String getASCII_string(long pos, char endmarker)
-  	{
-  		if (pos < 0 || pos >= this.getFileSize()) throw new IndexOutOfBoundsException();
+  	public String getASCII_string(long pos, char endmarker){
+  		if (pos < 0 || pos >= getFileSize()) throw new IndexOutOfBoundsException();
   	  
-  		String s = "";
-  		int i = 0;
-  		char nowByte = (char)FileBuffer.UByteToUShort(this.getByte(pos));
+  		StringBuilder sb = new StringBuilder(256);
+
+  		char c = '\0';
+  		boolean bool = true;
+  		do{
+  			byte b = getByte(pos++);
+  			c = (char)Byte.toUnsignedInt(b);
+  			bool = (c != endmarker && c >= 0x20);
+  			if(bool) sb.append(c);
+  			
+  			//System.err.println("Byte: 0x" + String.format("%02x", b) + " -- Char: " + c);
+  		}
+  		while(bool);
 	  
-  		while (nowByte != endmarker && (pos + i) < (int)this.getFileSize())
-	  	{
-  			if (nowByte == 0) break;
-  			if (nowByte < 32 && !(nowByte == 0x09 || nowByte == 0x0A || nowByte == 0x0B || nowByte == 0x0D)) break;
-  			s += nowByte;
-  			//System.out.println("Added character " + nowByte + " to string.");
-  			i++;
-  			nowByte = (char)(Byte.toUnsignedInt(this.getByte(pos + i)));
-  			//s += b;
-	  	}
-	  
-  		return s;
+  		return sb.toString();
   	}
   
   	/**

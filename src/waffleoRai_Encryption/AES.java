@@ -168,9 +168,12 @@ public class AES {
 		cipher_str = "CTR";
 	}
 	
-	public void setCCM()
-	{
+	public void setCCM(){
 		cipher_str = "CCM";
+	}
+	
+	public void setECB(){
+		cipher_str = "ECB";
 	}
 	
 	public void setPadding(boolean b)
@@ -508,41 +511,41 @@ public class AES {
 	
 	public byte[] decrypt(byte[] iv, byte[] in)
 	{
-		try 
-		{
+		try {
 			Cipher cipher = Cipher.getInstance(getCipherString());
 			SecretKeySpec skey = new SecretKeySpec(aes_key, "AES");
-			IvParameterSpec ivspec = new IvParameterSpec(iv);
-			cipher.init(Cipher.DECRYPT_MODE, skey, ivspec);
+			
+			if(cipher_str.equals("ECB")){
+				cipher.init(Cipher.DECRYPT_MODE, skey);
+			}
+			else{
+				IvParameterSpec ivspec = new IvParameterSpec(iv);
+				cipher.init(Cipher.DECRYPT_MODE, skey, ivspec);
+			}
+			
 			return cipher.doFinal(in);
 		} 
-		catch (NoSuchAlgorithmException e) 
-		{
+		catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
 			return null;
 		} 
-		catch (NoSuchPaddingException e) 
-		{
+		catch (NoSuchPaddingException e) {
 			e.printStackTrace();
 			return null;
 		} 
-		catch (InvalidKeyException e) 
-		{
+		catch (InvalidKeyException e) {
 			e.printStackTrace();
 			return null;
 		} 
-		catch (InvalidAlgorithmParameterException e) 
-		{
+		catch (InvalidAlgorithmParameterException e) {
 			e.printStackTrace();
 			return null;
 		} 
-		catch (IllegalBlockSizeException e) 
-		{
+		catch (IllegalBlockSizeException e) {
 			e.printStackTrace();
 			return null;
 		} 
-		catch (BadPaddingException e) 
-		{
+		catch (BadPaddingException e) {
 			e.printStackTrace();
 			return null;
 		}
@@ -554,9 +557,14 @@ public class AES {
 		{
 			cipher = Cipher.getInstance(getCipherString());
 			skey = new SecretKeySpec(aes_key, "AES");
-			ivspec = new IvParameterSpec(iv);
 			
-			cipher.init(Cipher.DECRYPT_MODE, skey, ivspec);
+			if(cipher_str.equals("ECB")){
+				cipher.init(Cipher.DECRYPT_MODE, skey);
+			}
+			else{
+				ivspec = new IvParameterSpec(iv);
+				cipher.init(Cipher.DECRYPT_MODE, skey, ivspec);	
+			}
 		} 
 		catch (NoSuchAlgorithmException e) 
 		{
@@ -603,8 +611,13 @@ public class AES {
 		{
 			Cipher cipher = Cipher.getInstance(getCipherString());
 			SecretKeySpec skey = new SecretKeySpec(aes_key, "AES");
-			IvParameterSpec ivspec = new IvParameterSpec(iv);
-			cipher.init(Cipher.ENCRYPT_MODE, skey, ivspec);
+			if(cipher_str.equals("ECB")){
+				cipher.init(Cipher.ENCRYPT_MODE, skey);	
+			}
+			else{
+				IvParameterSpec ivspec = new IvParameterSpec(iv);
+				cipher.init(Cipher.ENCRYPT_MODE, skey, ivspec);	
+			}
 			return cipher.doFinal(in);
 		} 
 		catch (NoSuchAlgorithmException e) 
@@ -637,6 +650,31 @@ public class AES {
 			e.printStackTrace();
 			return null;
 		}
+	}
+	
+	/* ----- Util ----- */
+	
+	public static byte[] str2Key(String s){
+		byte[] arr = new byte[s.length() >>> 1];
+		int cpos = 0;
+		for(int i = 0; i < arr.length; i++){
+			String bstr = s.substring(cpos, cpos+2);
+			arr[i] = (byte)Integer.parseInt(bstr, 16);
+			cpos+=2;
+		}
+		
+		return arr;
+	}
+	
+	public static String bytes2str(byte[] byte_arr){
+		if(byte_arr == null) return "<NULL>";
+		
+		int chars = byte_arr.length << 1;
+		StringBuilder sb = new StringBuilder(chars+2);
+		
+		for(int i = 0; i < byte_arr.length; i++) sb.append(String.format("%02x", byte_arr[i]));
+		
+		return sb.toString();
 	}
 	
 }

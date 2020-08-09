@@ -23,7 +23,16 @@ public class AESXTS extends AES{
 		genKeySchedule();
 	}
 	
+	public AESXTS(byte[] double_key){
+		super(Arrays.copyOf(double_key, double_key.length >>> 1));
+		int len = double_key.length >>> 1;
+		key_tweak = Arrays.copyOfRange(double_key, len, double_key.length);
+		
+		genKeySchedule();
+	}
+	
 	/* ----- Tweak ----- */
+	//https://github.com/horrorho/Java-XTS-AES
 	
 	public void resetTweak(byte[] t){
 		AES tcrypter = new AES(key_tweak);
