@@ -1,4 +1,4 @@
-package waffleoRai_Files;
+package waffleoRai_Files.tree;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -7,10 +7,8 @@ import java.util.List;
 
 import waffleoRai_Compression.definitions.AbstractCompDef;
 import waffleoRai_Compression.definitions.CompressionInfoNode;
-import waffleoRai_Utils.DirectoryNode;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBufferStreamer;
-import waffleoRai_Utils.FileNode;
 import waffleoRai_Utils.MultiFileBuffer;
 
 public class FragFileNode extends FileNode{

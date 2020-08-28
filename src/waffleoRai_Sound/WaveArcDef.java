@@ -5,7 +5,7 @@ import java.util.List;
 
 import waffleoRai_Files.FileClass;
 import waffleoRai_Files.FileTypeDefinition;
-import waffleoRai_Utils.FileNode;
+import waffleoRai_Files.tree.FileNode;
 
 public abstract class WaveArcDef implements FileTypeDefinition{
 	

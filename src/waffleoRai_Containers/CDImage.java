@@ -4,7 +4,7 @@ import java.io.IOException;
 
 import javax.swing.tree.TreeModel;
 
-import waffleoRai_Utils.DirectoryNode;
+import waffleoRai_Files.tree.DirectoryNode;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.VirDirectory;
 

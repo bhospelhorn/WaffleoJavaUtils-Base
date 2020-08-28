@@ -6,7 +6,7 @@ import java.util.Collection;
 import waffleoRai_Containers.CDTable.CDInvalidRecordException;
 import waffleoRai_Containers.XATable.XAEntry;
 import waffleoRai_Containers.XATable.XASectorHeader;
-import waffleoRai_Files.ISOFileNode;
+import waffleoRai_Files.tree.ISOFileNode;
 import waffleoRai_Utils.FileBuffer;
 //import waffleoRai_jpsx.PSXCDTable;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;

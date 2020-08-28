@@ -31,6 +31,9 @@ import java.util.Random;
  * 
  * 1.1.2 | July 16, 2020
  * 	If read in from a path, should save that path.
+ * 
+ * 1.2.0 | August 21, 2020
+ * 	Added flush()
  */
 
 /**
@@ -40,8 +43,8 @@ import java.util.Random;
  * <br>The size of each page and the number of pages (with data in memory) can be modified.
  * <br>WARNING: This class is not threadsafe.
  * @author Blythe Hospelhorn
- * @version 1.1.2
- * @since July 16, 2020
+ * @version 1.2.0
+ * @since August 21, 2020
  */
 public class CacheFileBuffer extends FileBuffer{
 	
@@ -909,6 +912,15 @@ public class CacheFileBuffer extends FileBuffer{
 		
 		return page;
 	}
+	
+	public void flush(){
+		CachePage page = first_page;
+		while(page != null){
+			//TODO handle dirty pages?
+			page.loaded_data = null;
+			page = page.next;
+		}
+  	}
 	
 	/* ----- BASIC GETTERS ----- */
 	

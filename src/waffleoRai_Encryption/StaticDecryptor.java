@@ -1,11 +1,9 @@
 package waffleoRai_Encryption;
 
-import java.io.File;
-
-import waffleoRai_Utils.FileNode;
+import waffleoRai_Files.tree.FileNode;
 
 public interface StaticDecryptor {
 	
-	public File decrypt(FileNode node);
+	public FileNode decrypt(FileNode node);
 
 }

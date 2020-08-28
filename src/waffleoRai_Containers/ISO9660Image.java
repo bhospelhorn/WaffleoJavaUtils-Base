@@ -10,11 +10,11 @@ import javax.swing.tree.TreeModel;
 
 import waffleoRai_Containers.CDTable.CDInvalidRecordException;
 import waffleoRai_Containers.ISO9660Table.ISO9660Entry;
-import waffleoRai_Files.ISOFileNode;
-import waffleoRai_Utils.DirectoryNode;
+import waffleoRai_Files.tree.DirectoryNode;
+import waffleoRai_Files.tree.FileNode;
+import waffleoRai_Files.tree.ISOFileNode;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
-import waffleoRai_Utils.FileNode;
 import waffleoRai_Utils.MultiFileBuffer;
 import waffleoRai_Utils.VirDirectory;
 

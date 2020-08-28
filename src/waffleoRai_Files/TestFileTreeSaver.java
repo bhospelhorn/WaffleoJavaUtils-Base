@@ -1,7 +1,7 @@
 package waffleoRai_Files;
 
-import waffleoRai_Utils.DirectoryNode;
-import waffleoRai_Utils.FileTreeSaver;
+import waffleoRai_Files.tree.DirectoryNode;
+import waffleoRai_Files.tree.FileTreeSaver;
 
 public class TestFileTreeSaver {
 

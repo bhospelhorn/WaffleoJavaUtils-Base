@@ -4,7 +4,7 @@ import java.util.Collection;
 
 import waffleoRai_Files.FileClass;
 import waffleoRai_Files.FileTypeDefinition;
-import waffleoRai_Utils.FileNode;
+import waffleoRai_Files.tree.FileNode;
 
 public abstract class PaletteFileDef implements FileTypeDefinition{
 	

@@ -1,6 +1,6 @@
 package waffleoRai_Files;
 
-import waffleoRai_Utils.FileNode;
+import waffleoRai_Files.tree.FileNode;
 
 public interface NodeMatchCallback {
 	

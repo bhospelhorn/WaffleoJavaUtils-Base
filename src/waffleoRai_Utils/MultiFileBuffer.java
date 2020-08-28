@@ -20,6 +20,8 @@ import java.util.List;
  * 		createCopy(long,long) should be only copying between points, was copying whole damn thing.
  * 2020.06.23 | 1.1.0 -> 1.1.1
  * 		Debugging toByteBuffer()
+ * 2020.08.21 | 1.1.1 -> 1.2.0
+ * 		Added flush()
  */
 
 /**
@@ -29,8 +31,8 @@ import java.util.List;
  * <br>This can be handy for serializing into an object to hold in memory.
  * <br>CachedFileBuffer utilizes very similar logic and can be used in the same way.
  * @author Blythe Hospelhorn
- * @version 1.1.1
- * @since June 23, 2020
+ * @version 1.2.0
+ * @since August 21, 2020
  *
  */
 public class MultiFileBuffer extends FileBuffer{
@@ -518,4 +520,10 @@ public class MultiFileBuffer extends FileBuffer{
   		last_read = null;
   	}
 	
+  	public void flush() throws IOException{
+  		for(Page p : list){
+  			if(p.data != null) p.data.flush();
+  		}
+  	}
+  	
 }

@@ -5,9 +5,9 @@ import java.util.Collection;
 
 import waffleoRai_Files.FileClass;
 import waffleoRai_Files.FileTypeDefinition;
-import waffleoRai_Utils.DirectoryNode;
+import waffleoRai_Files.tree.DirectoryNode;
+import waffleoRai_Files.tree.FileNode;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
-import waffleoRai_Utils.FileNode;
 
 public abstract class ArchiveDef implements FileTypeDefinition{
 	

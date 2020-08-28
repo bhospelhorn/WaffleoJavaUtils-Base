@@ -4,8 +4,8 @@ import java.util.Collection;
 
 import waffleoRai_Files.FileClass;
 import waffleoRai_Files.FileTypeDefinition;
+import waffleoRai_Files.tree.FileNode;
 import waffleoRai_SoundSynth.SynthBank;
-import waffleoRai_Utils.FileNode;
 
 public abstract class SoundbankDef implements FileTypeDefinition{
 	

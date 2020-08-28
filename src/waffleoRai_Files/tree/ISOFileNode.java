@@ -1,10 +1,8 @@
-package waffleoRai_Files;
+package waffleoRai_Files.tree;
 
 import java.io.IOException;
 
-import waffleoRai_Utils.DirectoryNode;
 import waffleoRai_Utils.FileBuffer;
-import waffleoRai_Utils.FileNode;
 import waffleoRai_Utils.MultiFileBuffer;
 
 /*

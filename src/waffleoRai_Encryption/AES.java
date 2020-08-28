@@ -652,6 +652,59 @@ public class AES {
 		}
 	}
 	
+	public boolean initEncrypt(byte[] iv)
+	{
+		try 
+		{
+			cipher = Cipher.getInstance(getCipherString());
+			skey = new SecretKeySpec(aes_key, "AES");
+			
+			if(cipher_str.equals("ECB")){
+				cipher.init(Cipher.ENCRYPT_MODE, skey);
+			}
+			else{
+				ivspec = new IvParameterSpec(iv);
+				cipher.init(Cipher.ENCRYPT_MODE, skey, ivspec);	
+			}
+		} 
+		catch (NoSuchAlgorithmException e) 
+		{
+			e.printStackTrace();
+			return false;
+		} 
+		catch (NoSuchPaddingException e)
+		{
+			e.printStackTrace();
+			return false;
+		} 
+		catch (InvalidKeyException e) 
+		{
+			e.printStackTrace();
+			return false;
+		} 
+		catch (InvalidAlgorithmParameterException e) 
+		{
+			e.printStackTrace();
+			return false;
+		}
+		return true;
+	}
+	
+	public byte[] encryptBlock(byte[] in, boolean finalBlock)
+	{
+		if(cipher == null) return null;
+		
+		if(finalBlock)
+		{
+			try {return cipher.doFinal(in);} 
+			catch (IllegalBlockSizeException e) {e.printStackTrace(); return null;} 
+			catch (BadPaddingException e) {e.printStackTrace(); return null;} 
+		}
+		return cipher.update(in);
+		
+	}
+	
+	
 	/* ----- Util ----- */
 	
 	public static byte[] str2Key(String s){

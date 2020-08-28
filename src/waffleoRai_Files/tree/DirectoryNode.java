@@ -1,8 +1,9 @@
-package waffleoRai_Utils;
+package waffleoRai_Files.tree;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -18,8 +19,22 @@ import java.util.Map;
 import javax.swing.tree.TreeNode;
 
 import waffleoRai_Files.FileClass;
+import waffleoRai_Files.FileNodeModifierCallback;
 import waffleoRai_Files.NodeMatchCallback;
+import waffleoRai_Utils.FileBuffer;
+import waffleoRai_Utils.Treenumeration;
 
+/*
+ * UPDATES --
+ * 
+ * 
+ */
+
+/**
+ * 
+ * @author Blythe
+ *
+ */
 public class DirectoryNode extends FileNode{
 
 	/* --- Instance Variables --- */
@@ -32,12 +47,22 @@ public class DirectoryNode extends FileNode{
 	
 	/* --- Interfaces --- */
 	
+	/**
+	 * 
+	 * @author Blythe
+	 *
+	 */
 	public interface TreeDumpListener{
 		public void onStartNodeDump(FileNode node);
 	}
 	
 	/* --- Construction --- */
 	
+	/**
+	 * 
+	 * @param parent
+	 * @param name
+	 */
 	public DirectoryNode(DirectoryNode parent, String name)
 	{
 		super(parent, name);
@@ -48,8 +73,16 @@ public class DirectoryNode extends FileNode{
 	
 	/* --- Getters --- */
 	
+	/**
+	 * 
+	 * @return
+	 */
 	public int getEndIndex(){return endIndex;}
 	
+	/**
+	 * 
+	 * @return
+	 */
 	public List<FileNode> getChildren()
 	{
 		List<FileNode> list = new ArrayList<FileNode>(children.size() + 1);
@@ -68,6 +101,11 @@ public class DirectoryNode extends FileNode{
 		}
 	}
 	
+	/**
+	 * 
+	 * @param includeDirectories
+	 * @return
+	 */
 	public Collection<FileNode> getAllDescendants(boolean includeDirectories){
 		List<FileNode> list = new LinkedList<FileNode>();
 		getDescendants(list, includeDirectories);
@@ -80,6 +118,11 @@ public class DirectoryNode extends FileNode{
 		return true;
 	}
 	
+	/**
+	 * 
+	 * @param relative_path
+	 * @return
+	 */
 	public FileNode getNodeAt(String relative_path)
 	{
 		//System.err.println("relative_path: " + relative_path);
@@ -116,6 +159,11 @@ public class DirectoryNode extends FileNode{
 		return getNodeAt(mypath);
 	}
 	
+	/**
+	 * 
+	 * @param splitPath
+	 * @return
+	 */
 	protected FileNode getNodeAt(Deque<String> splitPath)
 	{
 		//Look for child with name...
@@ -149,6 +197,10 @@ public class DirectoryNode extends FileNode{
 		return null;
 	}
 	
+	/**
+	 * 
+	 * @return
+	 */
 	public FileClass getFileClass(){
 		return fileclass;
 	}
@@ -159,20 +211,48 @@ public class DirectoryNode extends FileNode{
 	
 	/* --- Setters --- */
 	
+	/**
+	 * 
+	 * @param child
+	 * @param oldname
+	 */
 	protected void changeChildName(FileNode child, String oldname){
 		children.remove(oldname);
 		children.put(child.getFileName(), child);
 	}
 	
+	/**
+	 * 
+	 * @param node
+	 */
 	protected void addChild(FileNode node){children.put(node.getFileName(), node);}
+	
+	/**
+	 * 
+	 */
 	public void clearChildren(){children.clear();}
+	
+	/**
+	 * 
+	 * @param i
+	 */
 	public void setEndIndex(int i){endIndex = i;}
 	
+	/**
+	 * 
+	 * @param childname
+	 * @return
+	 */
 	public FileNode removeChild(String childname)
 	{
 		return children.remove(childname);
 	}
 	
+	/**
+	 * 
+	 * @param child
+	 * @return
+	 */
 	public boolean removeChild(FileNode child)
 	{
 		FileNode match = children.remove(child.getFileName());
@@ -196,10 +276,20 @@ public class DirectoryNode extends FileNode{
 		return false;
 	}
 	
+	/**
+	 * 
+	 * @param fc
+	 */
 	public void setFileClass(FileClass fc){
 		fileclass = fc;
 	}
 	
+	/**
+	 * 
+	 * @param targetpath
+	 * @param node
+	 * @return
+	 */
 	public boolean addChildAt(String targetpath, FileNode node){
 		//Move slashes
 		String slash = "/";
@@ -248,6 +338,10 @@ public class DirectoryNode extends FileNode{
 		return true;
 	}
 	
+	/**
+	 * 
+	 * @param path
+	 */
 	public void setSourcePathForTree(String path){
 		super.setSourcePath(path);
 		List<FileNode> clist = this.getChildren();
@@ -259,6 +353,10 @@ public class DirectoryNode extends FileNode{
 		}
 	}
 	
+	/**
+	 * 
+	 * @param value
+	 */
 	public void incrementTreeOffsetsBy(long value){
 		List<FileNode> clist = this.getChildren();
 		for(FileNode c : clist){
@@ -272,6 +370,11 @@ public class DirectoryNode extends FileNode{
 		}
 	}
 	
+	/**
+	 * 
+	 * @param key
+	 * @param value
+	 */
 	public void setMetaValueForTree(String key, String value){
 		List<FileNode> clist = this.getChildren();
 		for(FileNode c : clist){
@@ -281,6 +384,21 @@ public class DirectoryNode extends FileNode{
 			else{
 				c.setMetadataValue(key, value);
 			}
+		}
+	}
+	
+	/**
+	 * 
+	 * @param method
+	 */
+	public void doForTree(FileNodeModifierCallback method){
+		method.doToNode(this);
+		List<FileNode> clist = this.getChildren();
+		for(FileNode c : clist){
+			if(c instanceof DirectoryNode){
+				((DirectoryNode)c).doForTree(method);
+			}
+			else method.doToNode(c);
 		}
 	}
 	
@@ -335,6 +453,11 @@ public class DirectoryNode extends FileNode{
 		return copyAsDir(parent_copy);
 	}
 	
+	/**
+	 * 
+	 * @param parent_copy
+	 * @return
+	 */
 	public DirectoryNode copyAsDir(DirectoryNode parent_copy)
 	{
 		DirectoryNode copy = new DirectoryNode(parent_copy, getFileName());
@@ -350,11 +473,20 @@ public class DirectoryNode extends FileNode{
 		return copy;
 	}
 	
+	/**
+	 * 
+	 * @return
+	 */
 	public DirectoryNode copyDirectoryTree()
 	{
 		return copyDirectoryTree(null);
 	}
 	
+	/**
+	 * 
+	 * @param parent_copy
+	 * @return
+	 */
 	public DirectoryNode copyDirectoryTree(DirectoryNode parent_copy)
 	{
 		DirectoryNode copy = new DirectoryNode(parent_copy, getFileName());
@@ -372,21 +504,49 @@ public class DirectoryNode extends FileNode{
 		return copy;
 	}
 	
+	/**
+	 * 
+	 * @param path
+	 * @return
+	 * @throws IOException
+	 */
 	public boolean dumpTo(String path) throws IOException
 	{
 		return dumpTo(path, true, null);
 	}
 	
+	/**
+	 * 
+	 * @param path
+	 * @param listener
+	 * @return
+	 * @throws IOException
+	 */
 	public boolean dumpTo(String path, TreeDumpListener listener) throws IOException
 	{
 		return dumpTo(path, true, listener);
 	}
 	
+	/**
+	 * 
+	 * @param path
+	 * @param auto_decomp
+	 * @return
+	 * @throws IOException
+	 */
 	public boolean dumpTo(String path, boolean auto_decomp) throws IOException
 	{
 		return dumpTo(path, auto_decomp, null);
 	}
 	
+	/**
+	 * 
+	 * @param path
+	 * @param auto_decomp
+	 * @param listener
+	 * @return
+	 * @throws IOException
+	 */
 	public boolean dumpTo(String path, boolean auto_decomp, TreeDumpListener listener) throws IOException
 	{
 		if(path == null || path.isEmpty()) return false;
@@ -415,11 +575,17 @@ public class DirectoryNode extends FileNode{
 		return true;
 	}
 	
+	/**
+	 * 
+	 */
 	public boolean copyDataTo(String path, boolean decompress) throws IOException
 	{
 		return dumpTo(path, decompress);
 	}
 	
+	/**
+	 * 
+	 */
 	public boolean copyDataTo(OutputStream out, boolean decompress) throws IOException
 	{
 		return false;
@@ -449,6 +615,9 @@ public class DirectoryNode extends FileNode{
 		return null;
 	}
 	
+	/**
+	 * 
+	 */
 	public String findNodeThat(NodeMatchCallback cond){
 		
 		String path = "";
@@ -460,6 +629,15 @@ public class DirectoryNode extends FileNode{
 			dir = dir.getParent();
 		}
 		return null;
+	}
+	
+	/**
+	 * 
+	 * @param node
+	 * @return
+	 */
+	public static DirectoryNode castFileNode(FileNode node){
+		return (DirectoryNode)node;
 	}
 	
 	/* --- Debug --- */
@@ -474,6 +652,18 @@ public class DirectoryNode extends FileNode{
 		
 		List<FileNode> clist = this.getChildren();
 		for(FileNode c : clist) c.printMeToStdErr(indents+1);
+		
+	}
+	
+	public void printMeTo(Writer out, int indents) throws IOException{
+		StringBuilder sb = new StringBuilder(128);
+		for(int i = 0; i < indents; i++) sb.append("\t");
+		String tabs = sb.toString();
+		
+		out.write(tabs + "->" + this.getFileName() + "\n");
+		
+		List<FileNode> clist = this.getChildren();
+		for(FileNode c : clist) c.printMeTo(out, indents+1);
 		
 	}
 	

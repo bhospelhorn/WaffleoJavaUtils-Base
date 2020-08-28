@@ -3,8 +3,8 @@ package waffleoRai_Image.files;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 
+import waffleoRai_Files.tree.FileNode;
 import waffleoRai_Utils.FileBuffer;
-import waffleoRai_Utils.FileNode;
 
 public class TGAFile {
 	//https://en.wikipedia.org/wiki/Truevision_TGA

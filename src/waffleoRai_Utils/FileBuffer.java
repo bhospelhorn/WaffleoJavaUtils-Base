@@ -90,6 +90,8 @@ import java.util.TimeZone;
  * 	3.8.0 -> 3.8.1 | Added exception messages to checkOffsetPair() throws
  * 2020.08.03
  * 	3.8.1 -> 3.8.2 | Rewrote getASCII_string(long, char)
+ * 2020.08.21
+ * 	3.8.2 -> 3.9.0 | Added flush()
  * */
 
 /**
@@ -101,8 +103,8 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.8.2
- * @since August 3, 2020
+ * @version 3.9.0
+ * @since August 21, 2020
  */
 public class FileBuffer 
 {
@@ -4450,5 +4452,12 @@ public class FileBuffer
   		overflow.clear();
   		fSize = 0;
   	}
+  	
+  	/**
+  	 * Clear any data that is referenced on disk and can be reloaded at
+  	 * any time to free up memory.
+  	 * @throws IOException If there is an error accessing disk.
+  	 */
+  	public void flush() throws IOException {}
   	
 }
