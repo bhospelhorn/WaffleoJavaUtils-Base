@@ -4,6 +4,7 @@ import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -16,7 +17,6 @@ import java.util.TreeSet;
 import waffleoRai_Compression.definitions.AbstractCompDef;
 import waffleoRai_Compression.definitions.CompDefNode;
 import waffleoRai_Compression.definitions.CompressionDefs;
-import waffleoRai_Compression.definitions.CompressionInfoNode;
 import waffleoRai_Files.EncryptionDefinition;
 import waffleoRai_Files.EncryptionDefinitions;
 import waffleoRai_Files.FileClass;
@@ -34,9 +34,14 @@ public class FileTreeSaver {
 	/*Big Endian
 	 * 
 	 * Magic "tReE" [4]
-	 * Version [4]
+	 * Flags [2] (V7+)
+	 * 	15 - Has Tree
+	 * 	14 - Has List
+	 * Version [2] (4 bytes in V1-V6)
 	 * Offset to source path table [4]
 	 * Offset to tree start [4]
+	 * Offset to list start [4] (V7+)
+	 * (RESERVED) [12] (V7+)
 	 * 
 	 * Source Path Table (So don't have to repeat over and over...)
 	 * 	Block Magic "SPBt" [4]
@@ -44,6 +49,10 @@ public class FileTreeSaver {
 	 * 		Offset from "SPBt" to string [4 * n]
 	 * 
 	 * 		Path [VLS 2x2 * n]
+	 * 
+	 * List
+	 * 	Block Magic "tsil" [4] (V7+)
+	 * 	Node count [4] (V7+)
 	 * 
 	 * Tree
 	 * 	Block Magic "eert" [4]
@@ -72,10 +81,12 @@ public class FileTreeSaver {
 	 * 				3 - Fragmented Node
 	 * 				4 - Patchwork Node
 	 * 				5 - Complex Patchwork Node
-	 * 			7 - Source compressed? (If file)
+	 * 			7 - Has container? (File)
 	 * 			6 - Has type chain [file]/file class[dir] (V2+)(V4+ for dir)
 	 * 			5 - Has encryption (V2+)
 	 * 			4 - Data source is virtual (V7+)
+	 * 			3 - Container link is UID (V7+)
+	 * 				If not, container node is defined within this node
 	 * 		
 	 *  UID [8] (V7+)
 	 *  Parent UID [8] (If in list mode) (V7+)
@@ -84,8 +95,11 @@ public class FileTreeSaver {
 	 * 
 	 * If file...
 	 * 	Source Path Index [4]
+	 * 	Source Node UID [8] (If applicable) (V7+)
 	 * 	Offset [8]
 	 * 	Length [8]
+	 * 
+	 * File subtype data....
 	 * 	Block count [4] (If applicable) (V6+)
 	 *	Block location data [(16 or 20)*blocks] (If applicable) (V6+)
 	 *		Path Index [4] (If patchwork) (V7+)
@@ -97,18 +111,31 @@ public class FileTreeSaver {
 	 *  	Data Size [4]
 	 *  	Header Size [2]
 	 *  	Footer Size [2]
-	 *  Encryption Def ID [4] (If applicable) (V2+)
-	 *  Encryption Start [8] (If applicable) (V4+)
-	 *  Encryption Region Size [8] (If applicable) (V4+)
-	 *  # Type chain nodes [4] (If applicable) (V2+)
-	 *  Type chain [4 * n] (If applicable) (V2+)
-	 *  	ID [4] (First bit is always set if compression)
-	 * 	/DEP/ Compression Start Offset [8] (If applicable) [V1 only]
-	 * 	#Compression Chain Nodes [4] (If applicable) (V2+)
-	 * 	Compression Chain [20 * n] (If applicable) (V2+)
-	 * 		Definition ID [4]
-	 * 		Start offset[8]
-	 * 		Length [8]
+	 *  
+	 * File load data...
+	 *  (Encryption)
+	 *  	/DEP/ Encryption Def ID [4] (If applicable) (V2-V6)
+	 *  	/DEP/ Encryption Start [8] (If applicable) (V4-V6)
+	 *  	/DEP/ Encryption Region Size [8] (If applicable) (V4-V6)
+	 *  	#Encryption Nodes [4] (If appl.) (V7+)
+	 *  		Encryption Def ID [4] (V7+)
+	 *  		Encryption Start [8] (V7+)
+	 *  		Encryption Region Size [8] (V7+)
+	 *  (Type chain)
+	 *  	# Type chain nodes [4] (If applicable) (V2+)
+	 *  	Type chain [4 * n] (If applicable) (V2+)
+	 *  		ID [4] (First bit is always set if compression)
+	 *  (Container)
+	 * 		/DEP/ Compression Start Offset [8] (If applicable) [V1 only]
+	 * 		/DEP/ #Compression Chain Nodes [4] (If applicable) (V2-V6)
+	 * 		/DEP/ Compression Chain [20 * n] (If applicable) (V2-V6)
+	 * 			Definition ID [4]
+	 * 			Start offset[8]
+	 * 			Length [8]
+	 *		Container Node UID [8] (If appl.) (V7+)
+	 *			If flags 7 and 3 are set.
+	 *		Container Node Def... (If appl.) (V7+) 
+	 *			If flag 7 is set but 3 is not.
 	 * 
 	 * If directory...
 	 * 	Number of children [4] (Omitted in list mode)
@@ -150,6 +177,10 @@ public class FileTreeSaver {
 	public static final int NODETYPE_DISK = 2;
 	public static final int NODETYPE_FRAG = 3;
 	public static final int NODETYPE_PATCHWORK = 4;
+	public static final int NODETYPE_PATCHWORK_C = 5;
+	
+	public static final String METAKEY_SRCNODE_UID = "SRCNODE_UID";
+	public static final String METAKEY_CNTRNODE_UID = "CNTRNODE_UID";
 	
 	/* ----- Structs ----- */
 	
@@ -242,11 +273,16 @@ public class FileTreeSaver {
 		if(version >= 7){
 			nodetype = (flags >>> 8) & 0xF;
 			switch(nodetype){
-			case NODETYPE_STANDARD: new FileNode(parent, ""); break;
-			case NODETYPE_LINK: new LinkNode(parent, null, ""); break;
-			case NODETYPE_DISK: new ISOFileNode(parent, ""); break;
-			case NODETYPE_FRAG: new FragFileNode(parent, ""); break;
-			case NODETYPE_PATCHWORK: new PatchworkFileNode(parent, ""); break;
+			case NODETYPE_STANDARD: fn = new FileNode(parent, ""); break;
+			case NODETYPE_LINK: fn = new LinkNode(parent, null, ""); break;
+			case NODETYPE_DISK: fn = new ISOFileNode(parent, ""); break;
+			case NODETYPE_FRAG: fn = new FragFileNode(parent, ""); break;
+			case NODETYPE_PATCHWORK: fn = new PatchworkFileNode(parent, ""); break;
+			case NODETYPE_PATCHWORK_C: 
+				PatchworkFileNode pfn = new PatchworkFileNode(parent, ""); 
+				pfn.setComplexMode(true);
+				fn = pfn;
+				break;
 			}
 		}
 		else{
@@ -293,6 +329,13 @@ public class FileTreeSaver {
 		
 		//Node location
 		int pathidx = in.intFromFile(cpos); cpos+=4;
+		if(version >= 7 && (flags & 0x10) != 0){
+			//Virtual source
+			long srcuid = in.longFromFile(cpos); cpos+=8;
+			fn.setUseVirtualSource(true);
+			fn.setMetadataValue(METAKEY_SRCNODE_UID, Long.toHexString(srcuid));
+		}
+		
 		fn.setOffset(in.longFromFile(cpos)); cpos += 8;
 		fn.setLength(in.longFromFile(cpos)); cpos+=8;
 		
@@ -324,6 +367,15 @@ public class FileTreeSaver {
 				pfn.addBlock(ppath, off, len);
 			}
 		}
+		else if(nodetype == NODETYPE_PATCHWORK_C){
+			PatchworkFileNode pfn = (PatchworkFileNode)fn;
+			int block_count = in.intFromFile(cpos); cpos+=4;
+			for(int i = 0; i < block_count; i++){
+				ParsedNode pn = parseFileNode(in, null, cpos, paths, offmap, version, listmode);
+				cpos += pn.size;
+				pfn.addBlock(pn.node);
+			}
+		}
 		else if (nodetype == NODETYPE_DISK){
 			int dsize = in.intFromFile(cpos); cpos += 4;
 			int hsize = in.shortFromFile(cpos); cpos += 2;
@@ -333,15 +385,26 @@ public class FileTreeSaver {
 		
 		//Encryption info
 		if((flags & 0x20) != 0){
-			int defid = in.intFromFile(cpos); cpos += 4;
-			EncryptionDefinition def = EncryptionDefinitions.getByID(defid);
 			
-			if(version >= 4){
-				long enc_off = in.longFromFile(cpos); cpos+=8;
-				long enc_sz = in.longFromFile(cpos); cpos+=8;
-				fn.setEncryption(def, enc_off, enc_sz);
+			int count = 1;
+			if(version >= 7){
+				count = in.intFromFile(cpos); cpos+=4;
 			}
-			else fn.setEncryption(def);
+
+			for(int i = 0; i < count; i++){
+				int defid = in.intFromFile(cpos); cpos += 4;
+				EncryptionDefinition def = EncryptionDefinitions.getByID(defid);
+				long enc_off = 0;
+				long enc_sz = fn.getLength();
+				
+				if(version >= 4){
+					enc_off = in.longFromFile(cpos); cpos+=8;
+					enc_sz = in.longFromFile(cpos); cpos+=8;
+				}
+				
+				fn.addEncryption(def, enc_off, enc_sz);
+			}
+			
 		}
 		
 		//Type Chain
@@ -375,25 +438,49 @@ public class FileTreeSaver {
 			fn.setTypeChainHead(head);
 		}
 		
-		//Surrounding compression
+		//Container
 		if((flags & 0x80) != 0){
-			//fn.setSourceDataCompressed(in.longFromFile(cpos)); cpos += 8;
+			FileNode cntr = null;
 			if(version < 2){
-				//Just add a null def with offset
-				long offset = in.longFromFile(cpos); cpos+=8;
-				fn.addCompressionChainNode(null, offset, 0);
+				//Just a "compression start offset"
+				long cst = in.longFromFile(cpos); cpos+=8;
+				cntr = new FileNode(null, fn.getFileName() + "-cntr");
+				cntr.setSourcePath(fn.getSourcePath());
+				cntr.setOffset(cst);
+				cntr.setLength(fn.getLength() + (fn.getOffset() - cst));
 			}
-			else{
-				int compcount = in.intFromFile(cpos); cpos+=4;
-				for(int i = 0; i < compcount; i++)
-				{
-					int id = in.intFromFile(cpos); cpos+=4;
-					long offset = in.longFromFile(cpos); cpos += 8;
-					long len = in.longFromFile(cpos); cpos += 8;
+			else if(version >= 2 && version < 7){
+				//Compression chain
+				int chainsize = in.intFromFile(cpos); cpos+=4;
+				String path = fn.getSourcePath();
+				for(int i = 0; i < chainsize; i++){
+					FileNode cpar = cntr;
 					
-					fn.addCompressionChainNode(CompressionDefs.getCompressionDefinition(id), offset, len);
+					int defid = in.intFromFile(cpos); cpos+=4;
+					cntr = new FileNode(null, fn.getFileName() + "-cntr" + i);
+					cntr.setSourcePath(path);
+					cntr.setOffset(in.longFromFile(cpos)); cpos+=8;
+					cntr.setLength(in.longFromFile(cpos)); cpos+=8;
+					cntr.addTypeChainNode(new CompDefNode(CompressionDefs.getCompressionDefinition(defid)));
+					if(cpar != null) cntr.setContainerNode(cpar);
 				}
 			}
+			else if(version >= 7){
+				//Container
+				//Either UID or recursive
+				if((flags & 0x08) != 0){
+					//Just a uid, link later
+					long cuid = in.longFromFile(cpos); cpos+=8;
+					fn.setMetadataValue(METAKEY_CNTRNODE_UID, Long.toHexString(cuid));
+				}
+				else{
+					//Full node def
+					ParsedNode pn = parseFileNode(in, null, cpos, paths, offmap, version, listmode);
+					cpos += pn.size;
+					fn.setContainerNode(pn.node);
+				}
+			}
+			if(cntr != null) fn.setContainerNode(cntr);
 		}
 		
 		//Link offset
@@ -444,16 +531,21 @@ public class FileTreeSaver {
 	}
 	
 	public static DirectoryNode loadTree(String inpath) throws IOException, UnsupportedFileTypeException{
-		
 		FileBuffer in = FileBuffer.createBuffer(inpath, true);
 		long cpos = in.findString(0, 0x10, MAGIC);
 		if(cpos < 0) throw new FileBuffer.UnsupportedFileTypeException("FileTreeSaver.loadTree || Magic number could not be found!");
 		
 		//For now, just skip most of header...
-		cpos += 4;
-		int version = in.intFromFile(cpos); cpos += 4;
-		cpos += 4;
+		cpos += 4; //Skip magic we just checked
+		int hflags = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos += 2;
+		int version = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos += 2;
+		cpos += 4; //Offset of Source path table
 		long toff = Integer.toUnsignedLong(in.intFromFile(cpos)); cpos += 4;
+		long loff = toff;
+		if(version >= 7){
+			loff = Integer.toUnsignedLong(in.intFromFile(cpos)); cpos += 4;
+			cpos += 12;
+		}
 		//System.err.println("Tree Offset: 0x" + Long.toHexString(toff));
 		
 		//Read the source path table...
@@ -461,20 +553,94 @@ public class FileTreeSaver {
 		int path_count = in.intFromFile(cpos); cpos+=4;
 		String[] path_table = new String[path_count];
 		//System.err.println("Path count: " + path_count);
-		for(int i = 0; i < path_count; i++)
-		{
+		for(int i = 0; i < path_count; i++){
 			int off = 16 + in.intFromFile(cpos); cpos += 4;
 			long spos = Integer.toUnsignedLong(off);
 			path_table[i] = in.readVariableLengthString(ENCODING, spos, BinFieldSize.WORD, 2).getString();
 		}
 		
-		//Read the tree...
-		cpos = toff + 4;
+		//Prep map
+		Map<Long, FileNode> uidmap = new TreeMap<Long, FileNode>();
+		
+		//Read list...
+		List<FileNode> nodelist = null;
 		Map<Integer, FileNode> offmap = new HashMap<Integer, FileNode>();
-		DirectoryNode root = parseDirNode(in, null, cpos, path_table, offmap, version, false).node;
+		if((hflags & 0x4000) != 0){
+			//Has list
+			cpos = loff + 4; //Skip magic
+			int ncount = in.intFromFile(cpos); cpos+=4;
+			nodelist = new ArrayList<FileNode>(ncount+1);
+			for(int i = 0; i < ncount; i++){
+				int flags = Short.toUnsignedInt(in.shortFromFile(cpos));
+				if((flags & 0x8000) != 0){
+					ParsedDir pd = parseDirNode(in, null, cpos, path_table, offmap, version, true);
+					cpos += pd.size;
+					nodelist.add(pd.node);
+					uidmap.put(pd.node.getGUID(), pd.node);
+				}
+				else{
+					ParsedNode pn = parseFileNode(in, null, cpos, path_table, offmap, version, true);
+					cpos += pn.size;
+					nodelist.add(pn.node);
+					uidmap.put(pn.node.getGUID(), pn.node);
+				}
+			}
+			
+			//Resolve initial links - so can reuse offmap
+			for(FileNode node : nodelist){
+				//Link
+				if(node instanceof LinkNode){
+					FileNode link = offmap.get(node.scratch_field);
+					if(link != null) ((LinkNode) node).setLink(link);
+				}
+			}
+		}
+		
+		
+		//Read the tree...
+		DirectoryNode root = null;
+		offmap.clear();
+		if(version < 7 || (hflags & 0x8000) != 0){
+			cpos = toff + 4;
+			root = parseDirNode(in, null, cpos, path_table, offmap, version, false).node;	
+		}
+		mapNodesByGUID(root, uidmap);
 		
 		//Resolve links...
 		resolveLinks(root, offmap, path_table);
+		
+		//Parents...
+		if(nodelist != null){
+			for(FileNode node : nodelist){
+				FileNode p = uidmap.get(node.scratch_long);
+				if((p != null) && (p instanceof DirectoryNode)){
+					node.setParent(DirectoryNode.castFileNode(p));
+				}
+			}
+		}
+		
+		//Containers & virtual sources...
+		List<FileNode> allnodes = new LinkedList<FileNode>();
+		allnodes.addAll(uidmap.values());
+		for(FileNode node : allnodes){
+			String mdval = node.getMetadataValue(METAKEY_SRCNODE_UID);
+			if(mdval != null){
+				long uid = Long.parseUnsignedLong(mdval, 16);
+				FileNode target = uidmap.get(uid);
+				if(target != null) node.setVirtualSourceNode(target);
+				
+				node.clearMetadataValue(METAKEY_SRCNODE_UID);
+			}
+			
+			mdval = node.getMetadataValue(METAKEY_CNTRNODE_UID);
+			if(mdval != null){
+				long uid = Long.parseUnsignedLong(mdval, 16);
+				FileNode target = uidmap.get(uid);
+				if(target != null) node.setContainerNode(target);
+				
+				node.clearMetadataValue(METAKEY_CNTRNODE_UID);
+			}
+		}
 		
 		return root;
 	}
@@ -486,10 +652,16 @@ public class FileTreeSaver {
 		if(cpos < 0) throw new UnsupportedFileTypeException("FileTreeSaver.loadList || Magic number could not be found!");
 		
 		//For now, just skip most of header...
-		cpos += 4;
-		int version = in.intFromFile(cpos); cpos += 4;
-		cpos += 4;
-		long loff = Integer.toUnsignedLong(in.intFromFile(cpos)); cpos += 4;
+		cpos += 4; //Skip magic we just checked
+		cpos += 2; //Flags
+		int version = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos += 2;
+		cpos += 4; //Offset of Source path table
+		long toff = Integer.toUnsignedLong(in.intFromFile(cpos)); cpos += 4;
+		long loff = toff;
+		if(version >= 7){
+			loff = Integer.toUnsignedLong(in.intFromFile(cpos)); cpos += 4;
+			cpos += 12;
+		}
 		
 		//Read the source path table...
 		cpos += 4; //Skip "SPBt"
@@ -502,9 +674,9 @@ public class FileTreeSaver {
 		}
 		
 		//Read the list...
-		cpos = loff + 4;
+		cpos = loff + 8;
 		Map<Integer, FileNode> offmap = new HashMap<Integer, FileNode>();
-		//Map<Long, FileNode> idmap = new HashMap<Long, FileNode>();
+		Map<Long, FileNode> idmap = new HashMap<Long, FileNode>();
 		List<FileNode> nodes = new LinkedList<FileNode>();
 		long filesize = in.getFileSize();
 		while(cpos < filesize){
@@ -513,11 +685,13 @@ public class FileTreeSaver {
 				ParsedDir d = parseDirNode(in, null, cpos, path_table, offmap, version, true);
 				nodes.add(d.node);
 				cpos += d.size;
+				idmap.put(d.node.getGUID(), d.node);
 			}
 			else{
 				ParsedNode f = parseFileNode(in, null, cpos, path_table, offmap, version, true);
 				nodes.add(f.node);
 				cpos += f.size;
+				idmap.put(f.node.getGUID(), f.node);
 			}
 		}
 		
@@ -527,6 +701,25 @@ public class FileTreeSaver {
 				LinkNode ln = (LinkNode)node;
 				FileNode link = offmap.get(ln.scratch_field);
 				if(link != null) ln.setLink(link);
+			}
+			
+			//Containers and virtual sources...
+			String mdval = node.getMetadataValue(METAKEY_SRCNODE_UID);
+			if(mdval != null){
+				long uid = Long.parseUnsignedLong(mdval, 16);
+				FileNode target = idmap.get(uid);
+				if(target != null) node.setVirtualSourceNode(target);
+				
+				node.clearMetadataValue(METAKEY_SRCNODE_UID);
+			}
+			
+			mdval = node.getMetadataValue(METAKEY_CNTRNODE_UID);
+			if(mdval != null){
+				long uid = Long.parseUnsignedLong(mdval, 16);
+				FileNode target = idmap.get(uid);
+				if(target != null) node.setContainerNode(target);
+				
+				node.clearMetadataValue(METAKEY_CNTRNODE_UID);
 			}
 		}
 		
@@ -559,6 +752,36 @@ public class FileTreeSaver {
 	
 	/* ----- Serialization ----- */
 	
+	private static void mapRefNodes(Map<Long, FileNode> map, FileNode node){
+		FileNode ref = node.getContainer();
+		if(ref != null){
+			if(ref.getGUID() == -1L) ref.generateGUID();
+			map.put(ref.getGUID(), ref);
+			mapRefNodes(map, ref);
+		}
+		
+		ref = node.getVirtualSource();
+		if(ref != null){
+			if(ref.getGUID() == -1L) ref.generateGUID();
+			map.put(ref.getGUID(), ref);
+			mapRefNodes(map, ref);
+		}
+	}
+	
+	private static void saveRefNodePaths(Set<String> set, FileNode node){
+		FileNode ref = node.getContainer();
+		if(ref != null){
+			set.add(ref.getSourcePath());
+			saveRefNodePaths(set, ref);
+		}
+		
+		ref = node.getVirtualSource();
+		if(ref != null){
+			set.add(ref.getSourcePath());
+			saveRefNodePaths(set, ref);
+		}
+	}
+	
 	private static void getSourcePaths(Set<String> set, DirectoryNode dir)
 	{
 		List<FileNode> children = dir.getChildren();
@@ -571,6 +794,7 @@ public class FileTreeSaver {
 			else{
 				if(child.getSourcePath() != null) set.add(child.getSourcePath());
 				if(child instanceof PatchworkFileNode) set.addAll(((PatchworkFileNode)child).getAllSourcePaths());
+				saveRefNodePaths(set, child);
 			}
 		}
 	}
@@ -621,13 +845,15 @@ public class FileTreeSaver {
 		return sb.toString();
 	}
 	
-	private static FileBuffer serializeFileNode(FileNode node, Map<String, Integer> srcPathMap, boolean includeParentID){
+	private static DatNode serializeFileNode(FileNode node, Map<String, Integer> srcPathMap, boolean includeParentID, boolean refcontainers){
 
 		if(node.getGUID() == -1L) node.generateGUID();
 		
+		//Serialize node name
 		FileBuffer cname = new FileBuffer(3 + (node.getFileName().length()<< 1), true);
 		cname.addVariableLengthString(ENCODING, node.getFileName(), BinFieldSize.WORD, 2);
 		
+		//Serialize metadata
 		FileBuffer meta = null;
 		if(node.hasMetadata()){
 			String str = serializeMetadata(node);
@@ -635,28 +861,47 @@ public class FileTreeSaver {
 			meta.addVariableLengthString(ENCODING, str, BinFieldSize.DWORD, 2);
 		}
 		
-		List<FileTypeNode> typechain = node.getTypeChainAsList();
-		List<CompressionInfoNode> compchain = node.getCompressionChain();
-		int ccsz = compchain.size();
-		int flag = 0;
-		int csz = 18 + (int)cname.getFileSize() + 20;
-		if(node.sourceDataCompressed()){csz += (4 + (20 * ccsz)); flag |= 0x80;}
-		if(!typechain.isEmpty()){csz += (4 + (typechain.size() << 2)); flag |= 0x40;}
-		if(node.getEncryption() != null){csz += 12; flag |= 0x20;}
-		if(node.hasMetadata()){csz += meta.getFileSize(); flag |= 0x2000;}
-		//if(child.sourceDataCompressed()){csz += 8; flag |= 0x80;}
+		//Serialize container, if applicable
+		FileBuffer cont_serial = null;
+		if(!refcontainers && node.sourceDataCompressed()){
+			cont_serial = serializeFileNode(node.getContainer(), srcPathMap, includeParentID, false).dat;
+		}
 		
-		/*if(node instanceof LinkNode) flag |= 0x4000;
-		if(node instanceof ISOFileNode) flag |= 0x1000;
-		if(node instanceof FragFileNode) flag |= 0x800;*/
+		//Set flags and estimate size for allocation
+		List<FileTypeNode> typechain = node.getTypeChainAsList();
+		int flag = 0;
+		int csz = 28 + (int)cname.getFileSize() + 20;
+		if(node.sourceDataCompressed()){
+			if(cont_serial != null) csz += cont_serial.getFileSize();
+			else csz+=8;
+			flag |= 0x80;
+			if(refcontainers) flag |= 0x08;
+		}
+		if(node.hasEncryption()){
+			int ecount = node.getEncryptionDefChain().size();
+			csz += 20 * ecount; 
+			flag |= 0x20;
+		}
+		if(!typechain.isEmpty()){csz += (4 + (typechain.size() << 2)); flag |= 0x40;}
+		if(node.hasMetadata()){csz += meta.getFileSize(); flag |= 0x2000;}
+		if(node.hasVirtualSource()) flag |= 0x10;
+		
 		int nodetype = NODETYPE_STANDARD;
 		if(node instanceof LinkNode) nodetype = NODETYPE_LINK;
 		else if(node instanceof ISOFileNode) nodetype = NODETYPE_DISK;
 		else if(node instanceof FragFileNode) nodetype = NODETYPE_FRAG;
-		else if(node instanceof PatchworkFileNode) nodetype = NODETYPE_PATCHWORK;
+		else if(node instanceof PatchworkFileNode){
+			if(((PatchworkFileNode)node).complexMode()) nodetype = NODETYPE_PATCHWORK_C;
+			else nodetype = NODETYPE_PATCHWORK;
+		}
 		flag |= (nodetype & 0xF) << 8;
 		
+		//Allocate & Add initial fields
+		DatNode datnode = new DatNode();
 		FileBuffer cdat = new FileBuffer(csz, true);
+		datnode.src = node;
+		datnode.dat = cdat;
+		
 		cdat.addToFile((short)flag);
 		cdat.addToFile(node.getGUID());
 		
@@ -672,17 +917,28 @@ public class FileTreeSaver {
 		cdat.addToFile(cname);
 		if(meta != null) cdat.addToFile(meta);
 		
-		if(node instanceof LinkNode && node.isDirectory()) return cdat;
+		//If link to directory, don't need anything else.
+		if(node instanceof LinkNode && node.isDirectory()) return datnode;
 		
+		//Location data
 		Integer srcidx = 0;
 		if(srcPathMap != null){
 			srcidx = srcPathMap.get(node.getSourcePath());
 			if(srcidx == null) srcidx = -1;
 		}
 		cdat.addToFile(srcidx);
+		if(node.hasVirtualSource()){
+			FileNode srcnode = node.getVirtualSource();
+			if(srcnode == null) cdat.addToFile(-1L);
+			else{
+				if(srcnode.getGUID() == -1L) srcnode.generateGUID();
+				cdat.addToFile(srcnode.getGUID());
+			}
+		}
 		cdat.addToFile(node.getOffset());
 		cdat.addToFile(node.getLength());
 		
+		//Node type specific location data
 		if(node instanceof FragFileNode){
 			FragFileNode ffn = (FragFileNode)node;
 			List<long[]> blocks = ffn.getBlocks();
@@ -697,15 +953,22 @@ public class FileTreeSaver {
 			PatchworkFileNode pfn = (PatchworkFileNode)node;
 			List<FileNode> blocks = pfn.getBlocks();
 			cdat.addToFile(blocks.size());
-			for(FileNode block : blocks){
-				Integer psrcidx = -1;
-				if(srcPathMap != null){
-					psrcidx = srcPathMap.get(block.getSourcePath());
-					if(psrcidx == null) psrcidx = -1;
+			if(pfn.complexMode()){
+				for(FileNode block : blocks){
+					datnode.children.add(serializeFileNode(block, srcPathMap, includeParentID, refcontainers));
 				}
-				cdat.addToFile(psrcidx);
-				cdat.addToFile(block.getOffset());
-				cdat.addToFile(block.getLength());
+			}
+			else{
+				for(FileNode block : blocks){
+					Integer psrcidx = -1;
+					if(srcPathMap != null){
+						psrcidx = srcPathMap.get(block.getSourcePath());
+						if(psrcidx == null) psrcidx = -1;
+					}
+					cdat.addToFile(psrcidx);
+					cdat.addToFile(block.getOffset());
+					cdat.addToFile(block.getLength());
+				}	
 			}
 		}
 		
@@ -716,38 +979,43 @@ public class FileTreeSaver {
 			cdat.addToFile((short)isochild.getSectorFootSize());
 		}
 		
-		if(node.getEncryption() != null)
-		{
-			cdat.addToFile(node.getEncryption().getID());
-			cdat.addToFile(node.getEncryptionOffset());
-			cdat.addToFile(node.getEncryptionLength());
+		//Encryption
+		if(node.hasEncryption()){
+			List<EncryptionDefinition> edefs = node.getEncryptionDefChain();
+			long[][] eregs = node.getEncryptedRegions();
+			
+			cdat.addToFile(edefs.size());
+			int i = 0;
+			for(EncryptionDefinition def : edefs){
+				cdat.addToFile(def.getID());
+				cdat.addToFile(eregs[i][0]);
+				cdat.addToFile(eregs[i][1]);
+				i++;
+			}
 		}
-		if(!typechain.isEmpty())
-		{
+		
+		//Type chain
+		if(!typechain.isEmpty()){
 			cdat.addToFile(typechain.size());
 			for(FileTypeNode n : typechain){
 				cdat.addToFile(n.getTypeID());
 			}
 		}
-		//if(child.sourceDataCompressed())cdat.addToFile(child.getOffsetOfCompressionStart());
-		if(node.sourceDataCompressed())
-		{
-			cdat.addToFile(ccsz);
-			for(CompressionInfoNode comp : compchain)
-			{
-				AbstractCompDef def = comp.getDefinition();
-				if(def != null) cdat.addToFile(def.getDefinitionID());
-				else cdat.addToFile(-1);
-				cdat.addToFile(comp.getStartOffset());
-				cdat.addToFile(comp.getLength());
+		
+		//Compression container
+		if(node.sourceDataCompressed()){
+			if(cont_serial != null) cdat.addToFile(cont_serial);
+			else{
+				FileNode cont = node.getContainer();
+				if(cont.getGUID() == -1L) cont.generateGUID();
+				cdat.addToFile(cont.getGUID());
 			}
 		}
 
-		return cdat;
+		return datnode;
 	}
 
-	private static DatNode serializeDir(DirectoryNode dir, Map<String, Integer> srcPathMap, Map<Integer, DatNode> offmap, int off)
-	{
+	private static DatNode serializeDir(DirectoryNode dir, Map<String, Integer> srcPathMap, Map<Integer, DatNode> offmap, int off, boolean refcontainers){
 		//Note offset
 		dir.scratch_field = off;
 		
@@ -756,14 +1024,12 @@ public class FileTreeSaver {
 		
 		//Serialize just the name...
 		FileBuffer nodename = null;
-		if(dir.getParent() == null)
-		{
+		if(dir.getParent() == null){
 			//Root has empty name.
 			nodename = new FileBuffer(2, true);
 			nodename.addToFile((short)0);
 		}
-		else
-		{
+		else{
 			nodename = new FileBuffer(3 + (dir.getFileName().length()<< 1), true);
 			nodename.addVariableLengthString(ENCODING, dir.getFileName(), BinFieldSize.WORD, 2);
 		}
@@ -799,23 +1065,20 @@ public class FileTreeSaver {
 		offmap.put(off, dirnode);
 		off += dsz;
 		
-		for(FileNode child : children)
-		{
+		for(FileNode child : children){
 			if(child instanceof DirectoryNode){
-				DatNode cdir = serializeDir((DirectoryNode)child, srcPathMap, offmap, off);
+				DatNode cdir = serializeDir((DirectoryNode)child, srcPathMap, offmap, off, refcontainers);
 				off += (int)cdir.getTotalSize();
 				dirnode.children.add(cdir);
 			}
 			else{
 				child.scratch_field = off;
-				FileBuffer cdat = serializeFileNode(child, srcPathMap, false);
+				DatNode cnode = serializeFileNode(child, srcPathMap, false, refcontainers);
 				
-				DatNode cnode = new DatNode();
+				//DatNode cnode = new DatNode();
 				offmap.put(off, cnode);
-				cnode.dat = cdat;
 				dirnode.children.add(cnode);
-				off += cdat.getFileSize();
-				cnode.src = child;
+				off += cnode.dat.getFileSize();
 			}
 		}
 		
@@ -829,9 +1092,8 @@ public class FileTreeSaver {
 			
 			node.scratch_field = off;
 			
-			DatNode cnode = new DatNode();
-			cnode.src = node;
-			out.add(cnode);
+			DatNode cnode = null;
+			//cnode.src = node;
 			
 			if(node instanceof DirectoryNode){
 				//Just the basics
@@ -879,12 +1141,15 @@ public class FileTreeSaver {
 				}
 				if(hasfc) data.addToFile((short)dirnode.getFileClass().getIntegerValue());
 				
+				cnode = new DatNode();
+				cnode.src = node;
 				cnode.dat = data;
 			}
 			else{
-				cnode.dat = serializeFileNode(node, srcPathMap, true);
+				cnode = serializeFileNode(node, srcPathMap, true, true);
 			}
 			
+			out.add(cnode);
 			off += cnode.dat.getFileSize();
 		}
 		
@@ -951,24 +1216,61 @@ public class FileTreeSaver {
 			i++;
 		}
 		
+		//Isolate nodes that are not in tree... (so can list)
+		Map<Long, FileNode> treenodes = new TreeMap<Long, FileNode>();
+		Map<Long, FileNode> listnodes = new TreeMap<Long, FileNode>();
+		Collection<FileNode> tlist = root.getAllDescendants(true);
+		for(FileNode n : tlist){
+			if(n.getGUID() == -1L) n.generateGUID();
+			treenodes.put(n.getGUID(), n);
+			
+			//Get containers and virtual sources...
+			mapRefNodes(listnodes, n);
+		}
+		if(root.getGUID() == -1L) root.generateGUID();
+		treenodes.put(root.getGUID(), root);
+		
+		//Do list for all nodes not in tree
+		long lsize = 0L;
+		List<DatNode> extralist = null;
+		List<FileNode> lnodes = new LinkedList<FileNode>();
+		for(FileNode n : listnodes.values()){
+			if(!treenodes.containsKey(n.getGUID())) lnodes.add(n);
+		}
+		if(!lnodes.isEmpty()){
+			extralist = serializeList(lnodes, srcPathMap, 4);
+			for(DatNode dn : extralist) lsize += dn.dat.getFileSize();
+		}
+		
 		//Now do tree...
 		Map<Integer, DatNode> offmap = new HashMap<Integer, DatNode>();
-		DatNode sroot = serializeDir(root, srcPathMap, offmap, 4);
+		DatNode sroot = serializeDir(root, srcPathMap, offmap, 4, true);
 	
 		//Add link offsets...
 		Collection<LinkNode> links = getAllLinks(root, null);
-		for(LinkNode link : links)
-		{
+		for(LinkNode link : links){
 			DatNode ldat = offmap.get(link.scratch_field);
 			ldat.dat.addToFile(link.getLink().scratch_field);
 		}
 
 		//Now do header...
-		FileBuffer header = new FileBuffer(16, true);
+		FileBuffer header = new FileBuffer(32, true);
+		int hflags = 0x8000;
+		long toff = 32 + off;
+		if(extralist != null) {
+			hflags |= 0x4000;
+			toff += lsize + 8;
+		}
 		header.printASCIIToFile(MAGIC);
-		header.addToFile(CURRENT_VERSION);
-		header.addToFile(16);
-		header.addToFile(16 + off);
+		header.addToFile((short)hflags);
+		header.addToFile((short)CURRENT_VERSION);
+		header.addToFile(32);
+		header.addToFile((int)toff);
+		if(extralist != null) header.addToFile(32 + off);
+		else header.addToFile(-1);
+		header.addToFile(0);
+		header.addToFile(0);
+		header.addToFile(0);
 		
 		//Now write to disk...
 		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(outpath));
@@ -976,6 +1278,15 @@ public class FileTreeSaver {
 		bos.write(header.getBytes());
 		bos.write(sptbl_1.getBytes());
 		bos.write(sptbl_2.getBytes(0, sptbl_2.getFileSize()));
+		if(extralist != null) {
+			FileBuffer buff = new FileBuffer(8, true);
+			buff.printASCIIToFile(MAGIC_LIST);
+			buff.addToFile(extralist.size());
+			buff.writeToStream(bos);
+			
+			for(DatNode dn : extralist) dn.writeToStream(bos);
+		}
+		
 		FileBuffer buff = new FileBuffer(4, true);
 		buff.printASCIIToFile(MAGIC_TREE);
 		bos.write(buff.getBytes());
@@ -1003,6 +1314,8 @@ public class FileTreeSaver {
 					nodemap.put(d.getGUID(), d);
 				}
 			}
+			
+			mapRefNodes(nodemap, node);
 		}
 		
 		//Source path table
@@ -1053,11 +1366,17 @@ public class FileTreeSaver {
 		}
 		
 		//Now do header...
-		FileBuffer header = new FileBuffer(16, true);
+		FileBuffer header = new FileBuffer(32, true);
+		int hflags = 0x4000;
 		header.printASCIIToFile(MAGIC);
-		header.addToFile(CURRENT_VERSION);
-		header.addToFile(16);
-		header.addToFile(16 + off);
+		header.addToFile((short)hflags);
+		header.addToFile((short)CURRENT_VERSION);
+		header.addToFile(32);
+		header.addToFile(-1);
+		header.addToFile(32 + off);
+		header.addToFile(0);
+		header.addToFile(0);
+		header.addToFile(0);
 		
 		//Now write to disk...
 		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(outpath));
@@ -1065,8 +1384,9 @@ public class FileTreeSaver {
 		bos.write(header.getBytes());
 		bos.write(sptbl_1.getBytes());
 		bos.write(sptbl_2.getBytes(0, sptbl_2.getFileSize()));
-		FileBuffer buff = new FileBuffer(4, true);
+		FileBuffer buff = new FileBuffer(8, true);
 		buff.printASCIIToFile(MAGIC_LIST);
+		buff.addToFile(slist.size());
 		bos.write(buff.getBytes());
 		
 		for(DatNode dn : slist){

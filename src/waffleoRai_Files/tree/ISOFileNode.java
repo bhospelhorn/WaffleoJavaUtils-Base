@@ -2,6 +2,7 @@ package waffleoRai_Files.tree;
 
 import java.io.IOException;
 
+import waffleoRai_Utils.CacheFileBuffer;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.MultiFileBuffer;
 
@@ -14,6 +15,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 		Size should be in bytes, not sectors. (Might not fill last sector).
  * 2020.06.21 | 1.2.0
  * 		Added data loaders that only load file part
+ * 2020.08.28 | 2.0.0
+ * 		Updated loading procedure to be compatible w/ FileNode 3.0.0
  */
 
 /**
@@ -21,8 +24,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * references offsets by sector (noting sector type) instead of byte offset.
  * This way, sector checksum data can be included or excluded as needed.
  * @author Blythe Hospelhorn
- * @version 1.2.0
- * @since June 21, 2020
+ * @version 2.0.0
+ * @since August 28, 2020
  */
 public class ISOFileNode extends FileNode{
 	
@@ -158,8 +161,41 @@ public class ISOFileNode extends FileNode{
 		}
 	}
 	
-	public FileBuffer loadData(long stpos, long len) throws IOException{
+	public FileNode getSubFile(long stoff, long len){
+		//If stoff falls on a sector boundary, return a new ISOFileNode.
+		//Else, return a node sourced by this node
+		int sec_dat_size = this.getSectorDataSize();
+		long stsec = stoff/sec_dat_size; //Start sector index
+		long sec_stoff = stoff%sec_dat_size; // Position relative to sector data start
 		
+		if(sec_stoff == 0){
+			ISOFileNode sub = new ISOFileNode(null, "");
+			copyDataTo(sub);
+			sub.setOffset(sub.getOffset() + stsec);
+			
+			long subst = sub.getOffset() * sec_dat_size;
+			long maxed = (getOffset() * sec_dat_size) + getLength();
+			long subed = subst + len;
+			if(subed > maxed) subed = maxed;
+			sub.setLength(subed - subst);
+			
+			sub.subsetEncryptionRegions(subst, sub.getLength()); //Mark encryregion offsets in bytes...
+			
+			return sub;
+		}
+		else{
+			//Just make it virtually sourced...
+			FileNode sub = new FileNode(null, "");
+			sub.setVirtualSourceNode(this);
+			sub.setOffset(stoff);
+			sub.setLength(len);
+			
+			return sub;
+		}
+	}
+	
+	protected FileBuffer loadDirect(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
+
 		//Recalculate to sector coordinates
 		int sec_size = this.getSectorTotalSize();
 		int sec_dat_size = this.getSectorDataSize();
@@ -173,7 +209,7 @@ public class ISOFileNode extends FileNode{
 		long seccount = edsec - stsec;
 		if(sec_edoff != 0) seccount++;
 		
-		FileBuffer rawsecs = loadRawData(stsec, seccount);
+		FileBuffer rawsecs = loadRawData(stsec, seccount, forceCache);
 		MultiFileBuffer dat = new MultiFileBuffer((int)seccount);
 		long cpos = 0;
 		for(int s = 0; s < seccount; s++){
@@ -190,38 +226,39 @@ public class ISOFileNode extends FileNode{
 		
 		return dat;
 	}
-	
-	public FileBuffer loadData() throws IOException{
-		//This strips any header/footer data
-		//System.err.println("ISOFileNode.loadData || Called!");
-		FileBuffer raw = loadRawData();
-		if(sector_head_size == 0 && sector_foot_size == 0) return raw;
+
+	/** Load ALL data in the specified sectors, including sector header/footer data, referenced by this node
+	 * into a single FileBuffer.
+	 * @param sec_off Offset in sectors relative to the start of this file to begin reading.
+	 * @param sec_len Number of sectors to load. If this added to the offset sector exceeds the length
+	 * of the file, this method will return only what is in this file.
+	 * @param forceCache Whether or not to force the data to be loaded into a <code>CacheFileBuffer</code>
+	 * regardless of incoming data size.
+	 * @return FileBuffer containing raw data referenced by file - all full sectors sequential.
+	 * @throws IOException If the data cannot be loaded from disk.
+	 * @since 2.0.0
+	 */
+	public FileBuffer loadRawData(long sec_off, long sec_len, boolean forceCache) throws IOException{
+		if(sec_len <= 0) return null;
+		String path = getSourcePath();
 		
-		//Calculate data end
-		int seclen = this.getLengthInSectors();
-		long fulldat = (seclen-1) * this.getSectorDataSize();
-		long bytelen = this.getLength();
-		long partdat = bytelen - fulldat; //Number of data bytes in final sector
-		
-		//Strip
+		//Chain together desired sectors.
 		int sec_size = this.getSectorTotalSize();
-		long cpos = 0; long datend = sector_head_size + sector_data_size;
-		MultiFileBuffer dat = new MultiFileBuffer(seclen);
-		for(int s = 0; s < seclen-1; s++){
-			long st = cpos + sector_head_size;
-			long ed = cpos + datend;
-			//System.err.println("Extracting sector " + s + ": 0x" + Long.toHexString(st) + " - 0x" + Long.toHexString(ed));
-			dat.addToFile(raw, st, ed);
-			cpos += sec_size;
-		}
+		long maxlen = this.getLengthInSectors() - sec_off;
+		if(sec_len > maxlen) sec_len = maxlen;
 		
-		long st = cpos + sector_head_size;
-		long ed = st + partdat;
-		//System.err.println("Extracting sector " + (seclen-1) + " (final): 0x" + Long.toHexString(st) + " - 0x" + Long.toHexString(ed));
-		dat.addToFile(raw, st, ed);
-		cpos += sec_size;
-		//System.err.println("ISOFileNode.loadData || Size of buffer returned: 0x" + Long.toHexString(dat.getFileSize()));
-		return dat;
+		long stpos = sec_size * (this.getOffset() + sec_off);
+		long edpos = stpos + (sec_size*sec_len);
+		
+		if(this.hasVirtualSource()){
+			FileNode src = this.getVirtualSource();
+			src = src.getSubFile(stpos, edpos);
+			return src.loadDecompressedData(forceCache);
+		}
+		else{
+			if(forceCache) return CacheFileBuffer.getReadOnlyCacheBuffer(path, sec_size, 512, stpos, edpos);
+			else return FileBuffer.createBuffer(path, stpos, edpos);
+		}
 	}
 	
 	 /** Load ALL data in the specified sectors, including sector header/footer data, referenced by this node
@@ -234,28 +271,19 @@ public class ISOFileNode extends FileNode{
 	 * @since 1.2.0
 	 */
 	public FileBuffer loadRawData(long sec_off, long sec_len) throws IOException{
-		if(sec_len <= 0) return null;
-		String path = getSourcePath();
-		
-		//Chain together desired sectors.
-		int sec_size = this.getSectorTotalSize();
-		long maxlen = this.getLengthInSectors() - sec_off;
-		if(sec_len > maxlen) sec_len = maxlen;
-		
-		long stpos = sec_size * (this.getOffset() + sec_off);
-		long edpos = stpos + (sec_size*sec_len);
-		
-		return FileBuffer.createBuffer(path, stpos, edpos);
+		return loadRawData(sec_off, sec_len, false);
 	}
 	
 	/**
 	 * Load ALL data, including sector header/footer data, referenced by this node
 	 * into a single FileBuffer.
+	 * @param forceCache Whether or not to force the data to be loaded into a <code>CacheFileBuffer</code>
+	 * regardless of incoming data size.
 	 * @return FileBuffer containing raw data referenced by file - all full sectors sequential.
 	 * @throws IOException If the data cannot be loaded from disk.
-	 * @since 1.0.0
+	 * @since 2.0.0
 	 */
-	public FileBuffer loadRawData() throws IOException{
+	protected FileBuffer loadRawData(boolean forceCache) throws IOException{
 		String path = getSourcePath();
 		//FileBuffer imgdat = FileBuffer.createBuffer(path);
 		//ISO iso = new ISO(imgdat, true);
@@ -269,7 +297,26 @@ public class ISOFileNode extends FileNode{
 		
 		//System.err.println("Loading... 0x" + Long.toHexString(stpos) + " - 0x" + Long.toHexString(edpos));
 		
-		return FileBuffer.createBuffer(path, stpos, edpos);
+		if(this.hasVirtualSource()){
+			FileNode src = this.getVirtualSource();
+			src = src.getSubFile(stpos, edpos);
+			return src.loadDecompressedData(forceCache);
+		}
+		else{
+			if(forceCache) return CacheFileBuffer.getReadOnlyCacheBuffer(path, sec_size, 512, stpos, edpos);
+			else return FileBuffer.createBuffer(path, stpos, edpos);
+		}
+	}
+	
+	/**
+	 * Load ALL data, including sector header/footer data, referenced by this node
+	 * into a single FileBuffer.
+	 * @return FileBuffer containing raw data referenced by file - all full sectors sequential.
+	 * @throws IOException If the data cannot be loaded from disk.
+	 * @since 1.0.0
+	 */
+	public FileBuffer loadRawData() throws IOException{
+		return loadRawData(false);
 	}
 	
 	/* --- View --- */

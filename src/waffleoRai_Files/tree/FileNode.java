@@ -69,6 +69,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	public static final int LOADFAIL_FLAG_DATA_DECRYPT = 0x8;
 	public static final int LOADFAIL_FLAG_SRCFILE_DNE = 0x10;
 	public static final int LOADFAIL_FLAG_BADOFF = 0x20;
+	public static final int LOADFAIL_FLAG_ISDIR = 0x40;
 
 	/* --- Static Variables --- */
 	
@@ -574,6 +575,16 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	}
 	
 	/**
+	 * Remove a metadata key/value pair from this node's local metadata map.
+	 * @param key Key of metadata entry to remove.
+	 * @since 3.0.0
+	 */
+	public void clearMetadataValue(String key){
+		if(metadata == null) return;
+		metadata.remove(key);
+	}
+	
+	/**
 	 * Erase all metadata key-value mappings from this node. Keys and values
 	 * themselves will also be erased, so be careful.
 	 */
@@ -849,6 +860,9 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		copy.offset = this.offset;
 		copy.sourcePath = this.sourcePath;
 		
+		copy.src_virtual = this.src_virtual;
+		copy.sourceNode = this.sourceNode;
+		
 		/*copy.encryption = encryption;
 		copy.enc_start = enc_start;
 		copy.enc_len = enc_len;
@@ -902,6 +916,39 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 */
 	public FileNode copy(DirectoryNode parent_copy, FileNode link_copy){
 		return copy(parent_copy);
+	}
+	
+	/**
+	 * Cull the encryption regions for this node to those that fall between
+	 * the specified positions. This is used for generating split/ sub nodes.
+	 * @param stpos Start coordinate of region relative to prior start position.
+	 * @param len Length of region.
+	 */
+	protected void subsetEncryptionRegions(long stpos, long len){
+
+		if(encryption_chain == null) return;
+		
+		List<EncryInfoNode> refchain = encryption_chain;
+		encryption_chain = new LinkedList<EncryInfoNode>();
+		long edpos = stpos + len;
+		
+		for(EncryInfoNode en : refchain){
+			//If starts after region...
+			if(en.offset >= edpos) continue;
+			//If ends before region...
+			long eend = en.offset + en.length;
+			if(eend < stpos) continue;
+			
+			//Trim ends to fit.
+			long nst = en.offset - stpos;
+			if(nst < 0L) nst = 0L;
+			long ed = edpos<eend?edpos:eend;
+			long ned = ed - stpos;
+			long rlen = ned - nst;
+			
+			encryption_chain.add(new EncryInfoNode(en.def, nst, rlen));
+		}
+		
 	}
 	
 	/**
@@ -1055,6 +1102,8 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	
 	/* --- Load --- */
 	
+	//TODO does generate source and loadDirect handle virtual sources correctly?
+	
 	private void noteTempPath(String path){
 		if(temp_paths == null) temp_paths = new LinkedList<String>();
 		temp_paths.add(path);
@@ -1178,7 +1227,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		if(edoff > maxed) edoff = maxed;
 		
 		if(hasVirtualSource()){
-			return sourceNode.loadData(stoff, edoff-stoff, forceCache, decrypt);
+			return sourceNode.loadData(stoff + this.getOffset(), edoff-stoff, forceCache, decrypt);
 		}
 		else{
 			String path = getSourcePath();
@@ -1219,6 +1268,10 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	protected FileBuffer loadData(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
 
 		lfail_flags = 0;
+		if(this.isDirectory()){
+			lfail_flags |= FileNode.LOADFAIL_FLAG_ISDIR;
+			return null;
+		}
 		
 		//Unwrap
 		FileNode src = generateSource(decrypt);
