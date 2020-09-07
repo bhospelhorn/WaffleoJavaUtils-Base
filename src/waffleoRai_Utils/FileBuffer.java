@@ -8,6 +8,8 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.GregorianCalendar;
@@ -92,6 +94,8 @@ import java.util.TimeZone;
  * 	3.8.1 -> 3.8.2 | Rewrote getASCII_string(long, char)
  * 2020.08.21
  * 	3.8.2 -> 3.9.0 | Added flush()
+ * 2020.09.05
+ * 	3.9.0 -> 3.10.0 | Added a file hashing method
  * */
 
 /**
@@ -103,13 +107,15 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.9.0
- * @since August 21, 2020
+ * @version 3.10.0
+ * @since September 5, 2020
  */
 public class FileBuffer 
 {
 	
 	public static final byte ZERO_BYTE = 0x00;
+	
+	public static final int HASH_LOAD_SIZE = 0x8000000;
 	
 	public static final long DEFO_SIZE_THRESHOLD = 0x40000000; //1GB
 	private static long SIZE_THRESHOLD = DEFO_SIZE_THRESHOLD;
@@ -4202,6 +4208,36 @@ public class FileBuffer
   		return false;
   	}
   
+  	/**
+  	 * Get a hash using the specified algorithm of the file at the provided path.
+  	 * @param hashtype String specifying which hash algorithm to use (eg. "SHA-256")
+  	 * @param filepath Path on local file system to file to hash.
+  	 * @return Requested hash as a byte array.
+  	 * @throws NoSuchAlgorithmException If the hash algorithm string is not recognized by Java.
+  	 * @throws IOException If there is an error reading the file.
+  	 * @since 3.10.0
+  	 */
+  	public static byte[] getFileHash(String hashtype, String filepath) throws NoSuchAlgorithmException, IOException{
+  		MessageDigest digest = MessageDigest.getInstance(hashtype);
+  		long remaining = FileBuffer.fileSize(filepath);
+  		
+  		BufferedInputStream bis = new BufferedInputStream(new FileInputStream(filepath));
+  		
+  		byte[] arr = new byte[HASH_LOAD_SIZE];
+  		while(remaining > 0L){
+  			int bsz = remaining>HASH_LOAD_SIZE?HASH_LOAD_SIZE:(int)remaining;
+  			bis.read(arr, 0, bsz);
+  			digest.update(arr, 0, bsz);
+  			remaining -= bsz;
+  		}
+
+  		bis.close();
+  		
+  		byte[] hash = digest.digest();
+  		
+  		return hash;
+  	}
+  	
   	/* ----- STREAMING ----- */
   	
   	/**

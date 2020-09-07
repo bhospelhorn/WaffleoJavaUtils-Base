@@ -42,9 +42,9 @@ public class AESTest {
 		}
 		System.err.println();*/
 		
-		String key_str = "d6c4cf73c639e025654dd3232fe3aa7138f21bc8922271b4a6c0af999100b6b5e380ec7ec8da88e6816cd7f4f26e7ac0f86e4caac3be55234ebcd4347cda2fa5";
-		String iv_str = "041f41fa30b78898040b5e0ecba27d2b";
-		String enc_str = "d083f37a6160ac25c3229800ae0721d94bf6a9ff2f73a418544e6c787cbcd34a";
+		/*String key_str = "";
+		String iv_str = "";
+		String enc_str = "";
 		
 		byte[] key = AES.str2Key(key_str);
 		byte[] iv = AES.str2Key(iv_str);
@@ -56,7 +56,8 @@ public class AESTest {
 		
 		AESXTS xts = new AESXTS(key);
 		byte[] dec = xts.decrypt(iv, enc);
-		System.err.println("PT: " + AES.bytes2str(dec));
+		System.err.println("PT: " + AES.bytes2str(dec));*/
+
 	}
 
 }

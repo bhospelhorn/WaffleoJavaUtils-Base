@@ -1,8 +1,11 @@
 package waffleoRai_Files.tree;
 
 import java.io.IOException;
+import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import waffleoRai_Utils.CacheFileBuffer;
@@ -16,6 +19,9 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 	Documentation
  * 	Update to FileNode 3.0.0 compatibility
  * 
+ * 2020.09.02 | 2.1.0
+ * 	Added debugging method printDetailedTo()
+ * 
  */
 
 /**
@@ -23,13 +29,15 @@ import waffleoRai_Utils.MultiFileBuffer;
  * non-sequential chunks of data from different sources. This may be used
  * to represent patched virtual files.
  * @author Blythe Hospelhorn
- * @version 2.0.0
- * @since August 29, 2020
+ * @version 2.1.0
+ * @since September 2, 2020
  */
 public class PatchworkFileNode extends FileNode{
 	
 	public static final int CACHEBUFF_PGSIZE = 0x1000;
 	public static final int CACHEBUFF_PGNUM = 256;
+	
+	public static final String CLASSVER = "2.1.0";
 	
 	/*----- Instance Variables -----*/
 	
@@ -304,4 +312,52 @@ public class PatchworkFileNode extends FileNode{
 		System.err.println();
 	}
 
+	/**
+	 * Print the detailed contents and mapping data for this node
+	 * to the specified <code>Writer</code>. This can be used
+	 * for debugging.
+	 * @param out Output target.
+	 * @throws IOException If there is an error writing to the output.
+	 */
+	public void printDetailedTo(Writer out) throws IOException{
+
+		out.write("----------- PatchworkFileNode Instance (class v." + CLASSVER + ") -----------\n");
+		out.write("Node Local Name: " + this.getFileName() + "\n");
+		out.write("Node Tree Path: " + this.getFullPath() + "\n");
+		out.write("Complex Mode: " + this.complex_mode + "\n");
+		
+		out.write("Patch Pieces ----\n");
+		long pos = 0;
+		for(FileNode piece : pieces){
+			out.write("-> " + piece.getFileName() + "\n");
+			out.write("\tSource: ");
+			if(piece.hasVirtualSource()){
+				out.write("<virtual> ");
+				FileNode vsrc = piece.getVirtualSource();
+				if(vsrc == null) out.write("[NULL]\n");
+				else out.write("NODE" + Long.toHexString(vsrc.getGUID()) + "\n");
+			}
+			else out.write(piece.getSourcePath() + "\n");
+			
+			out.write("\tSource Location: " + piece.getLocationString() + "\n");
+			out.write("\tLocal Location: 0x" + Long.toHexString(pos) + " - 0x" + Long.toHexString(pos+piece.getLength()) + "\n");
+			pos+=piece.getLength();
+			
+			out.write("\tHas Container: " + piece.hasCompression() + "\n");
+			out.write("\tHas Encryption: " + piece.hasEncryption() + "\n");
+			
+			out.write("\tMetadata: ");
+			List<String> keys = piece.getMetadataKeys();
+			if(keys == null || keys.isEmpty()) out.write("[None]\n");
+			else{
+				out.write("\n");
+				Collections.sort(keys);
+				for(String k : keys){
+					out.write("\t\t" + k + "\t" + piece.getMetadataValue(k) + "\n");
+				}
+			}
+		}
+		
+	}
+	
 }

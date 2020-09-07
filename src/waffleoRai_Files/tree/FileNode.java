@@ -1026,6 +1026,8 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 */
 	public FileNode getSubFile(long stoff, long len){
 		FileNode child = copy(null);
+		long num = stoff ^ len;
+		child.setFileName(getFileName() + "-subnode-" + Long.toHexString(num));
 		if(stoff < 0) stoff = 0;
 		if(len < 0) len = 0;
 		
