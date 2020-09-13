@@ -351,8 +351,13 @@ public class MultiFileBuffer extends FileBuffer{
   		long w = 0;
   		long cpos = 0;
   		
+  		//int dc = -1; //Debug counter
+  		//System.err.println("Pages detected: " + list.size());
+  		//System.err.println("edPos = 0x" + Long.toHexString(edPos));
   		for(Page p : list)
   		{
+  			//dc++;
+  			
   			long epos = cpos + p.data.getFileSize();
   			if(epos < stPos){cpos = epos; continue;}
   			
@@ -361,6 +366,9 @@ public class MultiFileBuffer extends FileBuffer{
   			long ed = p.data.getFileSize();
   			if(ed > edPos) ed = edPos;
   			
+  			//System.err.println("MultiFileBuffer.writeToStream || Writing page " + dc);
+  			//System.err.println("\t Page Size 0x" + Long.toHexString(p.data.getFileSize()));
+  			//System.err.println("\t Writing 0x" + Long.toHexString(st) + " - 0x" + Long.toHexString(ed));
   			p.data.writeToStream(out, st, ed);
   			w += (ed-st);
   			

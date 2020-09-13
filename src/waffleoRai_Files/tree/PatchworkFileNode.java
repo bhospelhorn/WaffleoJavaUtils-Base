@@ -22,6 +22,9 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 2020.09.02 | 2.1.0
  * 	Added debugging method printDetailedTo()
  * 
+ * 2020.09.07 | 2.1.1
+ * 	Wrap pieces in structure that marks local address for faster lookup
+ * 
  */
 
 /**
@@ -29,20 +32,34 @@ import waffleoRai_Utils.MultiFileBuffer;
  * non-sequential chunks of data from different sources. This may be used
  * to represent patched virtual files.
  * @author Blythe Hospelhorn
- * @version 2.1.0
- * @since September 2, 2020
+ * @version 2.1.1
+ * @since September 7, 2020
  */
 public class PatchworkFileNode extends FileNode{
 	
 	public static final int CACHEBUFF_PGSIZE = 0x1000;
 	public static final int CACHEBUFF_PGNUM = 256;
 	
-	public static final String CLASSVER = "2.1.0";
+	public static final String CLASSVER = "2.1.1";
 	
 	/*----- Instance Variables -----*/
 	
 	private boolean complex_mode; //Uses the nodes as direct sources... (vs. just path/offset data)
-	private ArrayList<FileNode> pieces;
+	private ArrayList<Piece> pieces;
+	
+	/*----- Structures -----*/
+	
+	private static class Piece{
+		
+		public long st_off; //Local address. For quick lookup.
+		
+		public FileNode node;
+		
+		public Piece(long off, FileNode n){
+			st_off = off;
+			node = n;
+		}
+	}
 	
 	/*----- Construction -----*/
 
@@ -56,7 +73,7 @@ public class PatchworkFileNode extends FileNode{
 	 */
 	public PatchworkFileNode(DirectoryNode parent, String name) {
 		super(parent, name);
-		pieces = new ArrayList<FileNode>();
+		pieces = new ArrayList<Piece>();
 	}
 	
 	/**
@@ -70,10 +87,55 @@ public class PatchworkFileNode extends FileNode{
 	 */
 	public PatchworkFileNode(DirectoryNode parent, String name, int initPieces) {
 		super(parent, name);
-		pieces = new ArrayList<FileNode>(initPieces);
+		pieces = new ArrayList<Piece>(initPieces);
 	}
 	
 	/* --- Location Management --- */
+	
+	private int getPieceIndex(long offset){
+		//Binary search list to reduce retrieval time
+		int pcount = pieces.size();
+		int max = pcount;
+		int min = 0;
+		int idx = max/2;
+		
+		while(idx >= 0 && idx < pcount){
+			//Check this page to see if offset falls within.
+			Piece p0 = pieces.get(idx);
+			
+			if(p0.st_off > offset){
+				//Offset is before this page. Go left.
+				int space = max-min;
+				if(space <= 0) break; //No more nodes to check
+				
+				max = idx;
+				idx = min + (space/2);
+				continue;
+			}
+			
+			long edoff = 0L;
+			if(idx < (pcount-1)){
+				Piece p1 = pieces.get(idx+1);
+				edoff = p1.st_off;
+			}
+			else edoff = super.getLength();
+			
+			if(offset >= edoff){
+				//Offset is after this page. Go right.
+				int space = max-min;
+				if(space <= 0) break; //No more nodes to check
+				
+				min = idx+1;
+				idx = min + (space/2);
+				continue;
+			}
+			
+			//Offset is within this page. Return idx
+			return idx;
+		}
+		
+		return -1;
+	}
 	
 	/**
 	 * Add a piece to the end of the patchwork virtual file. This piece will
@@ -85,14 +147,15 @@ public class PatchworkFileNode extends FileNode{
 	 */
 	public void addBlock(String path, long offset, long size){
 		if (super.getSourcePath() == null) super.setSourcePath(path);
-		super.setLength(super.getLength() + size);
+		long len = super.getLength();
+		super.setLength(len + size);
 		
 		FileNode dat = new FileNode(null, "");
 		dat.setSourcePath(path);
 		dat.setOffset(offset);
 		dat.setLength(size);
 		
-		pieces.add(dat);
+		pieces.add(new Piece(len, dat));
 	}
 	
 	/**
@@ -104,8 +167,9 @@ public class PatchworkFileNode extends FileNode{
 	 */
 	public void addBlock(FileNode block){
 		if(block == null) return;
-		pieces.add(block);
-		super.setLength(super.getLength() + block.getLength());
+		long len = super.getLength();
+		pieces.add(new Piece(len, block));
+		super.setLength(len + block.getLength());
 	}
 	
 	/**
@@ -126,13 +190,13 @@ public class PatchworkFileNode extends FileNode{
 	 */
 	public ArrayList<FileNode> getBlocks(){
 		ArrayList<FileNode> copy = new ArrayList<FileNode>(pieces.size()+1);
-		copy.addAll(pieces);
+		for(Piece p : pieces) copy.add(p.node);
 		return copy;
 	}
 	
 	public Set<String> getAllSourcePaths(){
 		Set<String> set = new HashSet<String>();
-		for(FileNode piece : pieces) set.add(piece.getSourcePath());
+		for(Piece piece : pieces) set.add(piece.node.getSourcePath());
 		return set;
 	}
 	
@@ -161,37 +225,41 @@ public class PatchworkFileNode extends FileNode{
 		
 		if(len >= FileBuffer.DEFO_SIZE_THRESHOLD) forceCache = true;
 		
-		MultiFileBuffer file = new MultiFileBuffer(pieces.size()+1);
-		long cpos = 0;
-		long edpos = stpos + len;
-		for(FileNode piece : pieces){
-			//Check whether to include piece
-			if(cpos >= edpos) break;
-			long ped = cpos + piece.getLength();
-			if(ped < stpos){
-				cpos += piece.getLength();
-				continue;
+		MultiFileBuffer file = new MultiFileBuffer(pieces.size()+1); //Overkill but null pages shouldn't be that much of a mem sink.
+		//Get the index of the start piece using a binary search.
+		int idx = getPieceIndex(stpos);
+		long remaining = len;
+		while(remaining > 0L){
+			Piece p = pieces.get(idx++);
+			
+			//See if start is after start of piece.
+			long l = p.node.getLength();
+			long st = 0L;
+			if(p.st_off < stpos){
+				st = stpos-p.st_off;
+				l-=st;
 			}
 			
-			long st = 0;
-			long ed = piece.getLength();
+			//Get end position...
+			if(remaining < l) l = remaining;
+			long ed = st+l;
 			
-			if(cpos < stpos) st = stpos - cpos;
-			if(ped > edpos) ed = edpos - cpos;
-			
+			//Load
 			FileBuffer pdat = null;
 			if(complex_mode){
-				pdat = piece.loadData(st, ed-st, forceCache, decrypt);
+				pdat = p.node.loadData(st, l, forceCache, decrypt);
 			}
 			else{
+				FileNode piece = p.node;
 				long start = st + piece.getOffset();
 				long end = ed + piece.getOffset();
 				if(forceCache) CacheFileBuffer.getReadOnlyCacheBuffer(piece.getSourcePath(), CACHEBUFF_PGSIZE, CACHEBUFF_PGNUM, start, end);
 				else pdat = FileBuffer.createBuffer(piece.getSourcePath(), start, end);
 			}
 			
+			//Next
 			file.addToFile(pdat);
-			cpos += piece.getLength();
+			remaining -= l;
 		}
 		
 		return file;
@@ -220,7 +288,8 @@ public class PatchworkFileNode extends FileNode{
 	protected void copyDataTo(PatchworkFileNode copy){
 		super.copyDataTo(copy);
 		
-		copy.pieces = getBlocks();
+		copy.pieces = new ArrayList<Piece>(pieces.size()+1);
+		copy.pieces.addAll(pieces);
 		copy.complex_mode = this.complex_mode;
 	}
 	
@@ -246,7 +315,8 @@ public class PatchworkFileNode extends FileNode{
 		long cpos = 0L;
 		
 		copy.clearBlocks();
-		for(FileNode piece : this.pieces){
+		for(Piece p : this.pieces){
+			FileNode piece = p.node;
 			
 			//Skip if not in range
 			if(cpos >= edoff) break;
@@ -302,7 +372,8 @@ public class PatchworkFileNode extends FileNode{
 		String tabs = sb.toString();
 
 		System.err.print(tabs + "->" + super.getFileName() + " (");
-		for(FileNode piece : pieces){
+		for(Piece p : pieces){
+			FileNode piece = p.node;
 			String path = piece.getSourcePath();
 			String stoff = "0x" + Long.toHexString(piece.getOffset());
 			String edoff = "0x" + Long.toHexString(piece.getOffset() + piece.getLength());
@@ -328,7 +399,8 @@ public class PatchworkFileNode extends FileNode{
 		
 		out.write("Patch Pieces ----\n");
 		long pos = 0;
-		for(FileNode piece : pieces){
+		for(Piece p : pieces){
+			FileNode piece = p.node;
 			out.write("-> " + piece.getFileName() + "\n");
 			out.write("\tSource: ");
 			if(piece.hasVirtualSource()){

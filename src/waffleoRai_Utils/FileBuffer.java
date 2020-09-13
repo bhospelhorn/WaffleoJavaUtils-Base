@@ -96,6 +96,8 @@ import java.util.TimeZone;
  * 	3.8.2 -> 3.9.0 | Added flush()
  * 2020.09.05
  * 	3.9.0 -> 3.10.0 | Added a file hashing method
+ * 2020.09.10
+ * 	3.10.0 -> 3.10.1 | Debug - redirect writeFile(String) to long offset overload
  * */
 
 /**
@@ -107,8 +109,8 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.10.0
- * @since September 5, 2020
+ * @version 3.10.1
+ * @since September 10, 2020
  */
 public class FileBuffer 
 {
@@ -564,8 +566,7 @@ public class FileBuffer
 	 * Get the size in bytes of the file that the buffer contents would write.
 	 * @return Long integer representing the number of occupied bytes in this buffer. -1 if there is an error.
 	 */
-	public long getFileSize()
-	{
+	public long getFileSize(){
 		return Integer.toUnsignedLong(this.fSize);
 	}
   
@@ -593,8 +594,7 @@ public class FileBuffer
 	 * @return byte at position specified
 	 * @throws IndexOutOfBoundsException If position is invalid.
 	 */
-	public byte getByte(int position)
-	{
+	public byte getByte(int position){
 		if (position < 0 || position >= (int)this.getFileSize()) throw new IndexOutOfBoundsException();
 		if (this.isOverflowing())
 		{
@@ -619,8 +619,7 @@ public class FileBuffer
 	 * @return Byte at position specified
 	 * @throws IndexOutOfBoundsException If position is invalid.
 	 */
-	public byte getByte(long position)
-	{
+	public byte getByte(long position){
 		int pos = (int)position;
 		return this.getByte(pos);
 	}
@@ -793,8 +792,7 @@ public class FileBuffer
 	 * If FileBuffer is in read-only mode, will release it and once again allow for writing.
 	 * If FileBuffer is not in read-only mode, this will do nothing.
 	 */
-	public void unsetReadOnly()
-	{
+	public void unsetReadOnly(){
 		this.readOnly = false;
 	}
   
@@ -2783,7 +2781,7 @@ public class FileBuffer
   	public void writeFile(String path) throws IOException
   	{ 
   		/*Writes the full file to the given path.*/
-  		this.writeFile(path, 0, (int)this.getFileSize()); 
+  		this.writeFile(path, 0L, this.getFileSize()); 
   	}
   
   	/**

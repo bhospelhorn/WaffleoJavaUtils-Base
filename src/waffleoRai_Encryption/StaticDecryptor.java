@@ -5,5 +5,6 @@ import waffleoRai_Files.tree.FileNode;
 public interface StaticDecryptor {
 	
 	public FileNode decrypt(FileNode node);
+	public DecryptorMethod generateDecryptor(FileNode node);
 
 }

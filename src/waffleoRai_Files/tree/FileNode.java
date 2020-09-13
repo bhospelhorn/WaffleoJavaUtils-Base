@@ -23,15 +23,18 @@ import javax.swing.tree.TreePath;
 
 import waffleoRai_Compression.definitions.AbstractCompDef;
 import waffleoRai_Compression.definitions.CompDefNode;
+import waffleoRai_Encryption.DecryptorMethod;
 import waffleoRai_Encryption.StaticDecryption;
 import waffleoRai_Encryption.StaticDecryptor;
 import waffleoRai_Files.EncryptionDefinition;
 import waffleoRai_Files.FileTypeNode;
 import waffleoRai_Files.NodeMatchCallback;
 import waffleoRai_Utils.CacheFileBuffer;
+import waffleoRai_Utils.EncryptedFileBuffer;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBufferStreamer;
 import waffleoRai_Utils.FileUtils;
+import waffleoRai_Utils.MultiFileBuffer;
 import waffleoRai_Utils.Treenumeration;
 
 
@@ -42,6 +45,11 @@ import waffleoRai_Utils.Treenumeration;
  * 	("Initial" version number chosen arbitrarily)
  * 	Added virtual sourcing
  * 	Overhauled container and encryption linking
+ *
+ * 2020.09.08 | 3.0.0 -> 3.1.0
+ * 	Move decryption handling to after file data is loaded
+ * 		(to use EncryptedFileBuffer instead of writing to disk)
+ *
  * 
  */
 
@@ -55,8 +63,8 @@ import waffleoRai_Utils.Treenumeration;
  * within files on disk (such as archives or device images).
  * <br> This class replaces the deprecated <code>VirFile</code> class.
  * @author Blythe Hospelhorn
- * @version 3.0.0
- * @since August 25, 2020
+ * @version 3.1.0
+ * @since September 8, 2020
  */
 public class FileNode implements TreeNode, Comparable<FileNode>{
 	
@@ -1112,17 +1120,15 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	}
 	
 	/**
-	 * Process any wrapping containers and encryption to generate a new temporary
-	 * file node referencing the plaintext data for this node. If this node
+	 * Process any wrapping containers to generate a new temporary
+	 * file node referencing the decompressed data for this node. If this node
 	 * has no wrapping, this method will simply return this node.
-	 * @param decrypt Whether or not to attempt decryption of node data. If not, the
-	 * returned node will either be this node or reference the open container.
 	 * @return Node referencing plaintext or decompressed data from which this node's
 	 * data can be accessed.
 	 * @throws IOException If there is an error reading any source files or creating
 	 * any temp files.
 	 */
-	protected FileNode generateSource(boolean decrypt) throws IOException{
+	protected FileNode generateSource() throws IOException{
 
 		Random r = new Random(getGUID()); //For temp file names
 		
@@ -1157,7 +1163,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		}
 		
 		//Handle encryption if present, and possible
-		if(decrypt && (encryption_chain != null)){
+		/*if(decrypt && (encryption_chain != null)){
 			for(EncryInfoNode e : encryption_chain){
 				if(e.def == null){
 					lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
@@ -1198,7 +1204,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 					node = pfn;
 				}
 			}
-		}
+		}*/
 		
 		
 		return node;
@@ -1269,6 +1275,8 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 */
 	protected FileBuffer loadData(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
 
+		//System.err.println("FileBuffer.loadData || Loading " + this.getFullPath());
+		
 		lfail_flags = 0;
 		if(this.isDirectory()){
 			lfail_flags |= FileNode.LOADFAIL_FLAG_ISDIR;
@@ -1276,10 +1284,71 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		}
 		
 		//Unwrap
-		FileNode src = generateSource(decrypt);
+		FileNode src = generateSource();
 		
 		//Load
 		FileBuffer data = src.loadDirect(stpos, len, forceCache, decrypt);
+		
+		//Wrap buffer w/ decryption buffer if needed
+		if(decrypt && hasEncryption()){
+			int ecount = encryption_chain.size();
+			if(ecount == 1){
+				//See if the one entry covers the whole file...
+				//If so, just wrap data as-is
+				EncryInfoNode ereg = encryption_chain.getFirst();
+				long eend = ereg.offset + ereg.length; long dend = stpos + len;
+				if(ereg.offset <= stpos && eend >= dend){
+					//The one encryption region covers the whole chunk we extracted.
+					StaticDecryptor sdec = StaticDecryption.getDecryptorState(ereg.def.getID());
+					if(sdec != null){
+						DecryptorMethod decm = sdec.generateDecryptor(this);
+						if(stpos != 0) decm.adjustOffsetBy(stpos);
+						return new EncryptedFileBuffer(data, decm);
+					}
+					else{
+						lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
+						return data;
+					}
+				}
+			}
+			
+			//Chain regions together...
+			MultiFileBuffer multi = new MultiFileBuffer((ecount << 1) + 1);
+			long dend = stpos + len;
+			long pos = stpos;
+			int eadded = 0;
+			for(EncryInfoNode ereg : encryption_chain){
+				long eend = ereg.offset + ereg.length;
+				if(eend <= stpos) continue; //This region is before the requested data
+				if(ereg.offset >= dend) break; //This region is after the end of requested data
+				
+				//Get anything between the position and the region start...
+				if(ereg.offset > pos){
+					FileBuffer chunk = data.createCopy(pos-stpos, ereg.offset - stpos);
+					multi.addToFile(chunk);
+					pos = ereg.offset;
+				}
+				
+				//Do region
+				if(eend > dend) eend = dend;
+				FileBuffer chunk = data.createCopy(ereg.offset-stpos, eend - stpos);
+				StaticDecryptor sdec = StaticDecryption.getDecryptorState(ereg.def.getID());
+				if(sdec != null){
+					DecryptorMethod decm = sdec.generateDecryptor(this);
+					decm.adjustOffsetBy(stpos + ereg.offset);
+					multi.addToFile(new EncryptedFileBuffer(chunk, decm));
+				}
+				else{
+					lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
+					multi.addToFile(chunk);
+				}
+				eadded++;
+				pos = eend;
+			}
+			
+			if(eadded > 0) return multi;
+			
+		}
 		
 		return data;
 	}

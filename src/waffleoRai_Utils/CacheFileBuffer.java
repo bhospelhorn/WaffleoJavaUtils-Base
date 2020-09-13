@@ -34,6 +34,9 @@ import java.util.Random;
  * 
  * 1.2.0 | August 21, 2020
  * 	Added flush()
+ * 
+ * 1.2.1 | September 10, 2020
+ * 	Fixed a bug where the size of the last page would be derived incorrectly (end up negative)
  */
 
 /**
@@ -43,8 +46,8 @@ import java.util.Random;
  * <br>The size of each page and the number of pages (with data in memory) can be modified.
  * <br>WARNING: This class is not threadsafe.
  * @author Blythe Hospelhorn
- * @version 1.2.0
- * @since August 21, 2020
+ * @version 1.2.1
+ * @since September 10, 2020
  */
 public class CacheFileBuffer extends FileBuffer{
 	
@@ -92,7 +95,7 @@ public class CacheFileBuffer extends FileBuffer{
 		
 		private boolean isDirty;
 		private boolean write_flag;
-		private long offset_value;
+		private long offset_value; //Local offset
 		private int size;
 		
 		private FileBuffer loaded_data;
@@ -390,7 +393,7 @@ public class CacheFileBuffer extends FileBuffer{
 		current_file_size = edoff - stoff;
 		
 		//Generate all nodes and store in array.
-		boolean lastpg = (current_file_size % page_size != 0);
+		boolean lastpg = (current_file_size % page_size != 0); //Whether there's a smaller last page
 		int total_pgs = (int)(current_file_size / page_size);
 		if(lastpg) total_pgs++;
 		CachePage[] pgs = new CachePage[total_pgs];
@@ -400,13 +403,15 @@ public class CacheFileBuffer extends FileBuffer{
 		long relpos = 0;
 		for(int i = 0; i < ct; i++)
 		{
+			//Read full pages
 			pgs[i] = new CachePage(filepath, pos, relpos, page_size);
 			pos += page_size;
 			relpos += page_size;
 		}
 		if(lastpg)
 		{
-			int sz = (int)(current_file_size - pos);
+			//Last odd page
+			int sz = (int)(current_file_size - relpos);
 			pgs[ct] = new CachePage(filepath, pos, relpos, sz);
 		}
 		
@@ -1312,10 +1317,12 @@ public class CacheFileBuffer extends FileBuffer{
 		long mySize = this.getFileSize();
 		
 		try{
+			//System.err.println("Looking for page @ 0x" + Long.toHexString(stOff));
 			CachePage page = getLoadedPage(stOff);
 			if(page == null){
 				throw new IndexOutOfBoundsException("Page could not be found for offset 0x" + Long.toHexString(stOff));
 			}
+			//System.err.println("CacheBuffer.getBytes || Loading page @ local 0x" + Long.toHexString(page.offset_value) + " (File 0x" + Long.toHexString(page.src_offset) + ")");
 			if(page.getDataBuffer() == null) page.loadToCache();
 
 			long ppos = stOff - page.offset_value;
@@ -1337,6 +1344,8 @@ public class CacheFileBuffer extends FileBuffer{
 						System.err.println("Position = 0x" + Long.toHexString(stOff + i + 1));
 					}
 					
+					//System.err.println("CacheBuffer.getBytes || Loading page @ local 0x" + Long.toHexString(page.offset_value) + " (File 0x" + Long.toHexString(page.src_offset) + ")");
+					//System.err.println("Page size: 0x" + Long.toHexString(page.size));
 					if(page.getDataBuffer() == null) page.loadToCache();
 				}
 			}

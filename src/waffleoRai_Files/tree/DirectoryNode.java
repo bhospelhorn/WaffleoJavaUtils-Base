@@ -31,6 +31,9 @@ import waffleoRai_Utils.Treenumeration;
  * 	("Initial" version number chosen arbitrarily)
  * 	Compatibility w/ FileNode 3.0.0
  * 
+ * 2020.09.12 | 2.0.0 -> 2.1.0
+ * 		Added getNodesThat()
+ * 
  */
 
 /**
@@ -39,8 +42,8 @@ import waffleoRai_Utils.Treenumeration;
  * a virtual directory.
  * <br> This class replaces the deprecated <code>VirDirectory</code> class.
  * @author Blythe Hospelhorn
- * @version 2.0.0
- * @since August 28, 2020
+ * @version 2.1.0
+ * @since September 12, 2020
  */
 public class DirectoryNode extends FileNode{
 
@@ -680,6 +683,35 @@ public class DirectoryNode extends FileNode{
 			dir = dir.getParent();
 		}
 		return null;
+	}
+	
+	private void getNodesThat(NodeMatchCallback cond, Collection<FileNode> col){
+		//Check this node
+		if(cond.meetsCondition(this)) col.add(this);
+		
+		List<FileNode> children = this.getChildren();
+		for(FileNode child : children){
+			if(child instanceof DirectoryNode){
+				((DirectoryNode)child).getNodesThat(cond, col);
+			}
+			else{
+				if(cond.meetsCondition(child)) col.add(child);
+			}
+		}
+		
+	}
+	
+	/**
+	 * Search the tree and return all nodes that fulfill the specified condition.
+	 * @param cond Wrapped method that determines whether a node fulfills the condition.
+	 * @return Collection of nodes in this tree (including directories) that fulfill
+	 * the condition, in no particular order. If none are found, the returned collection is empty.
+	 * @since 2.1.0
+	 */
+	public Collection<FileNode> getNodesThat(NodeMatchCallback cond){
+		List<FileNode> nodes = new LinkedList<FileNode>();
+		getNodesThat(cond, nodes);
+		return nodes;
 	}
 	
 	/**
