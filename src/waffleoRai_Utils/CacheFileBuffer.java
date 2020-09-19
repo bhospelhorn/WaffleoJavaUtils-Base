@@ -37,6 +37,9 @@ import java.util.Random;
  * 
  * 1.2.1 | September 10, 2020
  * 	Fixed a bug where the size of the last page would be derived incorrectly (end up negative)
+ * 
+ * 1.2.2 | September 13, 2020
+ * 	toByteBuffer(long, long) was having issues, so now it just calls getBytes()
  */
 
 /**
@@ -46,8 +49,8 @@ import java.util.Random;
  * <br>The size of each page and the number of pages (with data in memory) can be modified.
  * <br>WARNING: This class is not threadsafe.
  * @author Blythe Hospelhorn
- * @version 1.2.1
- * @since September 10, 2020
+ * @version 1.2.2
+ * @since September 13, 2020
  */
 public class CacheFileBuffer extends FileBuffer{
 	
@@ -1820,29 +1823,8 @@ public class CacheFileBuffer extends FileBuffer{
   		
   		ByteBuffer bb = ByteBuffer.allocate((int)sz);
   		
-  		try
-  		{
-  			long cpos = stPos;
-  			CachePage page = getLoadedPage(stPos);
-
-  			while(cpos < edPos)
-  			{
-  				long st = cpos - page.getOffset();
-  				long ed = page.size;
-  				if(page.onPage(edPos)) ed = edPos - page.getOffset();
-  			
-  				bb.put(page.getDataBuffer().getBytes(st, ed));
-  			
-  				page = page.getNextPage();
-  				if(!page.dataLoaded()) page.loadToCache();
-  				cpos = page.getOffset() + ed;
-  			}
-  		}
-  		catch(IOException x)
-  		{
-  			x.printStackTrace();
-  			return null;
-  		}
+  		byte[] bytes = getBytes(stPos, edPos);
+  		bb.put(bytes);
   		
   		bb.rewind();
   		return bb;

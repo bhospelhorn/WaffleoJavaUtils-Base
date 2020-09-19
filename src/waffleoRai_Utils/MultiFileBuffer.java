@@ -22,6 +22,8 @@ import java.util.List;
  * 		Debugging toByteBuffer()
  * 2020.08.21 | 1.1.1 -> 1.2.0
  * 		Added flush()
+ * 2020.09.13 | 1.2.0 -> 1.2.1
+ * 		Debugging getBytes() and toByteBuffer()
  */
 
 /**
@@ -31,8 +33,8 @@ import java.util.List;
  * <br>This can be handy for serializing into an object to hold in memory.
  * <br>CachedFileBuffer utilizes very similar logic and can be used in the same way.
  * @author Blythe Hospelhorn
- * @version 1.2.0
- * @since August 21, 2020
+ * @version 1.2.1
+ * @since September 13, 2020
  *
  */
 public class MultiFileBuffer extends FileBuffer{
@@ -301,8 +303,7 @@ public class MultiFileBuffer extends FileBuffer{
 	
 	/* ----- CONTENT RETRIEVAL ----- */
 	
-	public byte[] getBytes()
-	{
+	public byte[] getBytes(){
 		if(current_file_size > 0x7FFFFFFF) throw new IndexOutOfBoundsException();
 		return getBytes(0, current_file_size);
 	}
@@ -403,27 +404,7 @@ public class MultiFileBuffer extends FileBuffer{
   		long sz = edPos - stPos;
   		if(sz > 0x7FFFFFFF) throw new IndexOutOfBoundsException();
   		ByteBuffer bb = ByteBuffer.allocate((int)sz);
-  		
-  		boolean copying = false;
-  		for(Page p : list){
-  			long st = 0;
-  			if(!copying){
-  				if(p.onPage(stPos)){
-  					copying = true;
-  					st = stPos - p.offset;
-  				}
-  				else continue;
-  			}
-
-  			long ed = p.data.getFileSize();
-  			if(p.onPage(edPos)){
-  				copying = false;
-  				ed = edPos - p.offset;
-  			}
-  			
-  			bb.put(p.data.getBytes(st, ed));
-  		}
-  		
+  		bb.put(getBytes(stPos, edPos));
   		bb.rewind();
   		return bb;
   	}

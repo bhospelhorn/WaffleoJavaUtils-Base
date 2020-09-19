@@ -1,9 +1,13 @@
 package waffleoRai_Files.tree;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -13,6 +17,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.InflaterInputStream;
 
 import waffleoRai_Compression.definitions.AbstractCompDef;
 import waffleoRai_Compression.definitions.CompDefNode;
@@ -30,6 +36,15 @@ import waffleoRai_Utils.SerializedString;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
 
 public class FileTreeSaver {
+	
+	/*
+	 * Starting with version 7, it can also be DEFLATEd
+	 * In which case...
+	 * 	Magic "cReE" [4]
+	 * 	Inflated Size [8]
+	 * 	(Compressed Data)
+	 * 
+	 */
 	
 	/*Big Endian
 	 * 
@@ -70,10 +85,11 @@ public class FileTreeSaver {
 	 * 		 	7 - Source compressed? (If file)
 	 * 		 	6 - Has type chain [file]/file class[dir] (V2+)(V4+ for dir)
 	 * 		 	5 - Has encryption (V2+)
-	 * 		FLAGS (V7+) ---
+	 * 		FLAGS (V7+) --- d0m0nnnn ctevu000
 	 * 			15 - Is Directory
 	 * 			14 - (Reserved)
 	 * 			13 - Has metadata?
+	 * 			12 - (Reserved)
 	 * 			11-8 - FileNode type enum (4 bits)
 	 * 				0 - Regular
 	 * 				1 - Link Node
@@ -100,13 +116,16 @@ public class FileTreeSaver {
 	 * 	Length [8]
 	 * 
 	 * File subtype data....
+	 * (Frag/Simple Patchwork)
 	 * 	Block count [4] (If applicable) (V6+)
 	 *	Block location data [(16 or 20)*blocks] (If applicable) (V6+)
 	 *		Path Index [4] (If patchwork) (V7+)
 	 *		Offset [8]
 	 *		Size [8]
+	 * (Complex Patchwork)
 	 *	# Inner Nodes [4] (If applicable (complex patchwork)) (V7+)
 	 *  Inner Nodes [var] (If applicable (complex patchwork)) (V7+)
+	 * (Disk)
 	 *  Sector Size Data [8] (If applicable) (V5+)
 	 *  	Data Size [4]
 	 *  	Header Size [2]
@@ -161,6 +180,8 @@ public class FileTreeSaver {
 	
 	/* ----- Constants ----- */
 	
+	public static final String MAGIC_COMP = "cReE";
+	
 	public static final String MAGIC = "tReE";
 	public static final String MAGIC_TABLE = "SPBt";
 	public static final String MAGIC_TREE = "eert";
@@ -204,6 +225,31 @@ public class FileTreeSaver {
 		}
 	}
 	
+	private static class DatNode{
+		
+		private FileNode src;
+		
+		private FileBuffer dat;
+		private List<DatNode> children;
+		
+		public DatNode(){
+			children = new LinkedList<DatNode>();
+		}
+		
+		public long getTotalSize(){
+			long sz = dat.getFileSize();
+			for(DatNode child : children) sz += child.getTotalSize();
+			return sz;
+		}
+		
+		public void writeToStream(OutputStream out) throws IOException{
+			//out.write(dat.getBytes());
+			dat.writeToStream(out);
+			for(DatNode child : children) child.writeToStream(out);
+		}
+		
+	}
+	
 	/* ----- Parse ----- */
 	
 	private static ParsedDir parseDirNode(FileBuffer in, DirectoryNode parent, long stpos, String[] paths, Map<Integer, FileNode> offmap, int version, boolean listmode)
@@ -226,6 +272,7 @@ public class FileTreeSaver {
 		SerializedString ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.WORD, 2);
 		cpos += ss.getSizeOnDisk();
 		dir.setFileName(ss.getString());
+		if(dir.getFileName() == null) dir.setFileName("");
 		//System.err.println("FileTreeSaver.parseDirNode || Dir Name: " + dir.getFileName());
 		
 		//Metadata
@@ -310,6 +357,7 @@ public class FileTreeSaver {
 		SerializedString ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.WORD, 2);
 		cpos += ss.getSizeOnDisk();
 		fn.setFileName(ss.getString());
+		if(fn.getFileName() == null) fn.setFileName("");
 		//System.err.println("FileTreeSaver.parseFileNode || File Name: " + fn.getFileName());
 		
 		if(version >= 3 && (flags & 0x2000) != 0) {
@@ -342,7 +390,7 @@ public class FileTreeSaver {
 		if(paths != null && pathidx >= 0 && pathidx < paths.length){
 			fn.setSourcePath(paths[pathidx]);
 		}
-		
+			
 		//Type specific location data
 		if(nodetype == NODETYPE_FRAG){
 			FragFileNode ffn = (FragFileNode)fn;
@@ -488,6 +536,7 @@ public class FileTreeSaver {
 			fn.scratch_field = in.intFromFile(cpos); cpos += 4;
 		}
 		
+		
 		return new ParsedNode(fn, ((int)(cpos - stpos)));
 	}
 
@@ -506,12 +555,12 @@ public class FileTreeSaver {
 					((LinkNode)child).setLinkOnly(target);
 				}
 			}
-			else
+			/*else //NO! Why is this here?!?!?
 			{
 				//Get src path
 				if(child.scratch_field < 0) continue;
 				child.setSourcePath(pathtbl[child.scratch_field]);
-			}
+			}*/
 		}
 	}
 	
@@ -531,9 +580,34 @@ public class FileTreeSaver {
 	}
 	
 	public static DirectoryNode loadTree(String inpath) throws IOException, UnsupportedFileTypeException{
+		
+		String tpath = null;
 		FileBuffer in = FileBuffer.createBuffer(inpath, true);
 		long cpos = in.findString(0, 0x10, MAGIC);
-		if(cpos < 0) throw new FileBuffer.UnsupportedFileTypeException("FileTreeSaver.loadTree || Magic number could not be found!");
+		if(cpos < 0){
+			//Check for compression
+			cpos = in.findString(0, 0x10, MAGIC_COMP);
+			if(cpos < 0) throw new FileBuffer.UnsupportedFileTypeException("FileTreeSaver.loadTree || Magic number could not be found!");
+			
+			tpath = inpath + ".tmp";
+			FileInputStream fis = new FileInputStream(inpath);
+			fis.skip(12);
+			BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(tpath));
+			InflaterInputStream iis = new InflaterInputStream(fis);
+			while(iis.available() != 0){
+				bos.write(iis.read());
+			}
+			bos.close();
+			iis.close();
+			
+			in = FileBuffer.createBuffer(tpath, true);
+			cpos = in.findString(0, 0x10, MAGIC);
+			
+			if(cpos < 0){
+				Files.deleteIfExists(Paths.get(tpath));
+				throw new FileBuffer.UnsupportedFileTypeException("FileTreeSaver.loadTree || Magic number could not be found!");
+			}
+		}
 		
 		//For now, just skip most of header...
 		cpos += 4; //Skip magic we just checked
@@ -549,14 +623,17 @@ public class FileTreeSaver {
 		//System.err.println("Tree Offset: 0x" + Long.toHexString(toff));
 		
 		//Read the source path table...
+		//System.err.println("SPBt - offset = 0x" + Long.toHexString(cpos));
+		int spbt_off = (int)cpos;
 		cpos += 4; //Skip "SPBt"
 		int path_count = in.intFromFile(cpos); cpos+=4;
 		String[] path_table = new String[path_count];
 		//System.err.println("Path count: " + path_count);
 		for(int i = 0; i < path_count; i++){
-			int off = 16 + in.intFromFile(cpos); cpos += 4;
+			int off = spbt_off + in.intFromFile(cpos); cpos += 4;
 			long spos = Integer.toUnsignedLong(off);
 			path_table[i] = in.readVariableLengthString(ENCODING, spos, BinFieldSize.WORD, 2).getString();
+			//System.err.println("Path found: " + path_table[i] + " (i=" + i + ")");
 		}
 		
 		//Prep map
@@ -640,6 +717,10 @@ public class FileTreeSaver {
 				
 				node.clearMetadataValue(METAKEY_CNTRNODE_UID);
 			}
+		}
+		
+		if(tpath != null){
+			Files.deleteIfExists(Paths.get(tpath));
 		}
 		
 		return root;
@@ -771,13 +852,13 @@ public class FileTreeSaver {
 	private static void saveRefNodePaths(Set<String> set, FileNode node){
 		FileNode ref = node.getContainer();
 		if(ref != null){
-			set.add(ref.getSourcePath());
+			set.addAll(ref.getAllSourcePaths());
 			saveRefNodePaths(set, ref);
 		}
 		
 		ref = node.getVirtualSource();
 		if(ref != null){
-			set.add(ref.getSourcePath());
+			set.addAll(ref.getAllSourcePaths());
 			saveRefNodePaths(set, ref);
 		}
 	}
@@ -799,34 +880,6 @@ public class FileTreeSaver {
 		}
 	}
 	
-	private static class DatNode
-	{
-		private FileNode src;
-		
-		private FileBuffer dat;
-		private List<DatNode> children;
-		
-		public DatNode()
-		{
-			children = new LinkedList<DatNode>();
-		}
-		
-		public long getTotalSize()
-		{
-			long sz = dat.getFileSize();
-			for(DatNode child : children) sz += child.getTotalSize();
-			return sz;
-		}
-		
-		public void writeToStream(OutputStream out) throws IOException
-		{
-			//out.write(dat.getBytes());
-			dat.writeToStream(out);
-			for(DatNode child : children) child.writeToStream(out);
-		}
-		
-	}
-
 	private static String serializeMetadata(FileNode node)
 	{
 		List<String> keylist = node.getMetadataKeys();
@@ -1173,13 +1226,16 @@ public class FileTreeSaver {
 		return list;
 	}
 	
-	public static boolean saveTree(DirectoryNode root, String outpath) throws IOException
-	{
-		return saveTree(root, outpath, false);
+	public static boolean saveTree(DirectoryNode root, String outpath) throws IOException{
+		return saveTree(root, outpath, false, true);
 	}
 
-	public static boolean saveTree(DirectoryNode root, String outpath, boolean scrubPaths) throws IOException
-	{
+	public static boolean saveTree(DirectoryNode root, String outpath, boolean scrubPaths) throws IOException{
+		return saveTree(root, outpath, scrubPaths, true);
+	}
+	
+	public static boolean saveTree(DirectoryNode root, String outpath, boolean scrubPaths, boolean compress) throws IOException{
+		
 		if(root == null) return false;
 		if(outpath == null || outpath.isEmpty()) return false;
 		
@@ -1239,7 +1295,7 @@ public class FileTreeSaver {
 		}
 		if(!lnodes.isEmpty()){
 			extralist = serializeList(lnodes, srcPathMap, 4);
-			for(DatNode dn : extralist) lsize += dn.dat.getFileSize();
+			for(DatNode dn : extralist) lsize += dn.getTotalSize();
 		}
 		
 		//Now do tree...
@@ -1273,7 +1329,9 @@ public class FileTreeSaver {
 		header.addToFile(0);
 		
 		//Now write to disk...
-		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(outpath));
+		String tpath = outpath;
+		if(compress) tpath = outpath + ".tmp";
+		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(tpath));
 		
 		bos.write(header.getBytes());
 		bos.write(sptbl_1.getBytes());
@@ -1294,6 +1352,42 @@ public class FileTreeSaver {
 		sroot.writeToStream(bos);
 		
 		bos.close();
+		
+		//Compress
+		if(compress){
+			long decsize = FileBuffer.fileSize(tpath);
+			FileBuffer cheader = new FileBuffer(12, true);
+			cheader.printASCIIToFile(MAGIC_COMP);
+			cheader.addToFile(decsize);
+			
+			long remain = decsize;
+			boolean lastblock = false;
+			FileOutputStream fos = new FileOutputStream(outpath);
+			cheader.writeToStream(fos);
+			BufferedInputStream bis = new BufferedInputStream(new FileInputStream(tpath));
+			DeflaterOutputStream dos = new DeflaterOutputStream(fos);
+			while(remain > 0){
+			
+				int blen = 0x400;
+				if(remain <= blen){
+					lastblock = true;
+					blen = (int)(remain);
+				}
+				
+				//Read in
+				byte[] buffer = new byte[blen];
+				bis.read(buffer);
+				dos.write(buffer);
+				if(lastblock) dos.finish();
+				
+				remain -= blen;
+			}
+			dos.close();
+			bis.close();
+			
+			//Remove the temp file
+			Files.deleteIfExists(Paths.get(tpath));
+		}
 		
 		return true;
 	}

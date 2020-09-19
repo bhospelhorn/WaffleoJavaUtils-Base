@@ -95,6 +95,7 @@ public class EncryptedFileBuffer extends FileBuffer{
 		byte[] bytes = getBytes(stPos, edPos);
 		ByteBuffer bb = ByteBuffer.allocate(bytes.length);
 		bb.put(bytes);
+		bb.rewind();
 		return bb;
 	}
 	
