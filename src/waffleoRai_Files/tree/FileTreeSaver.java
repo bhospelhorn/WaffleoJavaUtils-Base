@@ -807,7 +807,7 @@ public class FileTreeSaver {
 		return nodes;
 	}
 	
-	public static int loadNodes(String inpath, DirectoryNode mountTarget) throws IOException, UnsupportedFileTypeException{
+	public static Collection<FileNode> loadNodes(String inpath, DirectoryNode mountTarget) throws IOException, UnsupportedFileTypeException{
 
 		Collection<FileNode> nodelist = loadList(inpath);
 		
@@ -828,7 +828,7 @@ public class FileTreeSaver {
 			fn.setParent(dparent);
 		}
 		
-		return nodelist.size();
+		return nodelist;
 	}
 	
 	/* ----- Serialization ----- */

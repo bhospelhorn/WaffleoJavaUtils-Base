@@ -50,7 +50,8 @@ import waffleoRai_Utils.Treenumeration;
  * 	Move decryption handling to after file data is loaded
  * 		(to use EncryptedFileBuffer instead of writing to disk)
  *
- * 
+ * 2020.09.19 | 3.1.0 -> 3.2.0
+ * 	Added some methods for hiding parent (for temp dismounting)
  */
 
 /**
@@ -63,8 +64,8 @@ import waffleoRai_Utils.Treenumeration;
  * within files on disk (such as archives or device images).
  * <br> This class replaces the deprecated <code>VirFile</code> class.
  * @author Blythe Hospelhorn
- * @version 3.1.0
- * @since September 8, 2020
+ * @version 3.2.0
+ * @since September 19, 2020
  */
 public class FileNode implements TreeNode, Comparable<FileNode>{
 	
@@ -89,6 +90,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	/* --- Instance Variables --- */
 	
 	protected DirectoryNode parent;
+	private DirectoryNode hidden_parent;
 	
 	private String sourcePath;
 	private boolean src_virtual;
@@ -614,6 +616,33 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		
 		parent = p; 
 		if(p != null) p.addChild(this);
+	}
+	
+	/**
+	 * Hide this node from its parent node. This effectively allows for
+	 * a temporary tree dismount of this node.
+	 * <br>Internally, the parent link is moved to another field and the parent
+	 * field is set to null (removing this node from the parent's child map).
+	 * @since 3.2.0
+	 */
+	public void hideFromParent(){
+		hidden_parent = parent;
+		this.setParent(null);
+	}
+	
+	/**
+	 * Restore the link between this node and a previously hidden parent. If no
+	 * hidden parent is found, this method does nothing. If a hidden parent is found,
+	 * the parent of this node will be set to that parent (and any existing parent will
+	 * be delinked).
+	 * <br>This method can be used to remount a node that has been temporarily dismounted
+	 * from its tree.
+	 * @since 3.2.0
+	 */
+	public void restoreToParent(){
+		if(hidden_parent == null) return;
+		this.setParent(hidden_parent);
+		hidden_parent = null;
 	}
 	
 	/**
