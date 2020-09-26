@@ -57,9 +57,13 @@ public class EncryptedFileBuffer extends FileBuffer{
 		return getBytes(0L, getFileSize());
 	}
 	
+	public byte[] getBytes(int stOff, int edOff){
+		return getBytes(Integer.toUnsignedLong(stOff), Integer.toUnsignedLong(edOff));
+	}
+	
 	public byte[] getBytes(long stOff, long edOff){
 		if(stOff < 0) throw new IndexOutOfBoundsException("Start offset cannot be less than 0!");
-		if(edOff >= getFileSize()) throw new IndexOutOfBoundsException("End offset cannot exceed buffer size!");
+		if(edOff > getFileSize()) throw new IndexOutOfBoundsException("End offset cannot exceed buffer size!");
 		if(stOff >= edOff) throw new IndexOutOfBoundsException("Start offset must be smaller than end offset!");
 		
 		//Check size
@@ -73,11 +77,11 @@ public class EncryptedFileBuffer extends FileBuffer{
 		if(!offset_buffered(stOff)) bufferBlock(stOff); //Load start block
 		int pos = (int)(stOff % blocksize);
 		for(int i = 0; i < out.length; i++){
-			out[i] = buffer[pos++];
 			if(pos >= buffer.length){
 				bufferBlock(stOff + i);
 				pos = 0;
 			}
+			out[i] = buffer[pos++];
 		}
 		
 		return out;
