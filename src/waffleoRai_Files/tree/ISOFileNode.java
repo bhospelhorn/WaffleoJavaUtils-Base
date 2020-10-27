@@ -1,7 +1,11 @@
 package waffleoRai_Files.tree;
 
 import java.io.IOException;
+import java.util.List;
 
+import waffleoRai_Encryption.StaticDecryption;
+import waffleoRai_Encryption.StaticDecryptor;
+import waffleoRai_Files.EncryptionDefinition;
 import waffleoRai_Utils.CacheFileBuffer;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.MultiFileBuffer;
@@ -17,6 +21,9 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 		Added data loaders that only load file part
  * 2020.08.28 | 2.0.0
  * 		Updated loading procedure to be compatible w/ FileNode 3.0.0
+ * 2020.09.30 | 2.1.0
+ * 		Gutted loadDirect() to use RawDiskBuffer and handle 
+ * 			decryption buffering that requires sec header/footer data
  */
 
 /**
@@ -24,8 +31,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * references offsets by sector (noting sector type) instead of byte offset.
  * This way, sector checksum data can be included or excluded as needed.
  * @author Blythe Hospelhorn
- * @version 2.0.0
- * @since August 28, 2020
+ * @version 2.1.0
+ * @since September 30, 2020
  */
 public class ISOFileNode extends FileNode{
 	
@@ -195,36 +202,64 @@ public class ISOFileNode extends FileNode{
 	}
 	
 	protected FileBuffer loadDirect(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
-
-		//Recalculate to sector coordinates
-		int sec_size = this.getSectorTotalSize();
-		int sec_dat_size = this.getSectorDataSize();
-		long stsec = stpos/sec_dat_size; //Start sector index
-		long sec_stoff = stpos%sec_dat_size; // Position relative to sector data start
+		//TODO
+		//Convert position coordinates to sectors
+		long edpos = stpos + len;
+		long stsec = stpos/(long)sector_data_size;
+		long edsec = edpos/(long)sector_data_size;
 		
-		long edoff = stpos + len;
-		long edsec = edoff/sec_dat_size; //Index of sector that contains end position
-		long sec_edoff = edoff%sec_dat_size; // Position relative to sector data start
-		
-		long seccount = edsec - stsec;
-		if(sec_edoff != 0) seccount++;
-		
-		FileBuffer rawsecs = loadRawData(stsec, seccount, forceCache);
-		MultiFileBuffer dat = new MultiFileBuffer((int)seccount);
-		long cpos = 0;
-		for(int s = 0; s < seccount; s++){
-			long st = 0;
-			long ed = sec_dat_size;
-			if(s == 0) st = sec_stoff;
-			if(s == (seccount - 1)) ed= sec_edoff;
-			if(ed == 0) break;
+		//Scan encryption chain to see if sector header/footer stuff is needed
+		boolean dodec = false;
+		List<EncryptionDefinition> echain = null;
+		long[][] reg_bounds = null;
+		if(decrypt && super.hasEncryption()){
+			echain = super.getEncryptionDefChain();
+			reg_bounds = super.getEncryptedRegions();
 			
-			st += this.getSectorHeadSize(); ed += this.getSectorHeadSize();
-			dat.addToFile(rawsecs, cpos + st, cpos + ed);
-			cpos += sec_size;
+			int i = -1;
+			for(EncryptionDefinition def : echain){
+				//See if falls in region...
+				//(Coordinates should be in sectors...)
+				i++;
+				if(edsec <= reg_bounds[i][0]) continue;
+				if(stsec > reg_bounds[i][1]) continue;
+				if(def.unevenIOBlocks()){
+					dodec = true;
+					break;
+				}
+			}
+			
 		}
 		
-		return dat;
+		if(dodec){
+			int ecount = echain.size();
+			if(ecount == 1 && stsec <= reg_bounds[0][0] && edsec < reg_bounds[0][1]){
+				//If there's only one eregion and it covers the whole loading area...
+				//TODO
+				//Check for a loaded decryptor...
+				EncryptionDefinition def = echain.get(0);
+				StaticDecryptor decer = StaticDecryption.getDecryptorState(def.getID());
+				if(decer != null){
+					super.load_flag_decwrap_direct = true; //Don't want superclass redoing decryption
+					
+				}
+				else{
+					//No decryption method defined. Just return a RawDiskBuffer
+				}
+			}
+			else{
+				//Else...
+				//TODO
+				MultiFileBuffer out = new MultiFileBuffer((ecount << 1) + 1);
+			}
+		}
+		else{
+			//Just load into a RawDiskBuffer
+			//Superclass will handle anything else
+			//TODO
+		}
+		
+		return null;
 	}
 
 	/** Load ALL data in the specified sectors, including sector header/footer data, referenced by this node

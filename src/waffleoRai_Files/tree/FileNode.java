@@ -52,6 +52,12 @@ import waffleoRai_Utils.Treenumeration;
  *
  * 2020.09.19 | 3.1.0 -> 3.2.0
  * 	Added some methods for hiding parent (for temp dismounting)
+ * 
+ * 2020.09.30 | 3.2.0 -> 3.2.1
+ * 	Added internal protected flag to allow for decryption in subclass loadDirect()
+ * 
+ * 2020.10.26 | 3.2.1 -> 3.3.0
+ * 	Added ability to snap blocks for load
  */
 
 /**
@@ -64,8 +70,8 @@ import waffleoRai_Utils.Treenumeration;
  * within files on disk (such as archives or device images).
  * <br> This class replaces the deprecated <code>VirFile</code> class.
  * @author Blythe Hospelhorn
- * @version 3.2.0
- * @since September 19, 2020
+ * @version 3.3.0
+ * @since October 26, 2020
  */
 public class FileNode implements TreeNode, Comparable<FileNode>{
 	
@@ -101,6 +107,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	private String fileName;
 	private long offset;
 	private long length;
+	private int blocksize = -1; //Used to force it to load in even blocks
 	
 	private long guid;
 	
@@ -126,6 +133,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	//Scratch
 	protected int scratch_field;
 	protected long scratch_long;
+	protected boolean load_flag_decwrap_direct;
 	
 	/* --- Construction --- */
 	
@@ -136,6 +144,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @param name Initial node name. If null or empty, can be set later using <code>setFileName</code>. Note that there
 	 * may be issues with <code>String</code> based tree retrieval if the name is left null or empty.
 	 */
+
 	public FileNode(DirectoryNode parent, String name){
 		this.parent = parent;
 		fileName = name;
@@ -240,6 +249,15 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @return <code>FileNode</code> data size.
 	 */
 	public long getLength(){return length;}
+	
+	/**
+	 * Get the size of a loading block, if set.
+	 * @return Loading block size, or -1 if none.
+	 * @since 3.3.0
+	 */
+	public int getBlockSize(){
+		return blocksize;
+	}
 	
 	public DirectoryNode getParent(){return parent;}
 	
@@ -527,6 +545,19 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @param len Data length in bytes.
 	 */
 	public void setLength(long len){length = len;}
+	
+	/**
+	 * Set a size for a loading block unit for these data. This can be used
+	 * in cases of compression or encryption when data must be loaded in even
+	 * blocks in order to properly read.
+	 * <br>This only affects loading procedure. The end result of loadData()
+	 * should remain the same.
+	 * @param blockSize Size of desired load block, or -1 to unset block loading.
+	 * @since 3.3.0
+	 */
+	public void setBlockSize(int blockSize){
+		blocksize = blockSize;
+	}
 	
 	/**
 	 * Generate a 64-bit GUID for this file node from a SHA-1 hash of the root-relative
@@ -1303,13 +1334,23 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * or temp file creation.
 	 */
 	protected FileBuffer loadData(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
-
 		//System.err.println("FileBuffer.loadData || Loading " + this.getFullPath());
-		
+		load_flag_decwrap_direct = false;
 		lfail_flags = 0;
 		if(this.isDirectory()){
 			lfail_flags |= FileNode.LOADFAIL_FLAG_ISDIR;
 			return null;
+		}
+		
+		//Block align
+		long o_stpos = stpos;
+		long o_len = len;
+		if(blocksize > 1){
+			long ed = stpos + len;
+			stpos = (stpos/blocksize)*blocksize;
+			long edpos = (ed/blocksize)*blocksize;
+			if(ed % blocksize != 0) edpos+=blocksize;
+			len = edpos - stpos;
 		}
 		
 		//Unwrap
@@ -1319,7 +1360,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		FileBuffer data = src.loadDirect(stpos, len, forceCache, decrypt);
 		
 		//Wrap buffer w/ decryption buffer if needed
-		if(decrypt && hasEncryption()){
+		if(decrypt && hasEncryption() && !load_flag_decwrap_direct){
 			int ecount = encryption_chain.size();
 			if(ecount == 1){
 				//See if the one entry covers the whole file...
@@ -1377,6 +1418,11 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 			
 			if(eadded > 0) return multi;
 			
+		}
+		
+		if(blocksize > 1){
+			//Make an RO Sub Buffer
+			data = data.createReadOnlyCopy(o_stpos, o_stpos + o_len);
 		}
 		
 		return data;

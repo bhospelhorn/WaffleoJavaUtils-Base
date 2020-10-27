@@ -40,6 +40,10 @@ import java.util.Random;
  * 
  * 1.2.2 | September 13, 2020
  * 	toByteBuffer(long, long) was having issues, so now it just calls getBytes()
+ * 
+ * 1.3.0 | September 27, 2020
+ * 	Added methods to directly check page size and count, made constructors protected
+ * 
  */
 
 /**
@@ -49,8 +53,8 @@ import java.util.Random;
  * <br>The size of each page and the number of pages (with data in memory) can be modified.
  * <br>WARNING: This class is not threadsafe.
  * @author Blythe Hospelhorn
- * @version 1.2.2
- * @since September 13, 2020
+ * @version 1.3.0
+ * @since September 27, 2020
  */
 public class CacheFileBuffer extends FileBuffer{
 	
@@ -364,13 +368,13 @@ public class CacheFileBuffer extends FileBuffer{
 	
 	/* ----- Construction ----- */
 	
-	private CacheFileBuffer() throws IOException
+	protected CacheFileBuffer() throws IOException
 	{
 		//This is just an override to prevent use of defo constructor
 		this(DEFO_PAGE_SIZE, DEFO_PAGE_NUM, false);
 	}
 	
-	private CacheFileBuffer(int pageSize, int pageCount, boolean allowWrite) throws IOException
+	protected CacheFileBuffer(int pageSize, int pageCount, boolean allowWrite) throws IOException
 	{
 		rng = new Random();
 		tempdir = FileBuffer.getTempDir();
@@ -388,7 +392,7 @@ public class CacheFileBuffer extends FileBuffer{
 
 	/* ----- Static Object Generators ----- */
 	
-	private void loadReadOnlyCacheBuffer(String filepath, long stoff, long edoff) throws IOException
+	protected void loadReadOnlyCacheBuffer(String filepath, long stoff, long edoff) throws IOException
 	{
 		//Build reference tree
 		if(!FileBuffer.fileExists(filepath)) throw new IOException();
@@ -932,8 +936,7 @@ public class CacheFileBuffer extends FileBuffer{
 	
 	/* ----- BASIC GETTERS ----- */
 	
-	public long getFileSize()
-	{
+	public long getFileSize(){
 		return current_file_size;
 	}
   
@@ -987,6 +990,14 @@ public class CacheFileBuffer extends FileBuffer{
   		return est;
   	}
 	
+  	public int getPageSize(){
+  		return this.page_size;
+  	}
+  	
+  	public int getPageCount(){
+  		return this.page_count;
+  	}
+  	
   	/* ----- CAPACITY MANAGEMENT ----- */
     
 	public void changeBaseCapacity(int newCapacity)
@@ -1738,13 +1749,11 @@ public class CacheFileBuffer extends FileBuffer{
   		}
   	}
   	
-  	public long writeToStream(OutputStream out) throws IOException
-  	{
+  	public long writeToStream(OutputStream out) throws IOException{
   		return writeToStream(out, 0, current_file_size);
   	}
   	
-  	public long writeToStream(OutputStream out, long stPos, long edPos) throws IOException
-  	{
+  	public long writeToStream(OutputStream out, long stPos, long edPos) throws IOException{
   		long w = 0;
   		long cpos = stPos;
   		CachePage page = getLoadedPage(stPos);

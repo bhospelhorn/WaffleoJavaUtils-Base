@@ -7,4 +7,6 @@ public interface StaticDecryptor {
 	public FileNode decrypt(FileNode node);
 	public DecryptorMethod generateDecryptor(FileNode node);
 
+	public void dispose();
+	
 }

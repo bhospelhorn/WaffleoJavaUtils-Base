@@ -27,13 +27,14 @@ import waffleoRai_Utils.Treenumeration;
 /*
  * UPDATES --
  * 
- * Version 3.0.0 | Doc'd
+ * Version 2.0.0 | Doc'd
  * 	("Initial" version number chosen arbitrarily)
  * 	Compatibility w/ FileNode 3.0.0
  * 
  * 2020.09.12 | 2.0.0 -> 2.1.0
  * 		Added getNodesThat()
- * 
+ * 2020.10.26 | 2.1.0 -> 2.2.0
+ * 		Added hasChildNamed()
  */
 
 /**
@@ -42,8 +43,8 @@ import waffleoRai_Utils.Treenumeration;
  * a virtual directory.
  * <br> This class replaces the deprecated <code>VirDirectory</code> class.
  * @author Blythe Hospelhorn
- * @version 2.1.0
- * @since September 12, 2020
+ * @version 2.2.0
+ * @since October 26, 2020
  */
 public class DirectoryNode extends FileNode{
 
@@ -113,6 +114,17 @@ public class DirectoryNode extends FileNode{
 		list.addAll(children.values());
 		Collections.sort(list);
 		return list;
+	}
+	
+	/**
+	 * Check whether this directory has a child with the
+	 * specified name. Input is case-sensitive.
+	 * @param n Name string to check.
+	 * @return True if this directory has a child by that name. False if not.
+	 * @since 2.2.0
+	 */
+	public boolean hasChildNamed(String n){
+		return children.containsKey(n);
 	}
 	
 	private void getDescendants(Collection<FileNode> col, boolean includeDirectories){

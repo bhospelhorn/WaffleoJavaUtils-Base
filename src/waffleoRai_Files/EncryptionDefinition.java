@@ -19,4 +19,7 @@ public interface EncryptionDefinition {
 	public boolean encrypt(StreamWrapper input, OutputStream stream, List<byte[]> keydata);
 	
 	public int[] getExpectedKeydataSizes();
+	
+	public boolean unevenIOBlocks();
+	
 }

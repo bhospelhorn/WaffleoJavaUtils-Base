@@ -49,6 +49,10 @@ public abstract class FileCryptTable {
 	public int addKey(int type, byte[] key){
 		//Returns index within type
 		if(type < 0 || keys.size() <= type) return -1;
+		
+		int idx = getIndexOfKey(type, key);
+		if(idx >= 0) return idx;
+		
 		ArrayList<byte[]> typelist = keys.get(type);
 		if(typelist == null) return -1;
 		int i = typelist.size();
