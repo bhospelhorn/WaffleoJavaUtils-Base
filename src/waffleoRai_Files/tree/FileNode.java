@@ -58,6 +58,9 @@ import waffleoRai_Utils.Treenumeration;
  * 
  * 2020.10.26 | 3.2.1 -> 3.3.0
  * 	Added ability to snap blocks for load
+ * 
+ * 2020.10.27 | 3.3.0 -> 3.3.1
+ * 	Split into input & output block sizes
  */
 
 /**
@@ -70,8 +73,8 @@ import waffleoRai_Utils.Treenumeration;
  * within files on disk (such as archives or device images).
  * <br> This class replaces the deprecated <code>VirFile</code> class.
  * @author Blythe Hospelhorn
- * @version 3.3.0
- * @since October 26, 2020
+ * @version 3.3.1
+ * @since October 27, 2020
  */
 public class FileNode implements TreeNode, Comparable<FileNode>{
 	
@@ -107,7 +110,9 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	private String fileName;
 	private long offset;
 	private long length;
-	private int blocksize = -1; //Used to force it to load in even blocks
+	
+	private int blocksize_in = -1;
+	private int blocksize_out = -1; //Used to force it to load in even blocks
 	
 	private long guid;
 	
@@ -256,7 +261,27 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @since 3.3.0
 	 */
 	public int getBlockSize(){
-		return blocksize;
+		return blocksize_out;
+	}
+	
+	/**
+	 * Get the size of a loading block relative
+	 * to the output data, if set.
+	 * @return Loading block size, or -1 if none.
+	 * @since 3.3.1
+	 */
+	public int getOutputBlockSize(){
+		return blocksize_out;
+	}
+	
+	/**
+	 * Get the size of a loading block relative
+	 * to the input data, if set.
+	 * @return Loading block size, or -1 if none.
+	 * @since 3.3.1
+	 */
+	public int getInputBlockSize(){
+		return blocksize_in;
 	}
 	
 	public DirectoryNode getParent(){return parent;}
@@ -556,7 +581,23 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @since 3.3.0
 	 */
 	public void setBlockSize(int blockSize){
-		blocksize = blockSize;
+		blocksize_out = blockSize;
+		blocksize_in = blockSize;
+	}
+	
+	/**
+	 * Set sizes for input and output loading block units for these data.
+	 * This can be used in cases of compression or encryption when data 
+	 * must be loaded in even blocks in order to properly read.
+	 * <br>This only affects loading procedure. The end result of loadData()
+	 * should remain the same.
+	 * @param in_block Size of a block from the data source.
+	 * @param out_block Size of a block in file output.
+	 * @since 3.3.1
+	 */
+	public void setBlockSize(int in_block, int out_block){
+		blocksize_in = in_block;
+		blocksize_out = out_block;
 	}
 	
 	/**
@@ -1295,7 +1336,10 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		if(edoff > maxed) edoff = maxed;
 		
 		if(hasVirtualSource()){
-			return sourceNode.loadData(stoff + this.getOffset(), edoff-stoff, forceCache, decrypt);
+			//System.err.println("Virtual source detected!");
+			//System.err.println("Input Offsets: 0x" + Long.toHexString(stpos) + " - 0x" + Long.toHexString(stoff + len));
+			//System.err.println("Virtual Source: 0x" + Long.toHexString(stoff) + " - 0x" + Long.toHexString(edoff));
+			return sourceNode.loadData(stoff, edoff-stoff, forceCache, decrypt);
 		}
 		else{
 			String path = getSourcePath();
@@ -1345,12 +1389,20 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		//Block align
 		long o_stpos = stpos;
 		long o_len = len;
-		if(blocksize > 1){
+		int b_start = -1;
+		int b_end = -1;
+		if(blocksize_out > 1){
 			long ed = stpos + len;
-			stpos = (stpos/blocksize)*blocksize;
-			long edpos = (ed/blocksize)*blocksize;
-			if(ed % blocksize != 0) edpos+=blocksize;
+			b_start = (int)(stpos/blocksize_out);
+			b_end = (int)(ed/blocksize_out);
+			if(ed % blocksize_out != 0) b_end++;
+			
+			stpos = (long)b_start * (long)blocksize_in;
+			long edpos = (long)b_end * (long)blocksize_in;
 			len = edpos - stpos;
+			
+			//System.err.println("Requested Range: 0x" + Long.toHexString(o_stpos) + " - 0x" + Long.toHexString(o_stpos + o_len));
+			//System.err.println("Block Aligned Input Range: 0x" + Long.toHexString(stpos) + " - 0x" + Long.toHexString(edpos));
 		}
 		
 		//Unwrap
@@ -1361,6 +1413,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		
 		//Wrap buffer w/ decryption buffer if needed
 		if(decrypt && hasEncryption() && !load_flag_decwrap_direct){
+			boolean edone = false;
 			int ecount = encryption_chain.size();
 			if(ecount == 1){
 				//See if the one entry covers the whole file...
@@ -1373,56 +1426,72 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 					if(sdec != null){
 						DecryptorMethod decm = sdec.generateDecryptor(this);
 						if(stpos != 0) decm.adjustOffsetBy(stpos);
-						return new EncryptedFileBuffer(data, decm);
+						//return new EncryptedFileBuffer(data, decm);
+						data = new EncryptedFileBuffer(data, decm);
+						edone = true;
 					}
 					else{
 						lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
-						return data;
+						//return data;
+						edone = true;
 					}
 				}
 			}
 			
-			//Chain regions together...
-			MultiFileBuffer multi = new MultiFileBuffer((ecount << 1) + 1);
-			long dend = stpos + len;
-			long pos = stpos;
-			int eadded = 0;
-			for(EncryInfoNode ereg : encryption_chain){
-				long eend = ereg.offset + ereg.length;
-				if(eend <= stpos) continue; //This region is before the requested data
-				if(ereg.offset >= dend) break; //This region is after the end of requested data
-				
-				//Get anything between the position and the region start...
-				if(ereg.offset > pos){
-					FileBuffer chunk = data.createCopy(pos-stpos, ereg.offset - stpos);
-					multi.addToFile(chunk);
-					pos = ereg.offset;
+			if(!edone){
+				//Chain regions together...
+				MultiFileBuffer multi = new MultiFileBuffer((ecount << 1) + 1);
+				long dend = stpos + len;
+				long pos = stpos;
+				int eadded = 0;
+				for(EncryInfoNode ereg : encryption_chain){
+					long eend = ereg.offset + ereg.length;
+					if(eend <= stpos) continue; //This region is before the requested data
+					if(ereg.offset >= dend) break; //This region is after the end of requested data
+					
+					//Get anything between the position and the region start...
+					if(ereg.offset > pos){
+						FileBuffer chunk = data.createCopy(pos-stpos, ereg.offset - stpos);
+						multi.addToFile(chunk);
+						pos = ereg.offset;
+					}
+					
+					//Do region
+					if(eend > dend) eend = dend;
+					FileBuffer chunk = data.createCopy(ereg.offset-stpos, eend - stpos);
+					StaticDecryptor sdec = StaticDecryption.getDecryptorState(ereg.def.getID());
+					if(sdec != null){
+						DecryptorMethod decm = sdec.generateDecryptor(this);
+						decm.adjustOffsetBy(stpos + ereg.offset);
+						multi.addToFile(new EncryptedFileBuffer(chunk, decm));
+					}
+					else{
+						lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
+						multi.addToFile(chunk);
+					}
+					eadded++;
+					pos = eend;
 				}
 				
-				//Do region
-				if(eend > dend) eend = dend;
-				FileBuffer chunk = data.createCopy(ereg.offset-stpos, eend - stpos);
-				StaticDecryptor sdec = StaticDecryption.getDecryptorState(ereg.def.getID());
-				if(sdec != null){
-					DecryptorMethod decm = sdec.generateDecryptor(this);
-					decm.adjustOffsetBy(stpos + ereg.offset);
-					multi.addToFile(new EncryptedFileBuffer(chunk, decm));
-				}
-				else{
-					lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
-					multi.addToFile(chunk);
-				}
-				eadded++;
-				pos = eend;
+				//if(eadded > 0) return multi;
+				if(eadded > 0) data = multi;
 			}
-			
-			if(eadded > 0) return multi;
-			
 		}
 		
-		if(blocksize > 1){
+		if(b_start > 0){
+			
+			//Check if we need to make a RO sub buffer
+			stpos = (long)b_start * (long)blocksize_out;
+			//long edpos = (long)b_end * (long)blocksize_out;
+			
 			//Make an RO Sub Buffer
-			data = data.createReadOnlyCopy(o_stpos, o_stpos + o_len);
+			long o_ed = o_stpos + o_len;
+			
+			long l_st = o_stpos - stpos;
+			long l_ed = o_ed - stpos;
+			
+			//System.err.println("Trimmed Range: 0x" + Long.toHexString(l_st) + " - 0x" + Long.toHexString(l_ed));
+			data = data.createReadOnlyCopy(l_st, l_ed);
 		}
 		
 		return data;

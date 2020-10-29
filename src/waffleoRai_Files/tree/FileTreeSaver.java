@@ -89,7 +89,7 @@ public class FileTreeSaver {
 	 * 			15 - Is Directory
 	 * 			14 - (Reserved)
 	 * 			13 - Has metadata?
-	 * 			12 - (Reserved)
+	 * 			12 - Has block alignment? (V8+)
 	 * 			11-8 - FileNode type enum (4 bits)
 	 * 				0 - Regular
 	 * 				1 - Link Node
@@ -114,6 +114,8 @@ public class FileTreeSaver {
 	 * 	Source Node UID [8] (If applicable) (V7+)
 	 * 	Offset [8]
 	 * 	Length [8]
+	 * 	Block Size In [4] (If applicable) (V8+)
+	 * 	Block Size Out [4] (If applicable) (V8+)
 	 * 
 	 * File subtype data....
 	 * (Frag/Simple Patchwork)
@@ -187,7 +189,7 @@ public class FileTreeSaver {
 	public static final String MAGIC_TREE = "eert";
 	public static final String MAGIC_LIST = "tsil";
 	
-	public static final int CURRENT_VERSION = 7;
+	public static final int CURRENT_VERSION = 8;
 	
 	public static final String ENCODING = "UTF8";
 	
@@ -386,6 +388,13 @@ public class FileTreeSaver {
 		
 		fn.setOffset(in.longFromFile(cpos)); cpos += 8;
 		fn.setLength(in.longFromFile(cpos)); cpos+=8;
+		
+		if(version >= 8 && ((flags & 0x1000) != 0)){
+			//Block size
+			int bsz_in = in.intFromFile(cpos); cpos+=4;
+			int bsz_out = in.intFromFile(cpos); cpos+=4;
+			fn.setBlockSize(bsz_in, bsz_out);
+		}
 		
 		if(paths != null && pathidx >= 0 && pathidx < paths.length){
 			fn.setSourcePath(paths[pathidx]);
@@ -939,6 +948,10 @@ public class FileTreeSaver {
 		if(node.hasMetadata()){csz += meta.getFileSize(); flag |= 0x2000;}
 		if(node.hasVirtualSource()) flag |= 0x10;
 		
+		boolean blocked = false;
+		blocked = (node.getInputBlockSize() > 1 || node.getOutputBlockSize() > 1);
+		if(blocked) flag |= 0x1000;
+		
 		int nodetype = NODETYPE_STANDARD;
 		if(node instanceof LinkNode) nodetype = NODETYPE_LINK;
 		else if(node instanceof ISOFileNode) nodetype = NODETYPE_DISK;
@@ -990,6 +1003,10 @@ public class FileTreeSaver {
 		}
 		cdat.addToFile(node.getOffset());
 		cdat.addToFile(node.getLength());
+		if(blocked){
+			cdat.addToFile(node.getInputBlockSize());
+			cdat.addToFile(node.getOutputBlockSize());
+		}
 		
 		//Node type specific location data
 		if(node instanceof FragFileNode){

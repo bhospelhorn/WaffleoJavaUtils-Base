@@ -93,6 +93,8 @@ public class EncryptedFileBuffer extends FileBuffer{
 		if(!offset_buffered(position)) bufferBlock(position);
 		try{return buffer[(int)(position - buff_off)];}
 		catch(ArrayIndexOutOfBoundsException x){
+			System.err.println("Buffer error | Annotated buffer range: 0x" + Long.toHexString(buff_off) + " - 0x" + Long.toHexString(buff_ed));
+			System.err.println("Buffer size: 0x" + Integer.toHexString(buffer.length));
 			throw new IndexOutOfBoundsException("Position out of bounds for buffer: 0x" + Long.toHexString(position));
 		}
 	}
@@ -194,13 +196,22 @@ public class EncryptedFileBuffer extends FileBuffer{
 		long fsize = src.getFileSize();
 		if(b_end > fsize) b_end = fsize;
 		
+		//Check for preloaded bytes (in cases of CBC for example, need row before)
+		int bbcount = decm.backbyteCount();
+		if(bbcount > 0){
+			long bbstart = b_start - bbcount;
+			if(bbstart >= 0){
+				decm.putBackbytes(src.getBytes(bbstart, b_start));
+			}
+		}
+		
 		//Load
 		//System.err.println("EncryptedFileBuffer.bufferBlock || Block @ 0x" + Long.toHexString(b_start) + " - 0x" + Long.toHexString(b_end));
 		byte[] rawdat = src.getBytes(b_start, b_end);
 		buffer = decm.decrypt(rawdat, b_start);
 		
 		buff_off = (((long)buff_block * (long)blocks_per_buffer) * block_size_out);
-		buff_ed = b_end + getsize;
+		buff_ed = buff_off + (block_size_out * blocks_per_buffer);
 		fsize = this.getFileSize();
 		if(buff_ed > fsize) buff_ed = fsize;
 	}

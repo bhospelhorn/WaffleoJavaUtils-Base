@@ -17,5 +17,8 @@ public interface DecryptorMethod {
 	 * @return Output offset relative to start of output block.
 	 */
 	public long getOutputBlockOffset(long inputBlockOffset);
+	
+	public int backbyteCount();
+	public void putBackbytes(byte[] dat);
 
 }
