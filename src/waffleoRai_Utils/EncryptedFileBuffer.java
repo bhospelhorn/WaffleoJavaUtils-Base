@@ -30,6 +30,7 @@ public class EncryptedFileBuffer extends FileBuffer{
 	private int block_size_in;
 	private int block_size_out;
 	private int blocks_per_buffer;
+	private long f_size;
 	
 	private long buff_off; //Offset relative to source of beginning of current buffer
 	private long buff_ed;
@@ -70,21 +71,7 @@ public class EncryptedFileBuffer extends FileBuffer{
 	/* --- Getters --- */
 	
 	public long getFileSize(){
-		if(block_size_in == block_size_out) return src.getFileSize();
-		
-		long insize = src.getFileSize();
-		long in_end_b = insize/block_size_in;
-		long in_end_pos = insize%block_size_in;
-		
-		if(in_end_pos == 0){
-			return in_end_b * block_size_out;
-		}
-		else{
-			in_end_b--;
-			long opos = decm.getOutputBlockOffset(in_end_pos);
-			return (in_end_b * block_size_out) + opos;
-		}
-		
+		return f_size;
 	}
 	
 	public byte getByte(int position){return getByte(Integer.toUnsignedLong(position));}
@@ -156,6 +143,11 @@ public class EncryptedFileBuffer extends FileBuffer{
 		throw new UnsupportedOperationException();
 	}
 	
+	public void setLength(long len){
+		if(len <= 0) return;
+		f_size = len;
+	}
+	
 	/* --- Decryption --- */
 	
 	private boolean offset_buffered(long offset){
@@ -208,6 +200,11 @@ public class EncryptedFileBuffer extends FileBuffer{
 		//Load
 		//System.err.println("EncryptedFileBuffer.bufferBlock || Block @ 0x" + Long.toHexString(b_start) + " - 0x" + Long.toHexString(b_end));
 		byte[] rawdat = src.getBytes(b_start, b_end);
+		/*if(rawdat.length < decm.getInputBlockSize()){
+			byte[] dcopy = new byte[decm.getInputBlockSize()];
+			for(int i = 0; i < rawdat.length; i++) dcopy[i] = rawdat[i];
+			rawdat = dcopy;
+		}*/
 		buffer = decm.decrypt(rawdat, b_start);
 		
 		buff_off = (((long)buff_block * (long)blocks_per_buffer) * block_size_out);
@@ -222,6 +219,10 @@ public class EncryptedFileBuffer extends FileBuffer{
 		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(path));
 		writeToStream(bos, stPos, edPos);
 		bos.close();
+	}
+	
+	public long writeToStream(OutputStream out) throws IOException{
+		return writeToStream(out, 0, this.getFileSize());
 	}
 	
 	public long writeToStream(OutputStream out, long stPos, long edPos) throws IOException{
@@ -270,7 +271,33 @@ public class EncryptedFileBuffer extends FileBuffer{
 		if(opos != 0) start_block_size_out = (long)obsz - opos;
 		else start_block_size_out = 0L;*/ //Technically it is a full block, but we use this as a marker to show start is block aligned.
 		
+		if(block_size_in == block_size_out) f_size = src.getFileSize();
+		else{
+			long insize = src.getFileSize();
+			long in_end_b = insize/block_size_in;
+			long in_end_pos = insize%block_size_in;
+			
+			if(in_end_pos == 0){
+				f_size = (in_end_b * block_size_out);
+			}
+			else{
+				in_end_b--;
+				long opos = decm.getOutputBlockOffset(in_end_pos);
+				f_size = (in_end_b * block_size_out) + opos;
+			}
+				
+		}
+		
 	}
+	
+	public boolean hasBlockAlignment(){return true;}
+	
+	public long[] translateAlignedRange(long stOff, long edOff){
+		long stadj = (stOff/block_size_out) * block_size_out;
+		long edadj = (edOff/block_size_out) * block_size_out;
+		if(edOff % block_size_out != 0) edadj += block_size_out;
+  		return new long[]{stadj, edadj};
+  	}
 	
 	/* --- Copying --- */
 	
@@ -280,7 +307,22 @@ public class EncryptedFileBuffer extends FileBuffer{
 	
 	public FileBuffer createCopy(long stPos, long edPos) throws IOException{
 		//EncryptedFileBuffer copy = new EncryptedFileBuffer(src.createCopy(stPos, edPos), decm, block_shamt);
-		EncryptedFileBuffer copy = new EncryptedFileBuffer(src.createCopy(stPos, edPos), decm);
+		//System.err.println("src class: " + src.getClass());
+		//TODO uh oh, need to scale back to input block size for copying source!
+		EncryptedFileBuffer copy = null;
+		DecryptorMethod decc = decm.createCopy();
+		decc.adjustOffsetBy(stPos);
+		if(block_size_in == block_size_out) copy = new EncryptedFileBuffer(src.createCopy(stPos, edPos), decc);
+		else{
+			//Need to convert the positions to output coordinates....
+			//long outlen = edPos - stPos;
+			long stadj = (stPos/block_size_out) * block_size_in;
+			long edadj = (edPos/block_size_out) * block_size_in;
+			if(edPos % block_size_out != 0) edadj += block_size_in;
+			copy = new EncryptedFileBuffer(src.createCopy(stadj, edadj), decc);
+			//copy.setLength(outlen);
+		}
+		
 		return copy;
 	}
 	

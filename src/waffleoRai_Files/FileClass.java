@@ -13,6 +13,7 @@ public enum FileClass {
 	CONFIG_FILE(201),
 	TEXT_FILE(202),
 	XML(203),
+	MARKUP_SCRIPT(204),
 	
 	EXECUTABLE(300),
 	CODELIB(301),

@@ -98,6 +98,10 @@ import java.util.TimeZone;
  * 	3.9.0 -> 3.10.0 | Added a file hashing method
  * 2020.09.10
  * 	3.10.0 -> 3.10.1 | Debug - redirect writeFile(String) to long offset overload
+ * 2020.11.03
+ * 	3.10.1 -> 3.11.0 | Added a couple methods for handling block aligned subclasses
+ * 2020.11.07
+ * 	3.11.0 -> 3.11.1 | Added descriptions to exception throws in createCopy()
  * */
 
 /**
@@ -109,8 +113,8 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.10.1
- * @since September 10, 2020
+ * @version 3.11.1
+ * @since November 7, 2020
  */
 public class FileBuffer 
 {
@@ -3452,6 +3456,34 @@ public class FileBuffer
   		return true;
   	}
   	
+  	/**
+  	 * Check whether this buffer requires internal block
+  	 * alignment.
+  	 * @return True if the buffer must be block aligned. False if not.
+  	 * @since 3.11.0
+  	 */
+  	public boolean hasBlockAlignment(){return false;}
+  	
+  	/**
+  	 * Get the offsets used internally by this buffer for copying
+  	 * large subsections (such as in <code>createCopy()</code>) that
+  	 * have been snapped to block boundaries.
+  	 * <br>If the implementing class doesn't require block alignment,
+  	 * this method returns the input values.
+  	 * @param stOff Start offset of range of interest, relative to 
+  	 * the beginning of this buffer, inclusive.
+  	 * @param edOff End offset of range of interest, relative to 
+  	 * the beginning of this buffer, exclusive.
+  	 * @return <code>long</code> array of size 2 - the first element being
+  	 * the adjusted start offset, the second element being the adjusted end
+  	 * offset.
+  	 * @since 3.11.0
+  	 */
+  	public long[] translateAlignedRange(long stOff, long edOff){
+  		//By default, just returns input.
+  		return new long[]{stOff, edOff};
+  	}
+  	
   /* ----- STATIC FILE INFORMATION ----- */
 
   	/**
@@ -3972,11 +4004,15 @@ public class FileBuffer
   	{
   		if (stPos < 0) stPos = 0;
   		if (edPos > (int)this.getFileSize()) edPos = (int)this.getFileSize();
-  		if (edPos <= stPos) throw new IndexOutOfBoundsException();
+  		if (edPos <= stPos) throw new IndexOutOfBoundsException("Start position 0x" + Integer.toHexString(stPos) + 
+  				" cannot exceed end position 0x" + Integer.toHexString(edPos));
 	  
   		FileBuffer f = new FileBuffer(edPos - stPos, this.isBigEndian());
   		f.addToFile(this, stPos, edPos);
 	  
+  		//System.err.println("stpos: 0x" + Long.toHexString(stPos));
+  		//System.err.println("edpos: 0x" + Long.toHexString(edPos));
+  		//System.err.println("outgoing size: 0x" + Long.toHexString(f.getFileSize()));
   		return f;
   	}
   
@@ -3992,7 +4028,7 @@ public class FileBuffer
   	 */
   	public FileBuffer createCopy(long stPos, long edPos) throws IOException
   	{
-  		if (stPos < 0) throw new IndexOutOfBoundsException();
+  		if (stPos < 0) throw new IndexOutOfBoundsException("Start Index " + stPos + " is invalid! (< 0)");
   		return createCopy((int)stPos, (int)edPos);
   	}
   

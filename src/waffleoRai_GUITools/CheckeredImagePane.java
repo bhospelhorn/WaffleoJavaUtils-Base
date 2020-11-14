@@ -3,13 +3,10 @@ package waffleoRai_GUITools;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.util.LinkedList;
 import java.util.List;
 
 import javax.swing.JPanel;
-import javax.swing.Timer;
 
 public class CheckeredImagePane extends JPanel{
 
@@ -47,10 +44,10 @@ public class CheckeredImagePane extends JPanel{
 	private int draw_x;
 	private int draw_y;
 	
-	private List<ImagePaneDrawer> items;
+	protected List<ImagePaneDrawer> items;
 	
-	private int refresh_time;
-	private Timer timer;
+	//private int refresh_time;
+	//private Timer timer;
 	
 	/*----- Construction -----*/
 	
@@ -73,7 +70,7 @@ public class CheckeredImagePane extends JPanel{
 		draw_w = 0; draw_h = 0;
 		recalculateDrawingStart();
 		
-		refresh_time = 0;
+		//refresh_time = 0;
 	}
 	
 	/*----- Getters -----*/
@@ -86,9 +83,9 @@ public class CheckeredImagePane extends JPanel{
 		return new Dimension(area_w, area_h);
 	}
 	
-	public int getAnimationRefreshTime(){
+	/*public int getAnimationRefreshTime(){
 		return refresh_time;
-	}
+	}*/
 	
 	/*----- Setters -----*/
 	
@@ -124,7 +121,7 @@ public class CheckeredImagePane extends JPanel{
 		repaint();
 	}
 	
-	public void setAnimationRefreshTime(int millis){
+	/*public void setAnimationRefreshTime(int millis){
 		if(timer != null) timer.stop();
 		
 		timer = new Timer(millis, new ActionListener(){
@@ -143,7 +140,7 @@ public class CheckeredImagePane extends JPanel{
 	
 	public void stopAnimation(){
 		if(timer != null) timer.stop();
-	}
+	}*/
 	
 	/*----- Draw -----*/
 	

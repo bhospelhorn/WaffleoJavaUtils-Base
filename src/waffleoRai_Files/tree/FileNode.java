@@ -61,6 +61,12 @@ import waffleoRai_Utils.Treenumeration;
  * 
  * 2020.10.27 | 3.3.0 -> 3.3.1
  * 	Split into input & output block sizes
+ * 
+ * 2020.10.30 | 3.3.1 -> 3.3.2
+ * 	Blocked load debugging
+ * 
+ * 2020.11.04 | 3.3.2 -> 3.3.3
+ * 	Fixed an issue with sign extension in int -> long conversions in file loading
  */
 
 /**
@@ -73,8 +79,8 @@ import waffleoRai_Utils.Treenumeration;
  * within files on disk (such as archives or device images).
  * <br> This class replaces the deprecated <code>VirFile</code> class.
  * @author Blythe Hospelhorn
- * @version 3.3.1
- * @since October 27, 2020
+ * @version 3.3.3
+ * @since November 4, 2020
  */
 public class FileNode implements TreeNode, Comparable<FileNode>{
 	
@@ -1333,7 +1339,8 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		long stoff = getOffset() + stpos;
 		long maxed = getOffset() + getLength();
 		long edoff = stoff + len;
-		if(edoff > maxed) edoff = maxed;
+		if(blocksize_out <= 1 && edoff > maxed) edoff = maxed;
+		//if(edoff > maxed) edoff = maxed;
 		
 		if(hasVirtualSource()){
 			//System.err.println("Virtual source detected!");
@@ -1385,31 +1392,48 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 			lfail_flags |= FileNode.LOADFAIL_FLAG_ISDIR;
 			return null;
 		}
+		//System.err.println("len = 0x" + Long.toHexString(len));
 		
 		//Block align
 		long o_stpos = stpos;
 		long o_len = len;
 		int b_start = -1;
 		int b_end = -1;
+		//long mylen = getLength();
 		if(blocksize_out > 1){
 			long ed = stpos + len;
 			b_start = (int)(stpos/blocksize_out);
 			b_end = (int)(ed/blocksize_out);
 			if(ed % blocksize_out != 0) b_end++;
 			
-			stpos = (long)b_start * (long)blocksize_in;
-			long edpos = (long)b_end * (long)blocksize_in;
+			//stpos = (long)b_start * (long)blocksize_in;
+			//long edpos = (long)b_end * (long)blocksize_in;
+			stpos = (long)b_start * (long)blocksize_out;
+			long edpos = (long)b_end * (long)blocksize_out;
 			len = edpos - stpos;
 			
 			//System.err.println("Requested Range: 0x" + Long.toHexString(o_stpos) + " - 0x" + Long.toHexString(o_stpos + o_len));
 			//System.err.println("Block Aligned Input Range: 0x" + Long.toHexString(stpos) + " - 0x" + Long.toHexString(edpos));
+			/*if(edpos > mylen){
+				//Alter len temporarily
+				setLength(edpos);
+			}*/
 		}
 		
 		//Unwrap
 		FileNode src = generateSource();
 		
 		//Load
-		FileBuffer data = src.loadDirect(stpos, len, forceCache, decrypt);
+		long i_stpos = stpos;
+		long i_len = len;
+		if(b_start >= 0){
+			i_stpos = (long)b_start * (long)blocksize_in;
+			long i_edpos = (long)b_end * (long)blocksize_in;
+			i_len = i_edpos - i_stpos;
+			//System.err.println("Direct Load Range: 0x" + Long.toHexString(i_stpos) + " - 0x" + Long.toHexString(i_edpos));
+		}
+		FileBuffer data = src.loadDirect(i_stpos, i_len, forceCache, decrypt);
+		//System.err.println("Direct Load Size: 0x" + Long.toHexString(data.getFileSize()));
 		
 		//Wrap buffer w/ decryption buffer if needed
 		if(decrypt && hasEncryption() && !load_flag_decwrap_direct){
@@ -1420,14 +1444,20 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 				//If so, just wrap data as-is
 				EncryInfoNode ereg = encryption_chain.getFirst();
 				long eend = ereg.offset + ereg.length; long dend = stpos + len;
+				//System.err.println("erange: 0x" + Long.toHexString(ereg.offset) + " - 0x" + Long.toHexString(eend));
+				//System.err.println("drange: 0x" + Long.toHexString(stpos) + " - 0x" + Long.toHexString(dend));
 				if(ereg.offset <= stpos && eend >= dend){
 					//The one encryption region covers the whole chunk we extracted.
 					StaticDecryptor sdec = StaticDecryption.getDecryptorState(ereg.def.getID());
+					//System.err.println("e def: " + ereg.def.getDescription());
 					if(sdec != null){
 						DecryptorMethod decm = sdec.generateDecryptor(this);
 						if(stpos != 0) decm.adjustOffsetBy(stpos);
 						//return new EncryptedFileBuffer(data, decm);
-						data = new EncryptedFileBuffer(data, decm);
+						EncryptedFileBuffer ebuff = new EncryptedFileBuffer(data, decm);
+						//ebuff.setLength(o_len);
+						//System.err.println("o_len = 0x" + Long.toHexString(o_len));
+						data = ebuff;
 						edone = true;
 					}
 					else{
@@ -1445,9 +1475,12 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 				long pos = stpos;
 				int eadded = 0;
 				for(EncryInfoNode ereg : encryption_chain){
+					//System.err.println("e def: " + ereg.def.getDescription());
+					
 					long eend = ereg.offset + ereg.length;
 					if(eend <= stpos) continue; //This region is before the requested data
 					if(ereg.offset >= dend) break; //This region is after the end of requested data
+					//System.err.println("Location: 0x" + Long.toHexString(ereg.offset) + " - 0x" + Long.toHexString(eend));
 					
 					//Get anything between the position and the region start...
 					if(ereg.offset > pos){
@@ -1463,7 +1496,9 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 					if(sdec != null){
 						DecryptorMethod decm = sdec.generateDecryptor(this);
 						decm.adjustOffsetBy(stpos + ereg.offset);
-						multi.addToFile(new EncryptedFileBuffer(chunk, decm));
+						EncryptedFileBuffer ebuff = new EncryptedFileBuffer(chunk, decm);
+						//ebuff.setLength(ereg.length);
+						multi.addToFile(ebuff);
 					}
 					else{
 						lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
@@ -1478,8 +1513,8 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 			}
 		}
 		
-		if(b_start > 0){
-			
+		if(b_start >= 0){
+			//TODO make sure pos are relative to the buffer we're returning, not the FULL file
 			//Check if we need to make a RO sub buffer
 			stpos = (long)b_start * (long)blocksize_out;
 			//long edpos = (long)b_end * (long)blocksize_out;
@@ -1492,7 +1527,9 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 			
 			//System.err.println("Trimmed Range: 0x" + Long.toHexString(l_st) + " - 0x" + Long.toHexString(l_ed));
 			data = data.createReadOnlyCopy(l_st, l_ed);
+			//System.err.println("First 16 bytes: " + AES.bytes2str(data.getBytes(0, 0x10)));
 		}
+		//setLength(mylen);
 		
 		return data;
 	}

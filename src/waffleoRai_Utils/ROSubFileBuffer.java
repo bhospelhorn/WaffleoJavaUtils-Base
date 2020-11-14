@@ -24,6 +24,8 @@ import java.util.Collection;
  * 	3.0.3 -> 3.0.4 | On construction, copies byte-order flag from source FileBuffer
  * 2020.02.14
  * 	3.0.4 -> 3.1.0 | Added writeToStream()
+ * 2020.11.03
+ * 	3.1.0 -> 3.1.1 | Updated createCopy() to handle block-aligned sources properly!
  * 
  * */
 
@@ -33,8 +35,8 @@ import java.util.Collection;
  * Because this is basically just a wrapper for a reference to an existing buffer,
  * all write functions will throw an exception when called.
  * @author Blythe Hospelhorn
- * @version 3.1.0
- * @since February 14, 2020
+ * @version 3.1.1
+ * @since November 3, 2020
  */
 public class ROSubFileBuffer extends FileBuffer{
 
@@ -80,7 +82,7 @@ public class ROSubFileBuffer extends FileBuffer{
 		if (!this.offsetValid(locPos)){
 			System.err.println("ROSubFileBuffer.getPosition || Invalid position found: 0x" + Long.toHexString(locPos));
 			//System.err.println("ROSubFileBuffer.getPosition || Parent is null? " + (parent == null));
-			throw new ArrayIndexOutOfBoundsException();
+			throw new IndexOutOfBoundsException();
 		}
 		return locPos + posZero;
 	}
@@ -88,7 +90,7 @@ public class ROSubFileBuffer extends FileBuffer{
 	private long[] checkPositionPair(long stPos, long edPos)
 	{
 		long[] offs = new long[2];
-		if (stPos >= edPos) throw new ArrayIndexOutOfBoundsException();
+		if (stPos >= edPos) throw new IndexOutOfBoundsException();
 		if (stPos < 0) stPos = 0;
 		if (edPos - stPos > this.getFileSize()) edPos = this.getFileSize() - stPos;
 		stPos = getPosition(stPos);
@@ -323,7 +325,16 @@ public class ROSubFileBuffer extends FileBuffer{
 	  {
 		  long[] myPos = checkPositionPair(stPos, edPos);
 		  if (myPos == null || myPos.length != 2) throw new IndexOutOfBoundsException();
-		  return parent.createCopy(myPos[0], myPos[1]);
+		  
+		  if(!parent.hasBlockAlignment()) return parent.createCopy(myPos[0], myPos[1]); //Just copy the parent data!
+		  //Get the offsets the parent copy will snap to...
+		  long[] pPos = parent.translateAlignedRange(myPos[0], myPos[1]);
+		  if((pPos[0] == myPos[0]) && (pPos[1] == myPos[1])) return parent.createCopy(myPos[0], myPos[1]); //Offsets match anyway.
+		  FileBuffer newp = parent.createCopy(pPos[0], pPos[1]);
+		  long l_st = myPos[0] - pPos[0];
+		  long l_ed = myPos[1] - pPos[0];
+		  
+		  return newp.createReadOnlyCopy(l_st, l_ed);
 	  }
 	  
 	  /**

@@ -18,7 +18,13 @@ public interface DecryptorMethod {
 	 */
 	public long getOutputBlockOffset(long inputBlockOffset);
 	
+	public long getInputBlockOffset(long outputBlockOffset);
+	public long getOutputCoordinate(long inputCoord);
+	public long getInputCoordinate(long outputCoord);
+	
 	public int backbyteCount();
 	public void putBackbytes(byte[] dat);
+	
+	public DecryptorMethod createCopy();
 
 }

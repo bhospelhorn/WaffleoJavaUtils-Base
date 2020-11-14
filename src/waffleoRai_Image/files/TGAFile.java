@@ -2,8 +2,13 @@ package waffleoRai_Image.files;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
+import waffleoRai_Files.FileClass;
 import waffleoRai_Files.tree.FileNode;
+import waffleoRai_Image.RasterImageDef;
 import waffleoRai_Utils.FileBuffer;
 
 public class TGAFile {
@@ -298,5 +303,57 @@ public class TGAFile {
 	/*----- Setters -----*/
 	
 	/*----- Definition -----*/
+	
+	public static final int DEF_ID = 0x62ba8527;
+	
+	private static TGAImageDef stat_def;
+	
+	public static class TGAImageDef extends RasterImageDef{
+
+		public static final String DEF_ENG = "Truevision TARGA Image";
+		
+		private String desc = DEF_ENG;
+		
+		@Override
+		public Collection<String> getExtensions() {
+			List<String> list = new ArrayList<String>(1);
+			list.add("tga");
+			return list;
+		}
+
+		@Override
+		public String getDescription() {return desc;}
+
+		@Override
+		public FileClass getFileClass() {return FileClass.IMG_IMAGE;}
+
+		@Override
+		public int getTypeID() {return DEF_ID;}
+
+		@Override
+		public void setDescriptionString(String s) {desc = s;}
+
+		@Override
+		public String getDefaultExtension() {return "tga";}
+
+		@Override
+		public BufferedImage renderImage(FileNode src) {
+
+			try {
+				TGAFile tga = TGAFile.readTGA(src);
+				return tga.getImage();
+			} catch (IOException e) {
+				e.printStackTrace();
+				return null;
+			}
+
+		}
+		
+	}
+	
+	public static TGAImageDef getDefinition(){
+		if(stat_def == null) stat_def = new TGAImageDef();
+		return stat_def;
+	}
 	
 }
