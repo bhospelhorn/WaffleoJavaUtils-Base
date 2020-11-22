@@ -26,5 +26,7 @@ public abstract class GenericSystemDef implements FileTypeDefinition{
 	public void setDescriptionString(String s) {str = s;}
 	
 	public String getDefaultExtension(){return "bin";}
+	
+	public String toString(){return FileTypeDefinition.stringMe(this);}
 
 }

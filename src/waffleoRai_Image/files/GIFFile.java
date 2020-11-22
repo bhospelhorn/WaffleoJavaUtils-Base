@@ -2,6 +2,7 @@ package waffleoRai_Image.files;
 
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -13,6 +14,8 @@ import java.util.List;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.metadata.IIOMetadataNode;
+import javax.imageio.stream.FileCacheImageInputStream;
+import javax.imageio.stream.ImageInputStream;
 
 import waffleoRai_Files.FileBufferInputStream;
 import waffleoRai_Files.FileClass;
@@ -113,6 +116,10 @@ public class GIFFile {
 		Iterator<ImageReader> readers = ImageIO.getImageReadersByFormatName("gif");
 		if(readers == null || !readers.hasNext()) throw new UnsupportedFileTypeException("Java GIF reader not found!");
 		ImageReader reader = readers.next();
+		//ImageInputStream iis = new FileCacheImageInputStream(data, new File(FileBuffer.getTempDir() + 
+		//		File.separator + "~javagifread.tmp"));
+		ImageInputStream iis = new FileCacheImageInputStream(data, new File(FileBuffer.getTempDir()));
+		reader.setInput(iis);
 		
 		GIFFile gif = new GIFFile();
 		
@@ -120,7 +127,7 @@ public class GIFFile {
 	    int fidx = 0;
 	    int time = 0;
 	    while(true){
-	    	try{img = reader.read(fidx++);}
+	    	try{img = reader.read(fidx);}
 	    	catch(IndexOutOfBoundsException x){break;} //No way to check img count beforehand	
 	    	
 	    	//Verbatim from stackoverflow
@@ -138,11 +145,13 @@ public class GIFFile {
 	        time += frame.getDelay();
 	        
 	        gif.frames.add(frame);
+	        fidx++;
 	    }
 		
 	    //There's also global position and size for the whole file
 	    //But I'm skipping those cuz eh
 	    
+	    iis.close();
 		reader.dispose();
 		return gif;
 	}

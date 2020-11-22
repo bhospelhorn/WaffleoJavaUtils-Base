@@ -6,6 +6,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public enum FileClass {
 	
 	COMPRESSED(1),
+	EMPTY_FILE(2),
+	EMPTY_DIR(3),
 	
 	ARCHIVE(100),
 	

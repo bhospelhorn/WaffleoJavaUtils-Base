@@ -5,8 +5,10 @@ import java.util.List;
 
 import waffleoRai_Encryption.StaticDecryption;
 import waffleoRai_Encryption.StaticDecryptor;
+import waffleoRai_Files.DiskDataFilter;
 import waffleoRai_Files.EncryptionDefinition;
 import waffleoRai_Utils.CacheFileBuffer;
+import waffleoRai_Utils.EncryptedFileBuffer;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.MultiFileBuffer;
 
@@ -24,6 +26,10 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 2020.09.30 | 2.1.0
  * 		Gutted loadDirect() to use RawDiskBuffer and handle 
  * 			decryption buffering that requires sec header/footer data
+ * 2020.11.15 | 2.2.0
+ * 		Now records block sizes to super class
+ * 		Again gutted loadDirect() to use RawDiskBuffer
+ * 
  */
 
 /**
@@ -31,8 +37,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * references offsets by sector (noting sector type) instead of byte offset.
  * This way, sector checksum data can be included or excluded as needed.
  * @author Blythe Hospelhorn
- * @version 2.1.0
- * @since September 30, 2020
+ * @version 2.2.0
+ * @since November 15, 2020
  */
 public class ISOFileNode extends FileNode{
 	
@@ -57,6 +63,8 @@ public class ISOFileNode extends FileNode{
 		sector_head_size = 0x10;
 		sector_data_size = 0x800;
 		sector_foot_size = 0x120;
+		
+		super.setBlockSize(getSectorTotalSize(), sector_data_size);
 	}
 	
 	/* --- Getters --- */
@@ -117,9 +125,7 @@ public class ISOFileNode extends FileNode{
 	 * the specifications for CD-XA Mode 2, Form 1. (Used in PSX discs)
 	 */
 	public void setMode2Form1(){
-		sector_head_size = 0x18;
-		sector_data_size = 0x800;
-		sector_foot_size = 0x118;
+		setSectorDataSizes(0x18, 0x800, 0x118);
 	}
 	
 	/**
@@ -127,9 +133,7 @@ public class ISOFileNode extends FileNode{
 	 * the specifications for CD-XA Mode 2, Form 2. (Used in PSX discs)
 	 */
 	public void setMode2Form2(){
-		sector_head_size = 0x18;
-		sector_data_size = 0x914;
-		sector_foot_size = 0x4;
+		setSectorDataSizes(0x18, 0x914, 0x4);
 	}
 
 	/**
@@ -138,9 +142,7 @@ public class ISOFileNode extends FileNode{
 	 * @since 1.0.0
 	 */
 	public void setAudioMode(){
-		sector_head_size = 0;
-		sector_data_size = 0x930;
-		sector_foot_size = 0;
+		setSectorDataSizes(0x0, 0x930, 0x0);
 	}
 	
 	/**
@@ -154,6 +156,9 @@ public class ISOFileNode extends FileNode{
 		this.sector_head_size = head;
 		this.sector_data_size = dat;
 		this.sector_foot_size = foot;
+		
+		//set super loaders too
+		super.setBlockSize(getSectorTotalSize(), sector_data_size);
 	}
 	
 	/* --- Data Handling --- */
@@ -201,8 +206,25 @@ public class ISOFileNode extends FileNode{
 		}
 	}
 	
+	protected FileBuffer loadDataFilterBuff(long stsec, long edsec, boolean forceCache) throws IOException{
+		FileBuffer raw = loadRawData(stsec, edsec - stsec, forceCache);
+		return new EncryptedFileBuffer(raw, new DiskDataFilter(sector_head_size, sector_data_size, sector_foot_size));
+		
+		/*if(hasVirtualSource()){
+			//Load into an enc byffer w/ DiskDataFilter
+			FileBuffer raw = loadRawData(stsec, edsec - stsec, forceCache);
+			return new EncryptedFileBuffer(raw, new DiskDataFilter(sector_head_size, sector_data_size, sector_foot_size));
+		}
+		else{
+			long seclen = getSectorTotalSize();
+			long st = stsec * seclen;
+			long ed = edsec * seclen;
+			return RawDiskBuffer.openReadOnly(getSourcePath(), sector_head_size, sector_data_size, 
+					sector_foot_size, 8192, st, ed, true);	
+		}*/
+	}
+	
 	protected FileBuffer loadDirect(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
-		//TODO
 		//Convert position coordinates to sectors
 		long edpos = stpos + len;
 		long stsec = stpos/(long)sector_data_size;
@@ -235,31 +257,75 @@ public class ISOFileNode extends FileNode{
 			int ecount = echain.size();
 			if(ecount == 1 && stsec <= reg_bounds[0][0] && edsec < reg_bounds[0][1]){
 				//If there's only one eregion and it covers the whole loading area...
-				//TODO
 				//Check for a loaded decryptor...
 				EncryptionDefinition def = echain.get(0);
 				StaticDecryptor decer = StaticDecryption.getDecryptorState(def.getID());
 				if(decer != null){
 					super.load_flag_decwrap_direct = true; //Don't want superclass redoing decryption
-					
+					//Load raw into enc buffer
+					FileBuffer raw = loadRawData(stsec, edsec - stsec, forceCache);
+					return new EncryptedFileBuffer(raw, decer.generateDecryptor(this));
 				}
 				else{
 					//No decryption method defined. Just return a RawDiskBuffer
+					return loadDataFilterBuff(stsec, edsec, forceCache);
 				}
 			}
 			else{
 				//Else...
-				//TODO
 				MultiFileBuffer out = new MultiFileBuffer((ecount << 1) + 1);
+				super.load_flag_decwrap_direct = true;
+				
+				int i = 0;
+				long seclen = getSectorTotalSize();
+				long st = stsec * seclen;
+				long ed = edsec * seclen;
+				long pos = st;
+				for(EncryptionDefinition def : echain){
+					//See if falls within load region
+					long rst = reg_bounds[i][0];
+					long red = reg_bounds[i][1];
+					if(red <= st){i++; continue;}
+					if(rst >= ed){break;}
+					
+					//Grab anything before it...
+					if(pos < st){
+						long ssec = st/sector_data_size;
+						long esec = pos/sector_data_size;
+						if(pos % sector_data_size != 0) esec++;
+						FileBuffer reg = loadDataFilterBuff(ssec, esec, forceCache);
+						out.addToFile(reg);
+					}
+					
+					//Get decryptor
+					StaticDecryptor decer = StaticDecryption.getDecryptorState(def.getID());
+					
+					//Grab data within
+					long ssec = st/sector_data_size;
+					long esec = pos/sector_data_size;
+					if(pos % sector_data_size != 0) esec++;
+					if(decer != null){
+						FileBuffer reg = loadRawData(ssec, esec - ssec, forceCache);
+						reg = new EncryptedFileBuffer(reg, decer.generateDecryptor(this));
+						out.addToFile(reg);
+					}
+					else{
+						FileBuffer reg = loadDataFilterBuff(ssec, esec, forceCache);
+						out.addToFile(reg);
+					}
+					
+					i++;
+				}
+				
+				return out;
 			}
 		}
 		else{
 			//Just load into a RawDiskBuffer
 			//Superclass will handle anything else
-			//TODO
+			return loadDataFilterBuff(stsec, edsec, forceCache);
 		}
-		
-		return null;
+
 	}
 
 	/** Load ALL data in the specified sectors, including sector header/footer data, referenced by this node

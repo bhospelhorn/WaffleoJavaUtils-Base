@@ -122,6 +122,8 @@ public class AnimatedCheckeredImagePane extends CheckeredImagePane{
 		}
 		list.add(frame);
 		
+		//Adjust size?
+		
 	}
 	
 	public void clearAllFrames(){
@@ -146,6 +148,11 @@ public class AnimatedCheckeredImagePane extends CheckeredImagePane{
 			timer.stop();
 			active_frames.clear();
 		}
+	}
+	
+	public void setToAnimationView(){
+		if(timer != null && timer.isRunning()) stopAnimation();
+		items.clear();
 	}
 	
 	public void setToViewAllFrames(){

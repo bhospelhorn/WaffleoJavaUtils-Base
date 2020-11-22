@@ -313,6 +313,11 @@ public class WAV implements RandomAccessSound{
 		parseWAV(wavfile);
 	}
 	
+	public WAV(FileBuffer data) throws UnsupportedFileTypeException{
+		smpl_loops = new LinkedList<SampleLoop>();
+		parseWAV(data);
+	}
+	
 	public WAV(int bitdepth, int channels, int frames)
 	{
 		if (channels < 1 || frames < 1 || bitdepth < 1) throw new IllegalArgumentException();
@@ -352,7 +357,8 @@ public class WAV implements RandomAccessSound{
 		cPos += 8; //Skip magic and chunk size
 		short compCode = mywav.shortFromFile(cPos); cPos += 2;
 		//Right now, we'll only deal with uncompressed PCM. Maybe add more later.
-		if (compCode != 1) throw new FileBuffer.UnsupportedFileTypeException();
+		if (compCode != 1) throw new FileBuffer.UnsupportedFileTypeException("WAV.parseWAV || "
+				+ "Encodings other than uncompressed PCM not currently supported!");
 		short chNum = mywav.shortFromFile(cPos); cPos += 2;
 		sampleRate = mywav.intFromFile(cPos); cPos += 4;
 		cPos += 4; //Skip average bytes per second.
