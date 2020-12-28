@@ -50,6 +50,15 @@ public class ArrayWindow {
 		
 		return true;
 	}
+	
+	public int put(byte[] b){
+		int ct = 0;
+		for(byte by : b){
+			if(put(by)) ct++;
+			else return ct;
+		}
+		return ct;
+	}
 
 	public boolean forcePut(byte b)
 	{
@@ -143,5 +152,8 @@ public class ArrayWindow {
 		}
 	}
 	
+	public int emptySpace(){
+		return window.length - holding;
+	}
 
 }

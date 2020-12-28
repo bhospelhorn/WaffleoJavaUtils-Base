@@ -8,6 +8,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 
+import waffleoRai_Files.NodeMatchCallback;
+import waffleoRai_Files.tree.DirectoryNode;
+import waffleoRai_Files.tree.FileNode;
+
 public class FileUtils {
 	
 	public static byte[] getSHA1Hash(byte[] data){
@@ -64,6 +68,54 @@ public class FileUtils {
 		Files.delete(Paths.get(src));
 		
 		return b;
+	}
+
+	public static FileNode findPartnerNode(FileNode n, String metakey_path, String metakey_id){
+
+		//First checks path meta value
+		//If nothing, checks ID meta value
+		
+		if(n == null) return null;
+		if(metakey_path != null){
+			String path_val = n.getMetadataValue(metakey_path);
+			if(path_val != null){
+				//See if node exists at that location
+				if(n.getParent() != null){
+					FileNode partner = n.getParent().getNodeAt(path_val);	
+					if(partner != null) return partner;
+				}
+			}
+		}
+		
+		//Check ID
+		if(metakey_id != null){
+			String id_val = n.getMetadataValue(metakey_id);
+			if(id_val != null){
+				DirectoryNode parent = n.getParent();
+				if(parent != null){
+					String mpath = n.findNodeThat(new NodeMatchCallback(){
+
+						public boolean meetsCondition(FileNode n) {
+							if(n.isDirectory()) return false;
+							String v = n.getMetadataValue(metakey_id);
+							if(v == null) return false;
+							return v.equals(id_val);
+						}
+						
+					});
+					if(mpath != null && !mpath.isEmpty()){
+						FileNode partner = parent.getNodeAt(mpath);	
+						if(partner != null){
+							n.setMetadataValue(metakey_path, mpath);
+							return partner;
+						}
+					}
+				}
+			}
+		}
+		
+		
+		return null;
 	}
 	
 }

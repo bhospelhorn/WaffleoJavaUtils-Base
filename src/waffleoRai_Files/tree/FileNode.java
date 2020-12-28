@@ -67,6 +67,9 @@ import waffleoRai_Utils.Treenumeration;
  * 
  * 2020.11.04 | 3.3.2 -> 3.3.3
  * 	Fixed an issue with sign extension in int -> long conversions in file loading
+ * 
+ * 2020.12.26 | 3.3.3 -> 3.4.0
+ * 	Created a static method that generates a FileNode for a file on disk.
  */
 
 /**
@@ -79,8 +82,8 @@ import waffleoRai_Utils.Treenumeration;
  * within files on disk (such as archives or device images).
  * <br> This class replaces the deprecated <code>VirFile</code> class.
  * @author Blythe Hospelhorn
- * @version 3.3.3
- * @since November 4, 2020
+ * @version 3.4.0
+ * @since December 26, 2020
  */
 public class FileNode implements TreeNode, Comparable<FileNode>{
 	
@@ -959,6 +962,33 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		Object lasty = treepath.getLastPathComponent();
 		if(lasty instanceof FileNode) return ((FileNode)lasty).getFullPath();
 		return lasty.toString();
+	}
+	
+	/**
+	 * Generate a <code>FileNode</code> referencing a file on disk. 
+	 * The generated <code>FileNode</code> by default has no parent <code>DirectoryNode</code>. 
+	 * @param diskFilePath Path to file on disk to reference.
+	 * @return Generated <code>FileNode</code> referring to file at the provided path, or 
+	 * <code>null</code> if there is no file at the path or the path refers to a directory.
+	 * @since 3.4.0
+	 */
+	public static FileNode createFileNodeOf(String diskFilePath){
+		if(diskFilePath == null) return null;
+		if(!FileBuffer.fileExists(diskFilePath)) return null;
+		
+		//Extract name.
+		int seppos = diskFilePath.lastIndexOf(File.separatorChar);
+		String fname = diskFilePath;
+		if(seppos >= 0) fname = diskFilePath.substring(seppos+1);
+		
+		//Node
+		FileNode node = new FileNode(null, fname);
+		node.generateGUID();
+		node.setSourcePath(diskFilePath);
+		node.setOffset(0x0);
+		node.setLength(FileBuffer.fileSize(diskFilePath));
+		
+		return node;
 	}
 	
 	/* --- Other --- */

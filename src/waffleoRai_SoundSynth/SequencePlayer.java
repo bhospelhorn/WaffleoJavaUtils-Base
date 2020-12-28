@@ -922,7 +922,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 		worker = new PlayerWorker();
 		Thread t = new Thread(worker);
 		Random r = new Random();
-		t.setName("SeqpPlayer_WorkerThread_0x" + Integer.toHexString(r.nextInt()));
+		t.setName("SeqPlayer_WorkerThread_0x" + Integer.toHexString(r.nextInt()));
 		t.start();
 	}
 	
