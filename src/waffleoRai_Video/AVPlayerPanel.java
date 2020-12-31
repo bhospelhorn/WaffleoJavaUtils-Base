@@ -8,6 +8,7 @@ import waffleoRai_Sound.JavaSoundPlayer_16LE;
 import waffleoRai_Sound.JavaSoundPlayer_24LE;
 import waffleoRai_Sound.Sound;
 import waffleoRai_SoundSynth.AudioSampleStream;
+import waffleoRai_Utils.Arunnable;
 import waffleoRai_Utils.MathUtils;
 import waffleoRai_Utils.VoidCallbackMethod;
 
@@ -20,6 +21,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
+import java.util.Random;
 
 import javax.sound.sampled.LineUnavailableException;
 import javax.swing.Icon;
@@ -68,10 +70,18 @@ public class AVPlayerPanel extends DisposableJPanel{
 	private boolean fr_snap;
 	
 	private volatile boolean playing;
+	private volatile boolean lock_slider;
+	private volatile boolean pauseFlag;
 	//private boolean endFlag;
 	
 	private int[] a_cycle; //Audio samples to release per video frame cycle.
 	private int ac;
+	private volatile long ex_samps; //Expected audio sample at the beginning of v cycle (used for A/V sync)
+	private int s_leeway; //Max difference in sample position between audio and v expected before sync kicks in
+	private int wait_millis;
+	
+	private volatile boolean audio_hold;
+	private AVSyncWorker sync_worker;
 	
 	private Timer slide_timer;
 	private int vframes; //Total video frames
@@ -137,6 +147,16 @@ public class AVPlayerPanel extends DisposableJPanel{
 				videoEndCallback();
 			}
 		});
+		pnlVideo.setPanelClickCallbacks(new VoidCallbackMethod(){
+			public void doMethod() {
+				onPlayButton();
+			}
+		}, new VoidCallbackMethod(){
+			public void doMethod() {
+				onPauseButton();
+			}
+		});
+
 		
 		JPanel pnlSlider = new JPanel();
 		GridBagConstraints gbc_pnlSlider = new GridBagConstraints();
@@ -162,9 +182,11 @@ public class AVPlayerPanel extends DisposableJPanel{
 		pnlSlider.add(slider, gbc_slider);
 		slider.addChangeListener(new ChangeListener(){
 			public void stateChanged(ChangeEvent e) {
-				System.err.println("AVPlayerPanel.slider.ChangeListener.stateChanged || Source: " + e.getSource());
-				if(playing) return; //Easiest workaround to ignoring event triggers by the player itself.
+				//System.err.println("AVPlayerPanel.slider.ChangeListener.stateChanged || Source: " + e.getSource());
+				if(lock_slider) return; //Easiest workaround to ignoring event triggers by the player itself.
+				if(slide_timer != null && slide_timer.isRunning()) return;
 				int val = slider.getValue();
+				//if(val == 0) return; //Final check
 				onManualSliderMove(val);
 			}
 		});
@@ -290,6 +312,9 @@ public class AVPlayerPanel extends DisposableJPanel{
 			}
 		}
 		
+		//Calculate the leeway in samples. ms defaults to 500 = (1/2 second)
+		s_leeway = sr/2;
+		wait_millis = (int)Math.round((((double)s_leeway * 1000.0)/(double)sr) * 0.75); //Should be around 75
 	}
 	
 	/*----- Getters -----*/
@@ -322,7 +347,10 @@ public class AVPlayerPanel extends DisposableJPanel{
 	
 	private void onProgressUpdate(){
 		int fpos = pnlVideo.getTimeFrames();
-		now_sec++;
+		
+		//Instead, let's calculate time from frames...
+		
+		/*now_sec++;
 		if(now_sec >= 60){
 			now_min++;
 			now_sec = 0;
@@ -330,11 +358,13 @@ public class AVPlayerPanel extends DisposableJPanel{
 		if(now_min >= 60){
 			now_hr++;
 			now_min = 0;
-		}
+		}*/
+		updateTime(fpos);
 		
 		double ratio = (double)fpos/(double)vframes;
 		ratio *= 100.0;
 		int spos = (int)Math.round(ratio);
+		//System.err.println("lock_slider = " + lock_slider);
 		slider.getModel().setValue(spos); 
 		
 		slider.repaint();
@@ -367,6 +397,7 @@ public class AVPlayerPanel extends DisposableJPanel{
 	}
 	
 	protected void startSliderTimer(){
+		lock_slider = true;
 		if(slide_timer != null && slide_timer.isRunning()) slide_timer.stop();
 		slide_timer = new Timer(1000, new ActionListener(){
 
@@ -383,9 +414,108 @@ public class AVPlayerPanel extends DisposableJPanel{
 		slide_timer = null;
 	}
 	
+	protected void startSyncWorker(){
+		if(sync_worker != null) stopSyncWorker();
+		sync_worker = new AVSyncWorker();
+		
+		Thread t = new Thread(sync_worker);
+		t.setName(sync_worker.getName());
+		t.setDaemon(true);
+		t.start();
+	}
+	
+	protected void stopSyncWorker(){
+		if(sync_worker == null) return;
+		sync_worker.requestTermination();
+		sync_worker = null;
+	}
+	
+	protected void pauseSyncWorker(){
+		if(sync_worker == null) return;
+		sync_worker.requestPause();
+	}
+	
+	protected void unpauseSyncWorker(){
+		if(sync_worker == null) return;
+		sync_worker.requestResume();
+	}
+	
+	/*----- A/V Sync -----*/
+	
+	public class AVSyncWorker extends Arunnable{
+
+		public AVSyncWorker(){
+			super.delay = 250;
+			super.sleeps = true;
+			super.sleeptime = 1000;
+			
+			Random r = new Random();
+			super.setName("AVSyncWorker_" + Long.toHexString(r.nextLong()));
+		}
+		
+		public int checkSync(){
+			
+			long apos = audioPlayer.getPlaybackLocation();
+			long diff = ex_samps - apos;
+			
+			if(Math.abs(diff) >= s_leeway){
+				System.err.println("AVSyncWorker.checkSync || DEBUG-- Desync detected!");	
+				if(diff < 0) return -1;
+				else return 1;
+			}
+			return 0;
+		}
+		
+		public void doSomething() {
+			//Check AV sync
+			if(audioPlayer == null) return;
+
+			int sync = checkSync();
+			while(sync != 0){
+				//Need to sync.
+				if(sync < 0){
+					//Video is behind.
+					//Stop audio and wait for 3/4 leeway time.
+					audio_hold = true;
+					audioPlayer.pause();
+					try {Thread.sleep(wait_millis);} 
+					catch (InterruptedException e) {e.printStackTrace();}
+					audioPlayer.unpause();
+					audio_hold = false;
+				}
+				else{
+					//Audio is behind.
+					//Stop video and wait for 3/4 leeway time.
+					pnlVideo.quickPause();
+					try {Thread.sleep(wait_millis);} 
+					catch (InterruptedException e) {e.printStackTrace();}
+					pnlVideo.quickUnpause();
+				}
+				sync = checkSync();
+			}
+			
+			
+		}
+		
+	}
+	
 	/*----- Players -----*/
 	
-	private void genAudioPlayer(long milli_start){
+	private void updateTime(int frame){
+
+		double fps = v_src.getFrameRate();
+		double f = (double)frame;
+		
+		int time = (int)Math.round(f/fps);
+		now_sec = time%60;
+		time /= 60;
+		now_min = time%60;
+		time /= 60;
+		now_hr = time;
+		
+	}
+	
+	private void genAudioPlayer(long sampSkip){
 		if(a_src == null){
 			audioPlayer = null;
 			return;
@@ -407,7 +537,7 @@ public class AVPlayerPanel extends DisposableJPanel{
 		}
 		
 		//Fast forward stream to start point.
-		int v_cycle = pnlVideo.millisPerCycle();
+		/*int v_cycle = pnlVideo.millisPerCycle();
 		int m = 0; int c = 0;
 		try{
 		while(m < milli_start){
@@ -417,9 +547,18 @@ public class AVPlayerPanel extends DisposableJPanel{
 		}}
 		catch(InterruptedException x){
 			x.printStackTrace();
+		}*/
+		
+		try{
+			for(int s = 0; s < sampSkip; s++){
+				astr.nextSample();
+			}
+		}
+		catch(InterruptedException x){
+				x.printStackTrace();
 		}
 		
-		audioPlayer.setSyncedMode(true);
+		//audioPlayer.setSyncedMode(true);
 		audioPlayer.setPrebuffCycles(5);
 	}
 	
@@ -430,8 +569,17 @@ public class AVPlayerPanel extends DisposableJPanel{
 		//if(endFlag) return;
 		v_cycle++;
 		if(audioPlayer == null || a_cycle == null) return;
+		
+		//Start audio player if it's not running...
+		if(!audioPlayer.isRunning() && !audio_hold) {
+			try{audioPlayer.play();}
+			catch(LineUnavailableException x){x.printStackTrace();}
+		}
+		
 		if(ac >= a_cycle.length) ac = 0;
-		audioPlayer.releaseToLine(a_cycle[ac++]);
+		ex_samps += a_cycle[ac++];
+		//System.err.println("Release " + a_cycle[ac]);
+		//audioPlayer.releaseToLine(a_cycle[ac++]);
 	}
 	
 	private void videoEndCallback(){
@@ -448,6 +596,7 @@ public class AVPlayerPanel extends DisposableJPanel{
 	}
 	
 	private void onManualSliderMove(int value){
+		System.err.println("AVPlayerPanel.onManualSliderMove || Manual slider move detected!");
 		double ratio = (double)value/100.0;
 		int f = (int)Math.round(ratio * (double)vframes);
 		seek(f);
@@ -469,13 +618,12 @@ public class AVPlayerPanel extends DisposableJPanel{
 				
 				//Audio
 				if(a_src != null){
-					if(audioPlayer == null) genAudioPlayer(v_cycle*pnlVideo.millisPerCycle());
+					if(audioPlayer == null) genAudioPlayer(ex_samps);
 					try{audioPlayer.open();}
 					catch(LineUnavailableException x){x.printStackTrace();
 					 return null;}
 					
 					audioPlayer.startTimer(); 
-					//When in byte buffer mode as it should be, this buffers to a byte array, not the line
 				}
 				
 				return null;
@@ -503,11 +651,11 @@ public class AVPlayerPanel extends DisposableJPanel{
 				//Audio
 				if(a_src != null){
 					if(audioPlayer == null){
-						genAudioPlayer(v_cycle*pnlVideo.millisPerCycle());
-						try{audioPlayer.play();}
-						catch(LineUnavailableException x){x.printStackTrace();
-						 return null;}
+						genAudioPlayer(ex_samps);
 					}
+					/*try{audioPlayer.play();}
+					catch(LineUnavailableException x){x.printStackTrace();
+					 return null;}*/
 				}
 				
 				//Video
@@ -516,6 +664,10 @@ public class AVPlayerPanel extends DisposableJPanel{
 				}
 				
 				startSliderTimer();
+				
+				if(!pauseFlag) startSyncWorker();
+				else unpauseSyncWorker();
+				pauseFlag = false;
 				return null;
 			}
 			
@@ -535,22 +687,30 @@ public class AVPlayerPanel extends DisposableJPanel{
 
 		setWait();
 		playing = false;
+		pauseFlag = true;
 		
 		SwingWorker<Void, Void> task = new SwingWorker<Void, Void>(){
 
 			protected Void doInBackground() throws Exception {
 				
 				stopSliderTimer();
+				//stopSyncWorker();
+				pauseSyncWorker();
 			
 				//Video
 				if(v_src != null){
 					pnlVideo.pause();
+				}
+				
+				if(audioPlayer != null){
+					audioPlayer.pause();
 				}
 
 				return null;
 			}
 			
 			public void done(){
+				lock_slider = false;
 				setButtonPlay();
 				unsetWait();
 			}
@@ -568,6 +728,7 @@ public class AVPlayerPanel extends DisposableJPanel{
 
 			protected Void doInBackground() throws Exception {
 				stopSliderTimer();
+				stopSyncWorker();
 				
 				//Audio
 				if(audioPlayer != null){
@@ -587,11 +748,16 @@ public class AVPlayerPanel extends DisposableJPanel{
 				now_min = 0;
 				now_sec = 0;
 				ac = 0;
+				ex_samps = 0;
+				
+				lock_slider = true;
+				onProgressUpdate();
 				
 				return null;
 			}
 			
 			public void done(){
+				lock_slider = false;
 				setButtonPlay();
 				unsetWait();
 			}
@@ -610,6 +776,7 @@ public class AVPlayerPanel extends DisposableJPanel{
 
 			protected Void doInBackground() throws Exception {
 				stopSliderTimer();
+				stopSyncWorker();
 				
 				//Audio
 				if(audioPlayer != null){
@@ -636,6 +803,14 @@ public class AVPlayerPanel extends DisposableJPanel{
 				rawtime -= (now_min * 60);
 				now_sec = rawtime;
 				
+				//Expected audio samples
+				ex_samps = 0;
+				ac = 0;
+				for(int v = 0; v < v_cycle; v++){
+					if(ac >= a_cycle.length) ac = 0;
+					ex_samps += a_cycle[ac++];
+				}
+				
 				//Reopen streams
 				if(v_src != null){
 					int f = v_cycle * vcf;
@@ -643,7 +818,7 @@ public class AVPlayerPanel extends DisposableJPanel{
 					pnlVideo.startBufferWorker();
 				}
 				if(a_src != null){
-					genAudioPlayer(v_cycle*vcm);
+					genAudioPlayer(ex_samps);
 					try{audioPlayer.open();}
 					catch(LineUnavailableException x){x.printStackTrace();
 					 return null;}

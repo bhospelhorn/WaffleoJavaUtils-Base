@@ -46,22 +46,27 @@ public class BufferedVideoPanel extends JPanel{
 	//private int width;
 	//private int height;
 	
-	private Timer timer;
+	private volatile boolean playing_flag;
+	//private Timer timer;
+	private Timer[] timers;
 	private long time;
 	private volatile int frame_idx;
 	
 	private int[] cycle;
 	//private int cycle_ctr;
 	
+	private boolean lock_aspect_ratio;
 	private boolean click_sensitive;
 	private boolean showPause;
 	private boolean fr_snap;
 	private volatile boolean hoverFlag;
+	private Color bkg = new Color(0, 0, 0);
 	
 	private IVideoSource src;
 	private VideoFrameStream str; //open stream
 	
 	private BufferedImage current_frame;
+	private double aspect_ratio; //w:h
 	
 	private volatile boolean endFlag; //Set by async buffer if it encounters end.
 	private boolean useAsyncBuffer;
@@ -69,8 +74,14 @@ public class BufferedVideoPanel extends JPanel{
 	private ConcurrentLinkedQueue<BufferedImage> buffer;
 	private BufferRunner worker;
 	
+	private volatile int buff_stat;
+	private Boolean buff_lock;
+	
 	private VoidCallbackMethod cycle_callback;
 	private VoidCallbackMethod end_callback;
+	
+	private VoidCallbackMethod clickplay_callback;
+	private VoidCallbackMethod clickpause_callback;
 	
 	/*----- Initialization -----*/
 	
@@ -84,6 +95,7 @@ public class BufferedVideoPanel extends JPanel{
 		click_sensitive = clickControl;
 		showPause = hoverPause;
 		fr_snap = snap_framerate;
+		lock_aspect_ratio = true;
 		
 		//If click sensitive, add a listener
 		if(click_sensitive){
@@ -110,7 +122,8 @@ public class BufferedVideoPanel extends JPanel{
 		buffer = new ConcurrentLinkedQueue<BufferedImage>();
 		if(src != null){
 			this.setPreferredSize(new Dimension(src.getWidth(), src.getHeight()));
-			buffer_size = (1000/src.millisPerFrame()) + 1;
+			buffer_size = (int)src.getFrameRate()+1;
+			aspect_ratio = (double)src.getWidth()/(double)src.getHeight();
 			
 			if(snap_framerate && MathUtils.isInteger(src.getFrameRate())) calculateCycle();
 			else{
@@ -120,6 +133,7 @@ public class BufferedVideoPanel extends JPanel{
 		else{
 			buffer_size = 30;
 			cycle = new int[]{1000};
+			aspect_ratio = 4.0/3.0;
 		}
 	}
 	
@@ -182,13 +196,18 @@ public class BufferedVideoPanel extends JPanel{
 			cycle = new int[]{base_millis};
 		}
 		
+		
+		/*System.err.println("Frame cycle: ");
+		for(int i = 0; i < cycle.length; i++){
+			System.err.print(cycle[i] + " ");
+		}
+		System.err.println();*/
 	}
 	
 	/*----- Getters -----*/
 	
 	public boolean isPlaying(){
-		if(timer == null) return false;
-		return timer.isRunning();
+		return playing_flag;
 	}
 
 	public long getTimeMillis(){return time;}
@@ -215,6 +234,10 @@ public class BufferedVideoPanel extends JPanel{
 	
 	/*----- Setters -----*/
 	
+	public void setAspectRatioLock(boolean b){
+		lock_aspect_ratio = b;
+	}
+	
 	public void setAsyncBuffering(boolean b){
 		if(isPlaying()) throw new UnsupportedOperationException();
 		useAsyncBuffer = b;
@@ -236,12 +259,18 @@ public class BufferedVideoPanel extends JPanel{
 		end_callback = method;
 	}
 	
+	public void setPanelClickCallbacks(VoidCallbackMethod clickPlay, VoidCallbackMethod clickPause){
+		clickplay_callback = clickPlay;
+		clickpause_callback = clickPause;
+	}
+	
 	public void setVideo(IVideoSource vid){
 		stop();
 		
 		if(src != null){
 			this.setPreferredSize(new Dimension(src.getWidth(), src.getHeight()));
 			buffer_size = (1000/src.millisPerFrame()) + 1;
+			aspect_ratio = (double)src.getWidth()/(double)src.getHeight();
 			
 			if(fr_snap && MathUtils.isInteger(src.getFrameRate())) calculateCycle();
 			else{
@@ -251,21 +280,60 @@ public class BufferedVideoPanel extends JPanel{
 		else{
 			buffer_size = 30;
 			cycle = new int[]{1000};
+			aspect_ratio = 4.0/3.0;
 		}
 	}
+	
+	public void setBackgroundColor(Color c){bkg = c;}
 	
 	/*----- Buffer -----*/
 	
 	private class BufferRunner extends Arunnable{
 
+		private volatile int pb_pending_phase;
+		
 		public BufferRunner(int interval){
 			super.setName("BufferedVideoPanel_BufferDaemon");
 			super.sleeps = true;
 			super.sleeptime = interval;
+			super.delay = 0;
 		}
 		
 		public void doSomething() {
-			fillBuffer();
+			//fillBuffer();
+			if(endFlag) return;
+			while(buffer.size() < buffer_size){
+
+				//Render next frame
+				BufferedImage frame = str.getNextFrame();
+				if(str.done()) endFlag = true;
+				if(frame == null){return;}//Some weird problem...
+				
+				buffer.add(frame);
+				
+				//Check playback pending flag
+				if(buff_stat == -1){
+					//Playback is waiting on buffering.
+					//Buffer a couple more frames then update status.
+					for (int j = 0; j < 3; j++){
+						frame = str.getNextFrame();
+						if(str.done()) endFlag = true;
+						if(frame == null){break;}
+						buffer.add(frame);
+					}
+					
+					synchronized(buff_lock){buff_stat = pb_pending_phase;}
+				}
+			}
+			
+		}
+		
+		public synchronized void waitForMe(int phase){
+			//Interrupts buffer worker when playback thread needs next frame
+			synchronized(buff_lock){buff_stat = -1;}
+			pb_pending_phase = phase;
+			//pausePlayTimer();
+			interruptThreads();
 		}
 		
 	}
@@ -296,6 +364,8 @@ public class BufferedVideoPanel extends JPanel{
 		Thread t = new Thread(worker);
 		t.setName(worker.getName() + "_" + Long.toHexString(r.nextLong()));
 		t.setDaemon(true);
+		
+		open();
 		t.start();
 	}
 	
@@ -326,20 +396,41 @@ public class BufferedVideoPanel extends JPanel{
 		Rectangle bounds = g.getClipBounds();
 		int w = bounds.width;
 		int h = bounds.height;
+		int dx = 0;
+		int dy = 0;
 		
-		g.clearRect(0, 0, w, h);
+		int fw = w;
+		int fh = h;
+		if(lock_aspect_ratio){
+			double frat = (double)fw/(double)fh;
+			if(frat > aspect_ratio){
+				//Drawing space is too wide.
+				fw = (int)Math.round((double)fh * aspect_ratio);
+				dx = (w-fw)/2;
+			}
+			else if(frat < aspect_ratio){
+				//Drawing space is too tall.
+				fh = (int)Math.round((double)fw/aspect_ratio);
+				dy = (h-fh)/2;
+			}
+		}
+		
+		Color c = g.getColor();
+		g.setColor(bkg);
+		
+		//g.clearRect(0, 0, w, h);
+		g.fillRect(0, 0, w, h);
 		
 		//Draw image, if applicable
 		if(current_frame != null){
 			//Paint frame (may also need to rescale)
-			if(current_frame.getWidth() != w || current_frame.getWidth() != h){
-				g.drawImage(current_frame.getScaledInstance(w, h, BufferedImage.SCALE_DEFAULT), 0, 0, null);
+			if(current_frame.getWidth() != fw || current_frame.getHeight() != fh){
+				g.drawImage(current_frame.getScaledInstance(fw, fh, BufferedImage.SCALE_DEFAULT), dx, dy, null);
 			}
 			else g.drawImage(current_frame, 0, 0, null);
 			
 			if(!isPlaying() || hoverFlag){
 				//Draw semi-transparent black rectangle over to dim it.
-				Color c = g.getColor();
 				g.setColor(new Color(0, 0, 0, 128));
 				g.fillRect(0, 0, w, h);
 				g.setColor(c);
@@ -356,41 +447,36 @@ public class BufferedVideoPanel extends JPanel{
 	
 	protected void onScreenClick(){
 		//Pause or play
-		if(isPlaying()) pause();
-		else play();
+		if(isPlaying()){
+			if(clickpause_callback != null) clickpause_callback.doMethod();
+			else pause();
+		}
+		else{
+			if(clickplay_callback != null) clickplay_callback.doMethod();
+			else play();
+		}
 	}
 	
 	/*----- Control -----*/
 	
-	private void onTickCycle(){
-		if(str == null) return;
-		if(cycle_callback != null) cycle_callback.doMethod();
-		
-		for(int i = 0; i < cycle.length-1; i++){
-			if(!onFrameTick()) return;
-			try{Thread.sleep(cycle[i]);}
-			catch(InterruptedException x){
-				x.printStackTrace();
-				//But continue...
-			}
-			time += cycle[i];
-		}
-		
-		if(!onFrameTick()) return;
-		time += cycle[cycle.length-1];
-	}
-	
-	private boolean onFrameTick(){
+	private boolean onFrameTick(int phase){
 		//if(str == null) return;
 		frame_idx++;
 		//time += src.millisPerFrame();
 		if(buffer.isEmpty()){
 			//Render a new one or check if end...
+			System.err.println("WARNING: Buffer empty!");
 			if(endFlag || str.done()){
 				atStreamEnd();
 				return false; //Didn't render a new one
 			}
-			current_frame = str.getNextFrame();
+			
+			//Either render a new frame or block until buffer is ready.
+			if(useAsyncBuffer){
+				worker.waitForMe(phase);
+				return false;
+			}
+			else current_frame = str.getNextFrame();
 		}
 		else current_frame = buffer.poll();
 		repaint();
@@ -403,31 +489,81 @@ public class BufferedVideoPanel extends JPanel{
 	}
 	
 	private void startPlayTimer(){
-		if(timer != null && timer.isRunning()) timer.stop();
+		if(playing_flag) stopPlayTimer();
 		if(src == null) return;
 		
 		int clen = 0;
 		for(int i = 0; i < cycle.length; i++) clen += cycle[i];
-		timer = new Timer(clen, new ActionListener(){
+		timers = new Timer[cycle.length];
+		
+		int i = 0; int del = 0;
+		if(cycle_callback != null){
+			//First one also does callback.
+			timers[i++] = new Timer(clen, new ActionListener(){
 
-			public void actionPerformed(ActionEvent e) {
-				onTickCycle();
-			}});
+				private int my_phase = 1;
+				
+				public void actionPerformed(ActionEvent e) {
+					
+					if(buff_stat == 0 || buff_stat == my_phase){
+						cycle_callback.doMethod();
+						onFrameTick(my_phase);	
+						if(buff_stat == my_phase) synchronized(buff_lock){buff_stat = 0;}
+					}
+				}});
+			timers[0].setInitialDelay(0);
+			del += cycle[0];
+		}
+		
+		while(i < cycle.length){
+			int j = i+1;
+			timers[i] = new Timer(clen, new ActionListener(){
+
+				private int my_phase = j;
+				
+				public void actionPerformed(ActionEvent e) {
+					if(buff_stat == 0 || buff_stat == my_phase){
+						onFrameTick(j);
+						if(buff_stat == my_phase) synchronized(buff_lock){buff_stat = 0;}
+					}
+				}});
+			
+			timers[i].setInitialDelay(del);
+			del += cycle[i];
+			i++;
+		}
 	
-		timer.start();
+		playing_flag = true;
+		for(Timer t : timers) t.start();
 	}
 	
 	private void stopPlayTimer(){
-		if(timer == null) return;
-		if(timer.isRunning()) timer.stop();
-		timer = null;
+		if(timers == null) return;
+		for(int i = 0; i < timers.length; i++){
+			timers[i].stop();
+			timers[i] = null;
+		}
+		timers = null;
+		playing_flag = false;
 	}
 	
-	public void play(){
-		if(src == null) return;
-		
-		//Resume or open new stream.
-		if(isPlaying()) return;
+	protected void unpausePlayTimer(){
+		if(timers == null) return;
+		for(int i = 0; i < timers.length; i++){
+			timers[i].start();
+		}
+		playing_flag = true;
+	}
+	
+	protected void pausePlayTimer(){
+		if(timers == null) return;
+		for(int i = 0; i < timers.length; i++){
+			timers[i].stop();
+		}
+		//playing_flag = false;
+	}
+	
+	public synchronized void open(){
 		if(str == null || str.done()){
 			if(str != null) str.close();
 			try {str = src.openStream();} 
@@ -437,17 +573,42 @@ public class BufferedVideoPanel extends JPanel{
 			}
 			time = 0; frame_idx = 0;
 		}
+	}
+	
+	public synchronized void play(){
+		if(src == null) return;
+		if(isPlaying()) return;
 		
-		startBufferWorker(); //Does nothing if already running or not in async mode
+		//Buffer
+		if(useAsyncBuffer) startBufferWorker(); //includes open
+		else{
+			open();
+			fillBuffer();
+		}
+
 		startPlayTimer();
 	}
 	
-	public void pause(){
+	public synchronized void quickPause(){
+		pausePlayTimer();
+	}
+	
+	public synchronized void quickUnpause(){
+		unpausePlayTimer();
+	}
+	
+	public synchronized void pause(){
 		stopPlayTimer();
+
+		//Sync with cycle start, if applicable
+		if(cycle.length != 1){
+			while(frame_idx % cycle.length != 0) onFrameTick(-2);
+		}
+		
 		repaint();
 	}
 	
-	public void stop(){
+	public synchronized void stop(){
 		stopPlayTimer();
 		stopBufferWorker();
 		
@@ -458,16 +619,19 @@ public class BufferedVideoPanel extends JPanel{
 			str = null;
 		}
 		
+		time = 0;
+		frame_idx = 0;
+		
 		repaint();
 	}
 	
-	public void rewind(){
+	public synchronized void rewind(){
 		stop();
 		str = null; //Next time it plays, will spawn new stream from beginning.
 		time = 0; frame_idx = 0;
 	}
 	
-	public void seek(int min, int sec, int frame){
+	public synchronized void seek(int min, int sec, int frame){
 		stop();
 		if(src == null) return;
 		
@@ -502,7 +666,7 @@ public class BufferedVideoPanel extends JPanel{
 		repaint();
 	}
 	
-	public void seek(int frame){
+	public synchronized void seek(int frame){
 		stop();
 		if(src == null) return;
 		
@@ -526,7 +690,7 @@ public class BufferedVideoPanel extends JPanel{
 		repaint();
 	}
 	
-	public void dispose(){
+	public synchronized void dispose(){
 		stop();
 		worker = null;
 		src = null;

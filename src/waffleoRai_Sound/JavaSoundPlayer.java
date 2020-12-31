@@ -10,6 +10,7 @@ import javax.sound.sampled.SourceDataLine;
 
 import waffleoRai_Compression.ArrayWindow;
 import waffleoRai_SoundSynth.AudioSampleStream;
+import waffleoRai_Utils.MathUtils;
 
 /*
  * UPDATES
@@ -44,7 +45,7 @@ public abstract class JavaSoundPlayer implements IAudioPlayer{
 	protected boolean syncMode; //For manual sample release to line.
 	
 	protected volatile boolean closeMe;
-	protected boolean closedFlag;
+	protected volatile boolean closedFlag;
 	protected boolean pauseFlag;
 	
 	//protected long loc_pb;
@@ -73,26 +74,33 @@ public abstract class JavaSoundPlayer implements IAudioPlayer{
 	}
 	
 	protected void calculateCycleFrames(){
-		//Uses sample rate and millis/cycle
 		
-		//How many times per second is buff called?
-		//(If uneven how many seconds needed for even div?)
-		int fullmillis = 500;
-		while(fullmillis % millis_per_cycle != 0){
-			fullmillis += 500;
-			if(fullmillis > 10000) break;
+		//Use the currently set millis per cycle as a minimum.
+		int gcf = MathUtils.gcf((int)source.getSampleRate(), millis_per_cycle);
+		//int cycles = 1;
+		if(gcf <= 1){
+			//Just make the cycle one second.
+			millis_per_cycle = 1000;
+			frames_per_cycle = new int[]{(int)source.getSampleRate()};
 		}
-		int cycles = fullmillis/millis_per_cycle;
-		frames_per_cycle = new int[cycles];
+		else{
+			//Div by gcf is smallest unit.
+			int millis = 1000/gcf;
+			int fpc = (int)source.getSampleRate()/gcf;
+			if(millis < millis_per_cycle){
+				//Increase it until it is above.
+				int factor = millis_per_cycle/millis;
+				if(millis_per_cycle%millis != 0) factor++;
+				millis_per_cycle = millis*factor;
+				fpc *= factor;
+			}
+			else millis_per_cycle = millis;
+			frames_per_cycle = new int[]{fpc};
+		}
 		
-		//Now, check the sample rate...
-		int sr = (int)source.getSampleRate();
-		int total = (int)Math.round((double)sr * (double)(fullmillis/1000));
-		int div = total/cycles;
-		int mod = total%cycles;
-		
-		for(int i = 0; i < cycles; i++) frames_per_cycle[i] = div;
-		frames_per_cycle[cycles-1] += mod;
+		/*System.err.println("Millis per cycle: " + millis_per_cycle);
+		System.err.print("Frames per cycle: ");
+		for(int i = 0; i < cycles; i++){System.err.print(frames_per_cycle[i] + " ");}*/
 	}
 	
 	/*--- Getters ---*/
@@ -169,6 +177,7 @@ public abstract class JavaSoundPlayer implements IAudioPlayer{
 		
 		try{
 			for(int f = 0; f < frames; f++){
+				if(closedFlag) return;
 				loc_buf++;
 				if(closeOnEnd && source.done()){
 					closeWhenFinished();
@@ -191,7 +200,7 @@ public abstract class JavaSoundPlayer implements IAudioPlayer{
 		synchronized(this){closeMe = true;}
 	}
 	
-	public void startTimer(){
+	public synchronized void startTimer(){
 		if(timer != null)timer.cancel();
 		
 		timer = new Timer(true);
@@ -221,10 +230,11 @@ public abstract class JavaSoundPlayer implements IAudioPlayer{
 			ct++;
 		}
 		
+		//System.err.println("Released " + ct);
 		return ct;
 	}
 	
-	public void play() throws LineUnavailableException{
+	public synchronized void play() throws LineUnavailableException{
 		if(closedFlag || isRunning()) return;
 		if(!pauseFlag) open();
 		startTimer();
@@ -232,7 +242,15 @@ public abstract class JavaSoundPlayer implements IAudioPlayer{
 		pauseFlag = false;
 	}
 	
-	public void pause(){
+	public synchronized void unpause(){
+		if(closedFlag || isRunning()) return;
+		if(!pauseFlag) return;
+		startTimer();
+		line.start();
+		pauseFlag = false;
+	}
+	
+	public synchronized void pause(){
 		if(closedFlag || !isRunning()) return;
 		line.stop();
 		timer.cancel();
@@ -241,11 +259,11 @@ public abstract class JavaSoundPlayer implements IAudioPlayer{
 		timer = null;
 	}
 	
-	public void stop(){
+	public synchronized void stop(){
 		close();
 	}
 	
-	public void open()throws LineUnavailableException{
+	public synchronized void open()throws LineUnavailableException{
 		if(closedFlag || isRunning()) return;
 		if(line != null) return;
 		
@@ -256,7 +274,7 @@ public abstract class JavaSoundPlayer implements IAudioPlayer{
 		
 	}
 	
-	public void close(){
+	public synchronized void close(){
 		if(closedFlag) return;
 		closedFlag = true;
 		if(line != null) line.stop();
