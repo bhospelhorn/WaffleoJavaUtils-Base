@@ -118,4 +118,16 @@ public class FileUtils {
 		return null;
 	}
 	
+	public static String bytes2str(byte[] byte_arr){
+		if(byte_arr == null) return "<NULL>";
+		
+		int chars = byte_arr.length << 1;
+		StringBuilder sb = new StringBuilder(chars+2);
+		
+		for(int i = 0; i < byte_arr.length; i++) sb.append(String.format("%02x", byte_arr[i]));
+		
+		return sb.toString();
+	}
+	
+	
 }

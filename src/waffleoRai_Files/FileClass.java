@@ -60,6 +60,7 @@ public enum FileClass {
 	
 	MOV_MOVIE(801),
 	MOV_VIDEO(802),
+	MOV_MULTIMEDIA_STR(803)
 	
 	;
 	

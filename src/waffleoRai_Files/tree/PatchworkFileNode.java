@@ -365,6 +365,25 @@ public class PatchworkFileNode extends FileNode{
 	
 	/* --- Debug --- */
 	
+	protected String getTypeString(){return "PatchworkFileNode";}
+	protected String getOffsetString(){return "<variable>";}
+	protected String getLengthString(){return "0x" + Long.toHexString(getLength());}
+	
+	protected void printReferenceTrace(int indents){
+		super.printReferenceTrace(indents);
+		
+		StringBuilder sb = new StringBuilder(indents+1);
+		for(int i = 0; i < indents; i++) sb.append('\t');
+		String tabs = sb.toString();
+		if(pieces != null){
+			int i = 0;
+			for(Piece p : pieces){
+				System.err.println(tabs + "Piece " + i++);
+				p.node.printReferenceTrace(indents+1);
+			}
+		}
+	}
+	
 	public void printMeToStdErr(int indents)
 	{
 		StringBuilder sb = new StringBuilder(128);

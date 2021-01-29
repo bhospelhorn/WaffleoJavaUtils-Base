@@ -35,6 +35,8 @@ import waffleoRai_Utils.Treenumeration;
  * 		Added getNodesThat()
  * 2020.10.26 | 2.1.0 -> 2.2.0
  * 		Added hasChildNamed()
+ * 2021.01.28 | 2.2.0 -> 2.2.1
+ * 		Added debug str functions
  */
 
 /**
@@ -43,8 +45,8 @@ import waffleoRai_Utils.Treenumeration;
  * a virtual directory.
  * <br> This class replaces the deprecated <code>VirDirectory</code> class.
  * @author Blythe Hospelhorn
- * @version 2.2.0
- * @since October 26, 2020
+ * @version 2.2.1
+ * @since January 28, 2021
  */
 public class DirectoryNode extends FileNode{
 
@@ -737,6 +739,10 @@ public class DirectoryNode extends FileNode{
 	}
 	
 	/* --- Debug --- */
+	
+	protected String getTypeString(){return "DirectoryNode";}
+	protected String getOffsetString(){return "N/A";}
+	protected String getLengthString(){return "N/A";}
 	
 	public void printMeToStdErr(int indents)
 	{

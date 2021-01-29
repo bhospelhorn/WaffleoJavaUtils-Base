@@ -29,7 +29,15 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 2020.11.15 | 2.2.0
  * 		Now records block sizes to super class
  * 		Again gutted loadDirect() to use RawDiskBuffer
- * 
+ * 2021.01.14 | 2.3.0
+ * 		Added getRawDataNode()
+ * 2021.01.17 | 2.3.1
+ * 		A quick patch in loadDirect() that tries to guess whether coordinates
+ * 			are raw or data from superclass block sizes. It's a quickfix, so
+ * 			if there are coordinate or optimization issues again, maybe just don't
+ * 			set the superclass blocksize?
+ * 2021.01.28 | 2.3.2
+ * 		Ref trace methods
  */
 
 /**
@@ -37,8 +45,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * references offsets by sector (noting sector type) instead of byte offset.
  * This way, sector checksum data can be included or excluded as needed.
  * @author Blythe Hospelhorn
- * @version 2.2.0
- * @since November 15, 2020
+ * @version 2.3.2
+ * @since January 28, 2021
  */
 public class ISOFileNode extends FileNode{
 	
@@ -206,6 +214,37 @@ public class ISOFileNode extends FileNode{
 		}
 	}
 	
+	/**
+	 * Get a new <code>FileNode</code> referencing the raw data referenced
+	 * by this <code>ISOFileNode</code>. In other words, this new node
+	 * reveals all of the data backed by this node, not skipping sector
+	 * metadata.
+	 * <br><b>Note:</b> In order to avoid tree breaking, <i>the new node will NOT
+	 * have a parent node, and the generated name will be a copy name.</i>
+	 * @return <code>FileNode</code> referencing this node's full raw data.
+	 * @since 2.3.0
+	 */
+	public FileNode getRawDataNode(){
+		int secSize = getSectorTotalSize();
+		int secCount = getLengthInSectors();
+		
+		long newoff = (long)secSize * getOffset();
+		long newlen = (long)secSize * (long)secCount;
+		
+		FileNode raw = new FileNode(null, super.getFileName() + "_RAW");
+		if(hasVirtualSource()){
+			raw.setVirtualSourceNode(getVirtualSource());
+		}
+		else{
+			raw.setSourcePath(getSourcePath());
+		}
+		raw.setOffset(newoff);
+		raw.setLength(newlen);
+		raw.generateGUID();
+		
+		return raw;
+	}
+	
 	protected FileBuffer loadDataFilterBuff(long stsec, long edsec, boolean forceCache) throws IOException{
 		FileBuffer raw = loadRawData(stsec, edsec - stsec, forceCache);
 		return new EncryptedFileBuffer(raw, new DiskDataFilter(sector_head_size, sector_data_size, sector_foot_size));
@@ -225,10 +264,24 @@ public class ISOFileNode extends FileNode{
 	}
 	
 	protected FileBuffer loadDirect(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
+		//System.err.println("ISOFileNode.loadDirect || Called: stpos = 0x" + Long.toHexString(stpos) + " | len = 0x" + Long.toHexString(len));
+		
 		//Convert position coordinates to sectors
 		long edpos = stpos + len;
-		long stsec = stpos/(long)sector_data_size;
-		long edsec = edpos/(long)sector_data_size;
+		long stsec = -1L;
+		long edsec = -1L;
+		
+		if(super.getInputBlockSize() != super.getOutputBlockSize()){
+			//Assume it's in raw coordinates
+			stsec = stpos/(long)super.getInputBlockSize();
+			edsec = edpos/(long)super.getInputBlockSize();
+		}
+		else{
+			//Assume it's in data coordinates
+			stsec = stpos/(long)sector_data_size;
+			edsec = edpos/(long)sector_data_size;
+		}
+		//System.err.println("ISOFileNode.loadDirect || Node start sec: " + super.getOffset() + " | rel start sec: " + stsec);
 		
 		//Scan encryption chain to see if sector header/footer stuff is needed
 		boolean dodec = false;
@@ -428,6 +481,10 @@ public class ISOFileNode extends FileNode{
 	}
 	
 	/* --- Debug --- */
+	
+	protected String getTypeString(){return "ISOFileNode";}
+	protected String getOffsetString(){return "Sector " + getOffset();}
+	protected String getLengthString(){return "0x" + Long.toHexString(getLength()) + " bytes";}
 	
 	public void printMeToStdErr(int indents)
 	{

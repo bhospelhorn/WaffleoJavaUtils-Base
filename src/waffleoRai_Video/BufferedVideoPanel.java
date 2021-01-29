@@ -266,6 +266,7 @@ public class BufferedVideoPanel extends JPanel{
 	
 	public void setVideo(IVideoSource vid){
 		stop();
+		src = vid;
 		
 		if(src != null){
 			this.setPreferredSize(new Dimension(src.getWidth(), src.getHeight()));

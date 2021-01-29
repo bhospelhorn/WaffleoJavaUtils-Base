@@ -70,6 +70,9 @@ import waffleoRai_Utils.Treenumeration;
  * 
  * 2020.12.26 | 3.3.3 -> 3.4.0
  * 	Created a static method that generates a FileNode for a file on disk.
+ * 
+ * 2021.01.28 | 3.4.0 -> 3.5.0
+ * 	Ref trace methods
  */
 
 /**
@@ -82,8 +85,8 @@ import waffleoRai_Utils.Treenumeration;
  * within files on disk (such as archives or device images).
  * <br> This class replaces the deprecated <code>VirFile</code> class.
  * @author Blythe Hospelhorn
- * @version 3.4.0
- * @since December 26, 2020
+ * @version 3.5.0
+ * @since January 28, 2021
  */
 public class FileNode implements TreeNode, Comparable<FileNode>{
 	
@@ -1744,6 +1747,51 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		//String end = "0x" + Long.toHexString(offset + length);
 		
 		out.write(tabs + "->" + this.fileName + " (" + getLocationString() + ")\n");	
+	}
+	
+	protected String getTypeString(){return "FileNode";}
+	protected String getOffsetString(){return "0x" + Long.toHexString(getOffset());}
+	protected String getLengthString(){return "0x" + Long.toHexString(getLength());}
+	
+	protected void printReferenceTrace(int indents){
+		StringBuilder sb = new StringBuilder(indents+1);
+		for(int i = 0; i < indents; i++) sb.append('\t');
+		String tabs = sb.toString();
+		
+		//Print me.
+		System.err.println(tabs + getFullPath());
+		System.err.println(tabs + "UID: " + Long.toHexString(getGUID()));
+		System.err.println(tabs + "Class: " + getTypeString());
+		if(hasVirtualSource()) System.err.println(tabs + "Source: <virtual>");
+		else System.err.println(tabs + "Source: " + getSourcePath());
+		System.err.println(tabs + "Offset: " + getOffsetString());
+		System.err.println(tabs + "Length: " + getLengthString());
+		if(blocksize_in != -1) System.err.println(tabs + "Input Blocksize: 0x" + Integer.toHexString(blocksize_in));
+		if(blocksize_out != -1) System.err.println(tabs + "Output Blocksize: 0x" + Integer.toHexString(blocksize_out));
+		System.err.println(tabs + "Is Encrypted: " + hasEncryption());
+		System.err.println(tabs + "Is Compressed: " + hasCompression());
+		System.err.println(tabs + "Inside Compressed Container: " + sourceDataCompressed());
+		
+		//Print compression container chain
+		if(container != null){
+			System.err.println(tabs + "Compressed Container: ");
+			container.printReferenceTrace(indents+1);
+		}
+		
+		//Print source chain
+		if(sourceNode != null){
+			System.err.println(tabs + "Virtual Source Node: ");
+			sourceNode.printReferenceTrace(indents+1);
+		}
+		
+	}
+	
+	/**
+	 * Print details of this node and its data sources recursively to stderr.
+	 * @since 3.5.0
+	 */
+	public void printReferenceTrace(){
+		printReferenceTrace(0);	
 	}
 	
 }

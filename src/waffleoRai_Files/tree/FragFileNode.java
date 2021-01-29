@@ -238,6 +238,20 @@ public class FragFileNode extends FileNode{
 	
 	/* --- Debug --- */
 	
+	protected String getTypeString(){return "FragFileNode";}
+	
+	protected String getOffsetString(){
+		String s = "";
+		for(long[] block : block_locs){
+			s+="[";
+			s+="0x" + Long.toHexString(block[0]);
+			s+=" - 0x";
+			s+= Long.toHexString(block[0] + block[1]);
+			s+="]";
+		}
+		return s;
+	}
+	
 	public void printMeToStdErr(int indents)
 	{
 		StringBuilder sb = new StringBuilder(128);

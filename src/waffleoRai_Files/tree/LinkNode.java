@@ -16,7 +16,8 @@ import waffleoRai_Files.FileTypeNode;
  * 	Initial documentation
  * 	Update for compatibility w/ FileNode 3.0.0
  * 	Uses the superclass virtual source for link instead of its own instance var
- * 
+ * 2021.01.28 | 2.0.1 
+ * 	Ref tracing methods
  */
 
 /**
@@ -24,8 +25,8 @@ import waffleoRai_Files.FileTypeNode;
  * tree with its own unique path and UID, but references another <code>FileNode</code>
  * as a data source.
  * @author Blythe Hospelhorn
- * @version 2.0.0
- * @since August 29, 2020
+ * @version 2.0.1
+ * @since January 28, 2021
  */
 public class LinkNode extends FileNode{
 	
@@ -229,6 +230,8 @@ public class LinkNode extends FileNode{
 	}
 	
 	/* --- Debug --- */
+	
+	protected String getTypeString(){return "LinkNode";}
 	
 	public void printMeToStdErr(int indents)
 	{

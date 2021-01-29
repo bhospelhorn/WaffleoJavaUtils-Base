@@ -26,6 +26,8 @@ import java.util.Collection;
  * 	3.0.4 -> 3.1.0 | Added writeToStream()
  * 2020.11.03
  * 	3.1.0 -> 3.1.1 | Updated createCopy() to handle block-aligned sources properly!
+ * 2021.01.28
+ * 	3.1.1 -> 3.1.2 | Debugging and error reporting offset rejections
  * 
  * */
 
@@ -35,13 +37,15 @@ import java.util.Collection;
  * Because this is basically just a wrapper for a reference to an existing buffer,
  * all write functions will throw an exception when called.
  * @author Blythe Hospelhorn
- * @version 3.1.1
- * @since November 3, 2020
+ * @version 3.1.2
+ * @since January 28, 2021
  */
 public class ROSubFileBuffer extends FileBuffer{
 
 	private long posZero;
 	private long posEnd;
+	
+	private int invalid_off_error;
 	
 	private FileBuffer parent;
 	
@@ -82,6 +86,26 @@ public class ROSubFileBuffer extends FileBuffer{
 		if (!this.offsetValid(locPos)){
 			System.err.println("ROSubFileBuffer.getPosition || Invalid position found: 0x" + Long.toHexString(locPos));
 			//System.err.println("ROSubFileBuffer.getPosition || Parent is null? " + (parent == null));
+			switch(invalid_off_error){
+			case 1: System.err.println("Reason: Parent reference is null"); break;
+			case 2: System.err.println("Reason: File is empty"); break;
+			case 3: System.err.println("Reason: Offset is less than 0x0"); break;
+			case 4: System.err.println("Reason: File reference offset exceeds size of source"); break;
+			case 5: System.err.println("Reason: Offset exceeds reference size 0x" + Long.toHexString(posEnd-posZero)); break;
+			case 6: System.err.println("Reason: Offset exceeds source size 0x" + Long.toHexString(parent.getFileSize())); break;
+			default: System.err.println("Reason: unknown"); break;
+			}
+			
+			System.err.println("DEBUG Info --");
+			System.err.println("Requested Offset: 0x" + Long.toHexString(locPos));
+			System.err.println("posZero: 0x" + Long.toHexString(posZero));
+			System.err.println("posEnd: 0x" + Long.toHexString(posEnd));
+			System.err.println("Size: 0x" + Long.toHexString(this.getFileSize()));
+			if(parent != null){
+				System.err.println("Parent Class: " + parent.getClass());	
+				System.err.println("Parent Size: 0x" + Long.toHexString(parent.getFileSize()));
+			}
+			
 			throw new IndexOutOfBoundsException();
 		}
 		return locPos + posZero;
@@ -90,7 +114,8 @@ public class ROSubFileBuffer extends FileBuffer{
 	private long[] checkPositionPair(long stPos, long edPos)
 	{
 		long[] offs = new long[2];
-		if (stPos >= edPos) throw new IndexOutOfBoundsException();
+		if (stPos >= edPos) throw new IndexOutOfBoundsException("Start offset 0x" + Long.toHexString(stPos) + 
+				" exceeds end offset 0x" + Long.toHexString(edPos));
 		if (stPos < 0) stPos = 0;
 		if (edPos - stPos > this.getFileSize()) edPos = this.getFileSize() - stPos;
 		stPos = getPosition(stPos);
@@ -194,14 +219,14 @@ public class ROSubFileBuffer extends FileBuffer{
 		  return offsetValid((long)off);
 	  }
 	  
-	  public boolean offsetValid(long off)
-	  {
-		  if (parent == null) return false;
-		  if (this.getFileSize() <= 0) return false;
-		  if (off < 0) return false;
-		  if (posZero >= parent.getFileSize()) return false;
-		  if (posZero + off >= posEnd) return false;
-		  if (posZero + off >= parent.getFileSize()) return false;
+	  public boolean offsetValid(long off){
+		  invalid_off_error = 0;
+		  if (parent == null){invalid_off_error = 1; return false;}
+		  if (this.getFileSize() <= 0) {invalid_off_error = 2; return false;}
+		  if (off < 0) {invalid_off_error = 3; return false;}
+		  if (posZero >= parent.getFileSize()) {invalid_off_error = 4; return false;}
+		  if (posZero + off >= posEnd) {invalid_off_error = 5; return false;}
+		  if (posZero + off >= parent.getFileSize()) {invalid_off_error = 6; return false;}
 		  return true;
 	  }
 	  
