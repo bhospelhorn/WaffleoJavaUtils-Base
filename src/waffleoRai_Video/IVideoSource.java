@@ -17,5 +17,6 @@ public interface IVideoSource {
 	public VideoFrameStream openStreamAt(int frame) throws IOException;
 	
 	public int getRawDataFormat();
+	public int getRawDataColorspace();
 	
 }
