@@ -9,7 +9,8 @@ import waffleoRai_SoundSynth.AudioSampleStream;
  * 
  * 201219 | 1.0.0
  * 	Creation/Initial Doc 
- * 
+ * 210131 | 1.1.0
+ * 	Added master volume control method 
  * 
  */
 
@@ -18,8 +19,8 @@ import waffleoRai_SoundSynth.AudioSampleStream;
  * Should handle any kind of system resource acquisition, buffering,
  * timing, and conversion between samples and bytes.
  * @author Blythe Hospelhorn
- * @version 1.0.0
- * @since December 19, 2020
+ * @version 1.1.0
+ * @since January 31, 2021
  */
 public interface IAudioPlayer {
 
@@ -90,6 +91,40 @@ public interface IAudioPlayer {
 	 * @since 1.0.0
 	 */
 	public long getBufferLocation();
+	
+	/**
+	 * Set the master output volume of this player.
+	 * @param factor Value from 0x0 - 0x7fffffff representing
+	 * the proportion relative to 0x7fffffff the total volume should
+	 * be set to. Negative values are taken to be 0.
+	 * @since 1.1.0
+	 */
+	public void setMasterVolume(int factor);
+	
+	/**
+	 * Set the master output volume of this player.
+	 * @param amt Ratio relative to 1.0 to set the master volume to.
+	 * Values < 0.0 are set to 0.0. 
+	 * @since 1.1.0
+	 */
+	public void setMasterVolume(float amt);
+	
+	/**
+	 * Gets whether this player has the ability to have its master
+	 * volume adjusted.
+	 * @return True if player reacts to master volume changes. False if
+	 * not.
+	 * @since 1.1.0
+	 */
+	public boolean masterVolumeEnabled();
+	
+	/**
+	 * Set whether this player is on mute.
+	 * @param b True to mute, false to unmute.
+	 * @return Current mute value
+	 * @since 1.1.0
+	 */
+	public boolean setMute(boolean b);
 	
 	/**
 	 * Begin playback of the input audio stream. If the player/line

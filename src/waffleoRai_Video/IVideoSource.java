@@ -16,4 +16,6 @@ public interface IVideoSource {
 	public VideoFrameStream openStreamAt(int min, int sec, int frame) throws IOException;
 	public VideoFrameStream openStreamAt(int frame) throws IOException;
 	
+	public int getRawDataFormat();
+	
 }

@@ -82,14 +82,15 @@ public class ISOXAImage extends ISO9660Image {
 				//Uses full paths in name
 				ISOFileNode node = new ISOFileNode(null, "");
 				node.setOffset(e.getStartBlock());
-				//node.setLength(e.getSizeInSectors());
 				node.setLength(e.getFileSize());
+				//node.setLength(e.getSizeInSectors());
 				if(e.isMode2()){
 					if(e.isForm2()) node.setMode2Form2();
 					else node.setMode2Form1();
 				}
 				if(e.isCDDA()) node.setAudioMode();
 				//System.err.println("Found entry: " + e.getName());
+				//System.err.println("Entry file size: 0x" + Long.toHexString(e.getFileSize()));
 				String addpath = null;
 				if(e.isRawFile()) addpath = raw_dir + "\\" + e.getName();
 				else addpath = vident + "\\" + e.getName();

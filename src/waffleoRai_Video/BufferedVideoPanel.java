@@ -55,6 +55,9 @@ public class BufferedVideoPanel extends JPanel{
 	private int[] cycle;
 	//private int cycle_ctr;
 	
+	//private Timer debug_tmr;
+	//private volatile long debug_time;
+	
 	private boolean lock_aspect_ratio;
 	private boolean click_sensitive;
 	private boolean showPause;
@@ -270,7 +273,7 @@ public class BufferedVideoPanel extends JPanel{
 		
 		if(src != null){
 			this.setPreferredSize(new Dimension(src.getWidth(), src.getHeight()));
-			buffer_size = (1000/src.millisPerFrame()) + 1;
+			buffer_size = (int)src.getFrameRate()+1;
 			aspect_ratio = (double)src.getWidth()/(double)src.getHeight();
 			
 			if(fr_snap && MathUtils.isInteger(src.getFrameRate())) calculateCycle();
@@ -307,7 +310,10 @@ public class BufferedVideoPanel extends JPanel{
 
 				//Render next frame
 				BufferedImage frame = str.getNextFrame();
-				if(str.done()) endFlag = true;
+				if(str.done()){
+					System.err.println("Buffer thread: video end detected");
+					endFlag = true;
+				}
 				if(frame == null){return;}//Some weird problem...
 				
 				buffer.add(frame);
@@ -318,7 +324,10 @@ public class BufferedVideoPanel extends JPanel{
 					//Buffer a couple more frames then update status.
 					for (int j = 0; j < 3; j++){
 						frame = str.getNextFrame();
-						if(str.done()) endFlag = true;
+						if(str.done()){
+							System.err.println("Buffer thread: video end detected");
+							endFlag = true;
+						}
 						if(frame == null){break;}
 						buffer.add(frame);
 					}
@@ -344,7 +353,9 @@ public class BufferedVideoPanel extends JPanel{
 		if(endFlag) return true;
 		
 		while(buffer.size() < buffer_size){
-			if(str.done()) {endFlag = true; return true;}
+			if(str.done()) {
+				System.err.println("Buffer thread: video end detected"); 
+				endFlag = true; return true;}
 			buffer.add(str.getNextFrame());
 		}
 		return true;
@@ -463,11 +474,13 @@ public class BufferedVideoPanel extends JPanel{
 	private boolean onFrameTick(int phase){
 		//if(str == null) return;
 		frame_idx++;
+		//System.err.println("Phase " + phase + " time: " + debug_time);
 		//time += src.millisPerFrame();
 		if(buffer.isEmpty()){
 			//Render a new one or check if end...
 			System.err.println("WARNING: Buffer empty!");
 			if(endFlag || str.done()){
+				System.err.println("Render thread: video end detected"); 
 				atStreamEnd();
 				return false; //Didn't render a new one
 			}
@@ -485,6 +498,7 @@ public class BufferedVideoPanel extends JPanel{
 	}
 	
 	private void atStreamEnd(){
+		System.err.println("Render thread: atStreamEnd() called");
 		stop();
 		if(end_callback != null) end_callback.doMethod();
 	}
@@ -495,7 +509,15 @@ public class BufferedVideoPanel extends JPanel{
 		
 		int clen = 0;
 		for(int i = 0; i < cycle.length; i++) clen += cycle[i];
+		System.err.println("clen = " + clen);
 		timers = new Timer[cycle.length];
+		
+		/*debug_tmr = new Timer(200, new ActionListener(){
+			public void actionPerformed(ActionEvent e) {
+				debug_time++;
+			}
+		});
+		debug_tmr.start();*/
 		
 		int i = 0; int del = 0;
 		if(cycle_callback != null){
@@ -513,6 +535,8 @@ public class BufferedVideoPanel extends JPanel{
 					}
 				}});
 			timers[0].setInitialDelay(0);
+			timers[0].setDelay(clen);
+			//Timer.setLogTimers(true);
 			del += cycle[0];
 		}
 		
@@ -530,6 +554,7 @@ public class BufferedVideoPanel extends JPanel{
 				}});
 			
 			timers[i].setInitialDelay(del);
+			timers[i].setDelay(clen);
 			del += cycle[i];
 			i++;
 		}
@@ -546,6 +571,8 @@ public class BufferedVideoPanel extends JPanel{
 		}
 		timers = null;
 		playing_flag = false;
+		
+		//if(debug_tmr != null) debug_tmr.stop();
 	}
 	
 	protected void unpausePlayTimer(){

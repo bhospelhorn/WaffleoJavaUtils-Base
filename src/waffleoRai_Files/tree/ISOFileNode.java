@@ -38,6 +38,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 			set the superclass blocksize?
  * 2021.01.28 | 2.3.2
  * 		Ref trace methods
+ * 2021.01.31 | 2.3.3
+ * 		Hopefully fixed bug recalculating length of raw node
  */
 
 /**
@@ -45,8 +47,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * references offsets by sector (noting sector type) instead of byte offset.
  * This way, sector checksum data can be included or excluded as needed.
  * @author Blythe Hospelhorn
- * @version 2.3.2
- * @since January 28, 2021
+ * @version 2.3.3
+ * @since January 31, 2021
  */
 public class ISOFileNode extends FileNode{
 	
@@ -155,18 +157,27 @@ public class ISOFileNode extends FileNode{
 	
 	/**
 	 * Directly set the sector header, footer, and data sizes.
+	 * <br>This method also updates the length to match the new
+	 * data size.
 	 * @param head Header size in bytes.
 	 * @param dat Data size in bytes.
 	 * @param foot Footer size in bytes.
 	 * @since 1.0.0
 	 */
 	public void setSectorDataSizes(int head, int dat, int foot){
+		//Get length
+		long oldlen_s = this.getLengthInSectors();
+		//System.err.println("");
+		
 		this.sector_head_size = head;
 		this.sector_data_size = dat;
 		this.sector_foot_size = foot;
 		
 		//set super loaders too
 		super.setBlockSize(getSectorTotalSize(), sector_data_size);
+		
+		//Update length
+		super.setLength(oldlen_s * sector_data_size);
 	}
 	
 	/* --- Data Handling --- */
@@ -230,6 +241,11 @@ public class ISOFileNode extends FileNode{
 		
 		long newoff = (long)secSize * getOffset();
 		long newlen = (long)secSize * (long)secCount;
+		
+		//System.err.println("secSize: 0x" + Integer.toHexString(secSize));
+		//System.err.println("secCount: " + secCount);
+		//System.err.println("newoff: 0x" + Long.toHexString(newoff));
+		//System.err.println("newlen: 0x" + Long.toHexString(newlen));
 		
 		FileNode raw = new FileNode(null, super.getFileName() + "_RAW");
 		if(hasVirtualSource()){

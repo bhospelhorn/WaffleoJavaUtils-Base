@@ -10,6 +10,7 @@ public interface VideoFrameStream {
 	
 	public int getFrameCount();	
 	public BufferedImage getNextFrame();
+	public byte[] getNextFrameData();
 	public boolean done();
 	
 	public boolean rewindEnabled();

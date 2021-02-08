@@ -14,6 +14,7 @@ import waffleoRai_Utils.VoidCallbackMethod;
 
 import java.awt.GridBagLayout;
 import java.awt.Image;
+import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.GridBagConstraints;
 import java.awt.Insets;
@@ -72,6 +73,8 @@ public class AVPlayerPanel extends DisposableJPanel{
 	private volatile boolean playing;
 	private volatile boolean lock_slider;
 	private volatile boolean pauseFlag;
+	private volatile boolean mute;
+	private volatile float vol;
 	//private boolean endFlag;
 	
 	private int[] a_cycle; //Audio samples to release per video frame cycle.
@@ -90,6 +93,9 @@ public class AVPlayerPanel extends DisposableJPanel{
 	private int now_min;
 	private int now_sec;
 	
+	private JSlider sldVol;
+	private JButton btnMute;
+	
 	/*----- Initialization -----*/
 	
 	public AVPlayerPanel(IVideoSource video, Sound audio, boolean clickControl, boolean hoverPause, boolean snap_framerate){
@@ -98,6 +104,7 @@ public class AVPlayerPanel extends DisposableJPanel{
 		click_sensitive = clickControl;
 		showPause = hoverPause;
 		fr_snap = snap_framerate;
+		vol = 1;
 		
 		initGUI();
 		
@@ -119,8 +126,8 @@ public class AVPlayerPanel extends DisposableJPanel{
 		gridBagLayout = new GridBagLayout();
 		gridBagLayout.columnWidths = new int[]{0};
 		gridBagLayout.rowHeights = new int[]{0};
-		gridBagLayout.columnWeights = new double[]{1.0, Double.MIN_VALUE};
-		gridBagLayout.rowWeights = new double[]{1.0, Double.MIN_VALUE};
+		gridBagLayout.columnWeights = new double[]{1.0};
+		gridBagLayout.rowWeights = new double[]{1.0};
 		pnlVWrap.setLayout(gridBagLayout);
 		GridBagConstraints gbc_pnlVideo = new GridBagConstraints();
 		gbc_pnlVideo.insets = new Insets(0, 0, 5, 0);
@@ -205,15 +212,15 @@ public class AVPlayerPanel extends DisposableJPanel{
 		gbc_pnlControls.gridy = 2;
 		add(pnlControls, gbc_pnlControls);
 		GridBagLayout gbl_pnlControls = new GridBagLayout();
-		gbl_pnlControls.columnWidths = new int[]{0, 0, 0, 0, 0};
+		gbl_pnlControls.columnWidths = new int[]{0, 0, 0, 0, 0, 100, 0};
 		gbl_pnlControls.rowHeights = new int[]{0, 0};
-		gbl_pnlControls.columnWeights = new double[]{0.0, 0.0, 0.0, 1.0, Double.MIN_VALUE};
+		gbl_pnlControls.columnWeights = new double[]{0.0, 0.0, 0.0, 1.0, 0.0, 0.0, Double.MIN_VALUE};
 		gbl_pnlControls.rowWeights = new double[]{0.0, Double.MIN_VALUE};
 		pnlControls.setLayout(gbl_pnlControls);
 		
 		btnPlayPause = new JButton("Play");
 		GridBagConstraints gbc_btnPlayPause = new GridBagConstraints();
-		gbc_btnPlayPause.insets = new Insets(5, 5, 5, 2);
+		gbc_btnPlayPause.insets = new Insets(5, 5, 0, 5);
 		gbc_btnPlayPause.gridx = 0;
 		gbc_btnPlayPause.gridy = 0;
 		pnlControls.add(btnPlayPause, gbc_btnPlayPause);
@@ -235,7 +242,7 @@ public class AVPlayerPanel extends DisposableJPanel{
 		
 		btnStop = new JButton("Stop");
 		GridBagConstraints gbc_btnStop = new GridBagConstraints();
-		gbc_btnStop.insets = new Insets(5, 2, 5, 2);
+		gbc_btnStop.insets = new Insets(5, 2, 0, 5);
 		gbc_btnStop.gridx = 1;
 		gbc_btnStop.gridy = 0;
 		pnlControls.add(btnStop, gbc_btnStop);
@@ -255,7 +262,7 @@ public class AVPlayerPanel extends DisposableJPanel{
 		
 		btnRewind = new JButton("Rewind");
 		GridBagConstraints gbc_btnRewind = new GridBagConstraints();
-		gbc_btnRewind.insets = new Insets(5, 2, 5, 2);
+		gbc_btnRewind.insets = new Insets(5, 2, 0, 5);
 		gbc_btnRewind.gridx = 2;
 		gbc_btnRewind.gridy = 0;
 		pnlControls.add(btnRewind, gbc_btnRewind);
@@ -269,6 +276,34 @@ public class AVPlayerPanel extends DisposableJPanel{
 		btnRewind.addActionListener(new ActionListener(){
 			public void actionPerformed(ActionEvent e) {
 				onRewindButton();
+			}
+		});
+		
+		btnMute = new JButton("Mute");
+		GridBagConstraints gbc_btnMute = new GridBagConstraints();
+		gbc_btnMute.fill = GridBagConstraints.HORIZONTAL;
+		gbc_btnMute.insets = new Insets(5, 0, 0, 5);
+		gbc_btnMute.gridx = 4;
+		gbc_btnMute.gridy = 0;
+		pnlControls.add(btnMute, gbc_btnMute);
+		btnMute.addActionListener(new ActionListener(){
+			public void actionPerformed(ActionEvent e) {
+				setMute(!mute);
+			}
+		});
+		
+		sldVol = new JSlider();
+		sldVol.setValue(100);
+		GridBagConstraints gbc_sldVol = new GridBagConstraints();
+		gbc_sldVol.insets = new Insets(5, 2, 0, 5);
+		gbc_sldVol.fill = GridBagConstraints.BOTH;
+		gbc_sldVol.gridx = 5;
+		gbc_sldVol.gridy = 0;
+		pnlControls.add(sldVol, gbc_sldVol);
+		sldVol.addChangeListener(new ChangeListener(){
+			public void stateChanged(ChangeEvent e) {
+				int val = sldVol.getValue();
+				setMasterVolume((float)((double)val/100.0));
 			}
 		});
 		
@@ -324,6 +359,40 @@ public class AVPlayerPanel extends DisposableJPanel{
 	}
 	
 	/*----- Setters -----*/
+	
+	public void setVideo(IVideoSource vid){
+		stop();
+		setWait();
+		
+		v_src = vid;
+		if(v_src != null) vframes = v_src.getFrameCount();
+		pnlVideo.setVideo(v_src);
+		
+		unsetWait();
+	}
+	
+	public void setAudio(Sound aud){
+		stop();
+		setWait();
+		
+		a_src = aud;
+		calculateAudioCycle();
+		
+		unsetWait();
+	}
+	
+	public void setAV(IVideoSource vid, Sound aud){
+		stop();
+		setWait();
+		
+		v_src = vid;
+		a_src = aud;
+		if(v_src != null) vframes = v_src.getFrameCount();
+		calculateAudioCycle();
+		pnlVideo.setVideo(v_src);
+		
+		unsetWait();
+	}
 	
 	/*----- GUI -----*/
 	
@@ -559,7 +628,9 @@ public class AVPlayerPanel extends DisposableJPanel{
 		}
 		
 		//audioPlayer.setSyncedMode(true);
+		audioPlayer.setMasterVolume(vol);
 		audioPlayer.setPrebuffCycles(5);
+		sldVol.setEnabled(audioPlayer.masterVolumeEnabled());
 	}
 	
 	/*----- Actions -----*/
@@ -583,6 +654,7 @@ public class AVPlayerPanel extends DisposableJPanel{
 	}
 	
 	private void videoEndCallback(){
+		System.err.println("AV Player: videoEndCallback() called");
 		stop();
 	}
 	
@@ -603,6 +675,21 @@ public class AVPlayerPanel extends DisposableJPanel{
 	}
 	
 	/*----- Control -----*/
+	
+	public void setMute(boolean b){
+		if(audioPlayer == null) mute = false;
+		else mute = audioPlayer.setMute(b);
+		
+		if(mute) btnMute.setForeground(Color.blue);
+		else btnMute.setForeground(Color.black);
+		btnMute.repaint();
+	}
+	
+	public void setMasterVolume(float amt){
+		vol = amt;
+		if(audioPlayer == null) return;
+		audioPlayer.setMasterVolume(amt);
+	}
 	
 	public void openBuffer(){
 		setWait();
