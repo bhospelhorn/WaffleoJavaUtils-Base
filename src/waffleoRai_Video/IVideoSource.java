@@ -18,5 +18,6 @@ public interface IVideoSource {
 	
 	public int getRawDataFormat();
 	public int getRawDataColorspace();
+	public boolean rawOutputAnalogColor();
 	
 }
