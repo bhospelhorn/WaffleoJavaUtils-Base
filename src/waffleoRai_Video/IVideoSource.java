@@ -11,6 +11,7 @@ public interface IVideoSource {
 	
 	public double getFrameRate();
 	public int millisPerFrame();
+	public VideoIO.Rational getFrameRateRational();
 	
 	public VideoFrameStream openStream() throws IOException;
 	public VideoFrameStream openStreamAt(int min, int sec, int frame) throws IOException;

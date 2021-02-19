@@ -18,4 +18,9 @@ public class VideoIO {
 	public static final int CLRSPACE_YUV_HD = 4;
 	public static final int CLRSPACE_YUV_2020 = 5;
 	
+	public static class Rational{
+		public int numerator;
+		public int denominator;
+	}
+	
 }
