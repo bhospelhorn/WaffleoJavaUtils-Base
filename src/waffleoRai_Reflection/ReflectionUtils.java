@@ -1,6 +1,7 @@
 package waffleoRai_Reflection;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -19,6 +20,11 @@ public class ReflectionUtils {
 	
 	private static List<ExtURLClassLoader> my_loaders;
 	private static List<ClassLoader> other_loaders;
+	
+	public static Path getLoadedClassFileSource(Class<?> myclass) throws URISyntaxException{
+		//https://stackoverflow.com/questions/320542/how-to-get-the-path-of-a-running-jar-file
+		return Paths.get(myclass.getProtectionDomain().getCodeSource().getLocation().toURI());
+	}
 	
 	public static Collection<URL> scanJAR(String jarpath) throws IOException{
 		JarFile myjar = new JarFile(jarpath);
