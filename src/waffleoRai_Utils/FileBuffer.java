@@ -104,6 +104,8 @@ import java.util.TimeZone;
  * 	3.11.0 -> 3.11.1 | Added descriptions to exception throws in createCopy()
  * */
 
+//TODO Bug found - looks like there are issues with writeToStream if overflow is being used - (won't write overflow)
+
 /**
  * Memory buffer internally implemented as a byte array to hold raw file data.
  * Includes a number of methods specific to file processing and disk I/O.
