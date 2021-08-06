@@ -29,6 +29,7 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 	
 	private SingleBank[] iBanks;
 	private Map<String, SoundSample> samples;
+	private Map<String, SimpleInstrument> miscInst;
 	
 	public SimpleBank(String name, String version, String vendor, int maxBanks)
 	{
@@ -40,6 +41,7 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 		iBanks = new SingleBank[maxBanks];
 		sDescription = "";
 		samples = new ConcurrentHashMap<String, SoundSample>();
+		miscInst = new ConcurrentHashMap<String, SimpleInstrument>();
 	}
 	
 	@Override
@@ -86,6 +88,18 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 		return rarr;
 	}
 
+	public SimpleInstrument newInstrument(String name, int maxRegions){
+		SimpleInstrument inst = new SimpleInstrument(name, maxRegions);
+		miscInst.put(name, inst);
+		return inst;
+	}
+	
+	public List<SimpleInstrument> getLooseInstruments(){
+		List<SimpleInstrument> list = new ArrayList<SimpleInstrument>(miscInst.size()+1);
+		list.addAll(miscInst.values());
+		return list;
+	}
+	
 	@Override
 	public Instrument[] getInstruments() 
 	{
@@ -217,7 +231,7 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 				}
 			}
 		}
-		
+		ilist.addAll(miscInst.values());
 		return ilist;
 	}
 	

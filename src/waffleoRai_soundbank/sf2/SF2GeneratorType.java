@@ -62,7 +62,7 @@ public enum SF2GeneratorType {
 	fineTune(52),
 	
 	sampleID(53),
-	sampleModes(54),
+	sampleModes(54), //Looping!
 	
 	scaleTuning(56),
 	exclusiveClass(57),

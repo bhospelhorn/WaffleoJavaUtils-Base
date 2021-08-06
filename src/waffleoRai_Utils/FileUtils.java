@@ -43,6 +43,21 @@ public class FileUtils {
 		}
 
 	}
+	
+	public static byte[] getMD5Sum(byte[] data){
+
+		try{
+			MessageDigest md = MessageDigest.getInstance("MD5");
+			md.update(data);
+			byte[] hash = md.digest();
+			return hash;
+		}
+		catch(Exception x){
+			x.printStackTrace();
+			return null;
+		}
+
+	}
 
 	public static boolean moveDirectory(String src, String dest) throws IOException{
 

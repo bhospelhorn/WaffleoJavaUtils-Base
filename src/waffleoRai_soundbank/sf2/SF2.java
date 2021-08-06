@@ -287,6 +287,56 @@ public class SF2 {
 		return sf.toSimpleBank();
 	}
 	
+	private static SF2Inst convertInst(SimpleInstrument inst_in, int i, SimpleBank soundbank, Map<Integer, Integer> imap, Map<String, Integer> indexMap){
+		SF2Inst sfinst = new SF2Inst(i);
+		//int sfihash = sfinst.hashCode();
+		int ihash = inst_in.hashCode();
+		if (imap.containsKey(ihash)) return null;
+		imap.put(ihash, i);
+		sfinst.setName(inst_in.getName());
+		//Do global zone
+		List<Generator> ggen = inst_in.getGlobalGenerators();
+		if (ggen != null && !ggen.isEmpty())
+		{
+			sfinst.instantiateGlobalZone();
+			for (Generator g : ggen)
+			{
+				SF2Gen sfg = SF2GeneratorConverter.convertToSF2Gen(g);
+				sfinst.getGlobalZone().addGenerator(sfg);
+			}
+		}
+		List<Modulator> gmod = inst_in.getGlobalMods();
+		if (gmod != null && !gmod.isEmpty())
+		{
+			if (!sfinst.hasGlobalZone()) sfinst.instantiateGlobalZone();
+			for (Modulator m : gmod)
+			{
+				SF2Mod sfm = SF2ModConverter.convertMod(m);
+				sfinst.getGlobalZone().addModulator(sfm);
+			}
+		}
+		//Do other zones - don't forget to port over sample ID and loop type!
+		int rcount = inst_in.countRegions();
+		for (int k = 0; k < rcount; k++)
+		{
+			InstRegion r = inst_in.getRegion(k);
+			if (r == null) continue;
+			SF2Zone z = SF2Zone.convertZone(r, adsrcon);
+			//Determine sample ID
+			String sampKey = r.getSampleKey();
+			int sind = indexMap.get(sampKey);
+			z.addGenerator(new SF2Gen(SF2GeneratorType.sampleID, (short)sind));
+			//Determine loop type
+			SoundSample sample = soundbank.getSample(sampKey);
+			boolean sloop = sample.getSound().loops();
+			if (!sloop) z.addGenerator(new SF2Gen(SF2GeneratorType.sampleModes, (short)0));
+			else z.addGenerator(new SF2Gen(SF2GeneratorType.sampleModes, (short)1));
+			
+			sfinst.addZone(z);
+		}
+		return sfinst;
+	}
+	
 	public static SF2 createSF2(SimpleBank soundbank, String softwareTool, boolean bit24)
 	{
 		if (soundbank == null) return null;
@@ -343,52 +393,8 @@ public class SF2 {
 			//Dump and convert instruments
 			for (SimpleInstrument sinst : pilist)
 			{
-				SF2Inst sfinst = new SF2Inst(i);
-				//int sfihash = sfinst.hashCode();
-				int ihash = sinst.hashCode();
-				if (imap.containsKey(ihash)) continue;
-				imap.put(ihash, i);
-				sfinst.setName(sinst.getName());
-				//Do global zone
-				List<Generator> ggen = sinst.getGlobalGenerators();
-				if (ggen != null && !ggen.isEmpty())
-				{
-					sfinst.instantiateGlobalZone();
-					for (Generator g : ggen)
-					{
-						SF2Gen sfg = SF2GeneratorConverter.convertToSF2Gen(g);
-						sfinst.getGlobalZone().addGenerator(sfg);
-					}
-				}
-				List<Modulator> gmod = sinst.getGlobalMods();
-				if (gmod != null && !gmod.isEmpty())
-				{
-					if (!sfinst.hasGlobalZone()) sfinst.instantiateGlobalZone();
-					for (Modulator m : gmod)
-					{
-						SF2Mod sfm = SF2ModConverter.convertMod(m);
-						sfinst.getGlobalZone().addModulator(sfm);
-					}
-				}
-				//Do other zones - don't forget to port over sample ID and loop type!
-				int rcount = sinst.countRegions();
-				for (int k = 0; k < rcount; k++)
-				{
-					InstRegion r = sinst.getRegion(k);
-					if (r == null) continue;
-					SF2Zone z = SF2Zone.convertZone(r, adsrcon);
-					//Determine sample ID
-					String sampKey = r.getSampleKey();
-					int sind = indexMap.get(sampKey);
-					z.addGenerator(new SF2Gen(SF2GeneratorType.sampleID, (short)sind));
-					//Determine loop type
-					SoundSample sample = soundbank.getSample(sampKey);
-					boolean sloop = sample.getSound().loops();
-					if (!sloop) z.addGenerator(new SF2Gen(SF2GeneratorType.sampleModes, (short)0));
-					else z.addGenerator(new SF2Gen(SF2GeneratorType.sampleModes, (short)1));
-					
-					sfinst.addZone(z);
-				}
+				SF2Inst sfinst = convertInst(sinst, i, soundbank, imap, indexMap);
+				if(sfinst == null) continue;
 				
 				//Add new instrument to list
 				ilist.add(sfinst);
@@ -437,10 +443,22 @@ public class SF2 {
 			sf.pdata.addPreset(preset);
 			
 		}
+		//Loose instruments
+		List<SimpleInstrument> miscinst = soundbank.getLooseInstruments();
+		if(!miscinst.isEmpty()){
+			for (SimpleInstrument sinst : miscinst)
+			{
+				SF2Inst sfinst = convertInst(sinst, i, soundbank, imap, indexMap);
+				if(sfinst == null) continue;
+				
+				//Add new instrument to list
+				ilist.add(sfinst);
+				i++;
+			}
+		}
 		
 		//Add instruments to sf
-		for (SF2Inst sfi : ilist)
-		{
+		for (SF2Inst sfi : ilist){
 			sf.pdata.addInstrument(sfi);
 		}
 		

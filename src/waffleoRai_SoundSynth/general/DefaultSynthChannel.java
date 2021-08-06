@@ -210,6 +210,8 @@ public class DefaultSynthChannel implements SynthChannel{
 	
 	/* ----- Control ----- */
 	
+	public void setEffect(int effect, int value){}
+	
 	public void setBankIndex(int idx)
 	{
 		bidx = idx;

@@ -30,6 +30,8 @@ import waffleoRai_SoundSynth.soundformats.WAVWriter;
  * 		Oopsy doopsy, worker wasn't closing audio line before terminating :P
  * 2020.05.10 | 1.3.0
  * 		Added removeListener(Object o) and dispose()
+ * 2021.07.25 | 1.4.0
+ * 		Added method to directly access channel
  */
 
 /**
@@ -47,8 +49,8 @@ import waffleoRai_SoundSynth.soundformats.WAVWriter;
  * can occur well before they are played back, noting the time coordinate of the event
  * relative to the current playback time coordinate is essential.
  * @author Blythe Hospelhorn
- * @version 1.3.0
- * @since May 10, 2020
+ * @version 1.4.0
+ * @since July 25, 2021
  */
 public abstract class SequencePlayer implements SynthPlayer{
 	
@@ -256,6 +258,21 @@ public abstract class SequencePlayer implements SynthPlayer{
 		return tr_solo_vector != 0L;
 	}
 	
+	/**
+	 * Get a direct reference to the requested player channel, if
+	 * it exists.
+	 * @param idx Index of desired channel.
+	 * @return A <code>SynthChannel</code> interface allowing direct control
+	 * of the channel.
+	 * @since 1.4.0
+	 */
+	public SynthChannel getChannel(int idx){
+		if(idx < 0) return null;
+		if(channels == null) return null;
+		if(idx >= channels.length) return null;
+		return channels[idx];
+	}
+	
 	public boolean isCapturable(){
 		return true;
 	}
@@ -263,6 +280,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 	public boolean done(){
 		return !(isRunning());
 	}
+	
 	/*--- Setters ---*/
 	
 	public void setMasterAttenuation(double amp_ratio){
@@ -352,6 +370,15 @@ public abstract class SequencePlayer implements SynthPlayer{
 	protected void incrementLoopNumber(){
 		myloops++;
 	}
+	
+	/**
+	 * Do a program change for a channel using the current soundbank.
+	 * @param ch_idx Index of channel to set new program for
+	 * @param bank Index of bank containing new program
+	 * @param program Index of program
+	 * @since 1.4.0
+	 */
+	public abstract void setChannelProgram(int ch_idx, int bank, int program);
 	
 	/*--- Listeners ---*/
 	
