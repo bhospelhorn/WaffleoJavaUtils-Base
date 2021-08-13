@@ -235,6 +235,26 @@ public class MidiMessageGenerator {
 		return genExpressionChange(channel, bi);
 	}
 	
+	public List<MidiMessage> genControllerLevelChange(int channel, int controller, int level, boolean omitFine) throws InvalidMidiDataException
+	{
+		int status = 0xB0 | (channel & 0xF);
+		//Clamp to 14 bits
+		level = clampTo14U(level);
+		List<MidiMessage> list = new LinkedList<MidiMessage>();
+		int msb = (level >>> 7)&0x7F;
+		int lsb = level & 0x7F;
+		list.add(new ShortMessage(status, controller, msb)); lastExp_msb = msb;
+		if(!omitFine){list.add(new ShortMessage(status, controller + 0x20, lsb)); lastExp_lsb = lsb;}
+		return list;
+	}
+	
+	public List<MidiMessage> genControllerLevelChange(int channel, int controller, byte level) throws InvalidMidiDataException
+	{
+		int bi = Byte.toUnsignedInt(level);
+		bi = bi << 7;
+		return genControllerLevelChange(channel, controller, bi, true);
+	}
+	
 	public MidiMessage genDamperChange(int channel, boolean on) throws InvalidMidiDataException
 	{
 		if(on == lastDamperSetting) return null;

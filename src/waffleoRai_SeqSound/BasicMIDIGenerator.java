@@ -10,6 +10,8 @@ import javax.sound.midi.Track;
 
 import waffleoRai_SoundSynth.SequenceController;
 
+//TODO have a message generator for each channel (because it saves previous param values)
+
 public class BasicMIDIGenerator implements SequenceController{
 	
 	private Sequence seq;
@@ -210,6 +212,54 @@ public class BasicMIDIGenerator implements SequenceController{
 		try {
 			MidiMessage msg = gen.genNoteOff(ch, Byte.toUnsignedInt(note));
 			tracks[ch+1].add(new MidiEvent(msg, tick));
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setControllerValue(int ch, int controller, byte value){
+		try {
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, controller, value);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setControllerValue(int ch, int controller, int value, boolean omitFine){
+		try {
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, controller, value, omitFine);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setEffect1(int ch, byte value){
+		try {
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, 0xc, value);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setEffect2(int ch, byte value){
+		try {
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, 0xd, value);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
 		} 
 		catch (InvalidMidiDataException e) {
 			e.printStackTrace();

@@ -22,6 +22,10 @@ public interface SequenceController {
 	public void setPitchBendRange(int ch, int cents);
 	public void setProgram(int ch, int bank, int program);
 	public void setProgram(int ch, int program);
+	public void setControllerValue(int ch, int controller, byte value);
+	public void setControllerValue(int ch, int controller, int value, boolean omitFine);
+	public void setEffect1(int ch, byte value);
+	public void setEffect2(int ch, byte value);
 	public void addNRPNEvent(int ch, int index, int value, boolean omitFine);
 	
 	//Music control
