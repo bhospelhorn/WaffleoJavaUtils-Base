@@ -74,9 +74,9 @@ public class MIDIInterpreter {
 			bank &= mask2;
 			if((mod & mask1) != 0) target.setModWheel(ch_idx, (short)mod);
 			mod &= mask2;
-			if((eff1 & mask1) != 0) target.setChannelPan(ch_idx, (byte)(eff1 >>> 8));
+			if((eff1 & mask1) != 0) target.setEffect1(ch_idx, (byte)(eff1 >>> 8));
 			eff1 &= mask2;
-			if((eff2 & mask1) != 0) target.setChannelPan(ch_idx, (byte)(eff2 >>> 8));
+			if((eff2 & mask1) != 0) target.setEffect2(ch_idx, (byte)(eff2 >>> 8));
 			eff2 &= mask2;
 			if((port_time & mask1) != 0) target.setControllerValue(ch_idx, 0x05, port_time & mask2, false);
 			port_time &= mask2;
