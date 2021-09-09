@@ -60,8 +60,8 @@ public class CoverageMap1D {
 		return true;
 	}
 	
-	public boolean isCovered(int location){
-		if(blocks.isEmpty()) return false;
+	protected int getBlockIndex(int location){
+		if(blocks.isEmpty()) return -1;
 		int idx = blocks.size()/2;
 		int left = 0;
 		int right = blocks.size();
@@ -73,7 +73,7 @@ public class CoverageMap1D {
 				right = idx;
 			}
 			else{
-				if(location < check.end) return true;
+				if(location < check.end) return idx;
 				left = idx+1;
 			}
 			int space = right-left;
@@ -81,7 +81,11 @@ public class CoverageMap1D {
 			idx = left + (space/2);
 		}
 		
-		return false;
+		return -1;
+	}
+	
+	public boolean isCovered(int location){
+		return getBlockIndex(location) >= 0;
 	}
 	
 	public boolean isCovered(int start, int end){
@@ -127,6 +131,39 @@ public class CoverageMap1D {
 			newlist.add(b);
 			i = j;
 		}
+		blocks = newlist;
+	}
+	
+	public boolean splitBlockAt(int value){
+		int block_idx = getBlockIndex(value);
+		if(block_idx < 0) return false;
+		
+		Block b = blocks.get(block_idx);
+		Block b2 = new Block(value, b.end);
+		b.end = value;
+		blocks.add(block_idx+1, b2);
+		
+		return true;
+	}
+	
+	public void add(CoverageMap1D other){
+		if(other == null) return;
+		blocks.addAll(other.blocks);
+		Collections.sort(blocks);
+		mergeBlocks();
+	}
+	
+	public void fillGapsSmallerThan(int value){
+		int bcount = blocks.size();
+		for(int i = 0; i < bcount-1; i++){
+			Block b1 = blocks.get(i);
+			Block b2 = blocks.get(i+1);
+			
+			if((b2.start - b1.end - 1) < value){
+				b1.end = b2.start;
+			}
+		}
+		mergeBlocks();
 	}
 	
 	public int[][] getBlocks(){
