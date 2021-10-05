@@ -9,7 +9,7 @@ import java.util.Map;
 
 public class MultiValMap<K extends Comparable<K>,V> {
 	
-private Map<K, List<V>> map;
+	private Map<K, List<V>> map;
 	
 	public MultiValMap(){
 		map = new HashMap<K, List<V>>();
@@ -42,4 +42,12 @@ private Map<K, List<V>> map;
 		return copy;
 	}
 
+	public boolean hasValueAt(K key, V value){
+		List<V> list = map.get(key);
+		if(list == null || list.isEmpty()) return false;
+		return list.contains(value);
+	}
+	
+	public boolean isEmpty(){return map.isEmpty();}
+	
 }
