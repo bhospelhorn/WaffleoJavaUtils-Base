@@ -1,10 +1,12 @@
 package waffleoRai_Utils;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
 public class ByteBufferStreamer implements StreamWrapper{
 	
 	private ByteBuffer buffer;
+	private int readcount = 0;
 	
 	//private LinkedList<Byte> pushStack;
 	
@@ -39,7 +41,15 @@ public class ByteBufferStreamer implements StreamWrapper{
 	public byte get()
 	{
 		//if(!pushStack.isEmpty()) return pushStack.pop();
-		return buffer.get();
+		try{
+			readcount++;
+			return buffer.get();
+		}
+		catch(BufferUnderflowException ex){
+			System.err.println("Woah, this buffer appears to be empty...");
+			System.err.println("Bytes read: 0x" + Integer.toHexString(readcount));
+			throw ex;
+		}
 	}
 	
 	public void put(byte b)
@@ -64,6 +74,7 @@ public class ByteBufferStreamer implements StreamWrapper{
 	
 	public void rewind()
 	{
+		readcount = 0;
 		buffer.rewind();
 	}
 

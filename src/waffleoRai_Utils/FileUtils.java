@@ -7,6 +7,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
+import java.util.LinkedList;
+import java.util.List;
 
 import waffleoRai_Files.NodeMatchCallback;
 import waffleoRai_Files.tree.DirectoryNode;
@@ -144,5 +146,29 @@ public class FileUtils {
 		return sb.toString();
 	}
 	
+	public static int deleteRecursive(String directory_path) throws IOException{
+		int dcount = 0;
+		if(!FileBuffer.directoryExists(directory_path)) return 0;
+		List<String> subdirs = new LinkedList<String>();
+		
+		DirectoryStream<Path> dstr = Files.newDirectoryStream(Paths.get(directory_path));
+		for(Path p : dstr){
+			if(Files.isDirectory(p)){
+				subdirs.add(p.toAbsolutePath().toString());
+			}
+			else{
+				Files.delete(p);
+				dcount++;
+			}
+		}
+		dstr.close();
+		
+		//Do subdirs
+		for(String subdir : subdirs) dcount += deleteRecursive(subdir);
+		
+		Files.delete(Paths.get(directory_path));
+		
+		return dcount;
+	}
 	
 }
