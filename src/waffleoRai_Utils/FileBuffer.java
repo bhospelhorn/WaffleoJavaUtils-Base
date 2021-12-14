@@ -102,6 +102,8 @@ import java.util.TimeZone;
  * 	3.10.1 -> 3.11.0 | Added a couple methods for handling block aligned subclasses
  * 2020.11.07
  * 	3.11.0 -> 3.11.1 | Added descriptions to exception throws in createCopy()
+ * 2021.11.06
+ * 	3.11.1 -> 3.12.0 | Added BufferReference
  * */
 
 //TODO Bug found - looks like there are issues with writeToStream if overflow is being used - (won't write overflow)
@@ -115,8 +117,8 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.11.1
- * @since November 7, 2020
+ * @version 3.12.0
+ * @since November 6, 2021
  */
 public class FileBuffer 
 {
@@ -4152,6 +4154,21 @@ public class FileBuffer
   			if (f.hasDescendant(key)) return true;
   		}
   		return false;
+  	}
+  	
+  	/**
+  	 * Generate a reference object to this <code>FileBuffer</code> that behaves akin
+  	 * to a pointer to data at a specific position in the code.
+  	 * <br>If this <code>FileBuffer</code> is write enabled, it will be possible to write
+  	 * using this reference as well.
+  	 * @param position Position relative to this buffer to generate reference to.
+  	 * @return <code>BufferReference</code> pointing to requested position in this buffer.
+  	 * @throws IndexOutOfBoundsException If position is out of bounds.
+  	 * @since 3.12.0
+  	 */
+  	public BufferReference getReferenceAt(long position){
+  		//Note: The BufferReference constructor throws the exception if position is bad, so don't need to do here.
+  		return new BufferReference(this, position);
   	}
   	
   /* ----- FILE STATISTICS/ INFO ----- */
