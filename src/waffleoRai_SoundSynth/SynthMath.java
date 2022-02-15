@@ -1,5 +1,7 @@
 package waffleoRai_SoundSynth;
 
+import waffleoRai_Utils.MathUtils;
+
 public class SynthMath {
 	
 	private static int SINTABLE_RES = 0x100000;
@@ -109,6 +111,12 @@ public class SynthMath {
 	{
 		double exp = ((double)cents * -1.0) / 1200.0;
 		return Math.pow(2.0, exp);
+	}
+	
+	public static int freqRatio2Cents(double ratio){
+		double val = MathUtils.log2(ratio);
+		val *= -1200.0;
+		return (int)Math.round(val);
 	}
 
 	public static double quickTriangle(double in){

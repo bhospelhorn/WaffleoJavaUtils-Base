@@ -31,8 +31,7 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 	private Map<String, SoundSample> samples;
 	private Map<String, SimpleInstrument> miscInst;
 	
-	public SimpleBank(String name, String version, String vendor, int maxBanks)
-	{
+	public SimpleBank(String name, String version, String vendor, int maxBanks){
 		sName = name;
 		sVersion = version;
 		sVendor = vendor;
@@ -45,37 +44,30 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 	}
 	
 	@Override
-	public String getName() 
-	{
+	public String getName() {
 		return sName;
 	}
 
 	@Override
-	public String getVersion() 
-	{
+	public String getVersion() {
 		return sVersion;
 	}
 
 	@Override
-	public String getVendor() 
-	{
+	public String getVendor() {
 		return sVendor;
 	}
 
 	@Override
-	public String getDescription() 
-	{
+	public String getDescription() {
 		return sDescription;
 	}
 
 	@Override
-	public SoundbankResource[] getResources() 
-	{
+	public SoundbankResource[] getResources() {
 		List<SoundbankResource> rlist = new LinkedList<SoundbankResource>();
-		for (SingleBank b : iBanks)
-		{
-			if (b != null)
-			{
+		for (SingleBank b : iBanks){
+			if (b != null){
 				rlist.addAll(b.getAllPresets());
 				//rlist.addAll(b.getAllSamples());
 			}
@@ -101,13 +93,10 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 	}
 	
 	@Override
-	public Instrument[] getInstruments() 
-	{
+	public Instrument[] getInstruments() {
 		List<Instrument> rlist = new LinkedList<Instrument>();
-		for (SingleBank b : iBanks)
-		{
-			if (b != null)
-			{
+		for (SingleBank b : iBanks){
+			if (b != null){
 				rlist.addAll(b.getAllPresets());
 			}
 		}
@@ -119,8 +108,7 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 	}
 
 	@Override
-	public Instrument getInstrument(Patch patch) 
-	{
+	public Instrument getInstrument(Patch patch) {
 		int b = patch.getBank();
 		int p = patch.getProgram();
 		SingleBank bank = getBank(b);
@@ -129,33 +117,27 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 		return preset;
 	}
 	
-	public SingleBank getBank(int index)
-	{
+	public SingleBank getBank(int index){
 		if (index < 0 || index >= iBanks.length) return null;
 		return iBanks[index];
 	}
 	
-	public AudioSampleStream openSampleStream(String samplekey)
-	{
+	public AudioSampleStream openSampleStream(String samplekey){
 		SoundSample ss = samples.get(samplekey);
 		if(ss == null) return null;
 		return ss.getSound().createSampleStream();
 	}
 	
-	public AudioSampleStream openSampleStream(int index)
-	{
+	public AudioSampleStream openSampleStream(int index){
 		return openSampleStream(Integer.toString(index));
 	}
 	
-	public int newBank(int index, String name)
-	{
+	public int newBank(int index, String name){
 		if (index < 0 || index >= iBanks.length) return -1;
 		SingleBank bank = iBanks[index];
-		if (bank != null)
-		{
+		if (bank != null){
 			index = -1;
-			for (int i = 0; i < iBanks.length; i++)
-			{
+			for (int i = 0; i < iBanks.length; i++){
 				if (iBanks[index] == null) {
 					index = i;
 					break;
@@ -169,33 +151,43 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 		return index;
 	}
 	
-	public void setDescription(String desc)
-	{
+	public void setName(String s){
+		if(s == null) return;
+		sName = s;
+	}
+	
+	public void setVendor(String s){
+		if(s == null) return;
+		sVendor = s;
+	}
+	
+	public void setVersionString(String s){
+		if(s == null) return;
+		sVersion = s;
+	}
+	
+	public void setDescription(String desc){
 		if (desc == null) return;
 		sDescription = desc;
 	}
 	
-	public SoundSample getSample(String key)
-	{
+	public SoundSample getSample(String key){
 		return samples.get(key);
 	}
 	
-	public List<SoundSample> getAllSamples()
-	{
+	public List<SoundSample> getAllSamples(){
 		int nsamps = samples.size();
 		List<SoundSample> sorted = new ArrayList<SoundSample>(nsamps+1); 
 		List<String> sortedkeys = new ArrayList<String>(nsamps + 1);
 		sortedkeys.addAll(samples.keySet());
 		Collections.sort(sortedkeys);
-		for (String k : sortedkeys)
-		{
+		for (String k : sortedkeys){
 			sorted.add(samples.get(k));
 		}
 		return sorted;
 	}
 	
-	public List<String> getAllSampleKeys()
-	{
+	public List<String> getAllSampleKeys(){
 		List<String> list = new LinkedList<String>();
 		Set<String> keyset = samples.keySet();
 		list.addAll(keyset);
@@ -203,30 +195,29 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 		return list;
 	}
 	
-	public void addSample(String key, Sound sample)
-	{
+	public void addSample(String key, Sound sample){
 		SoundSample s = new SoundSample(this, key, sample);
 		samples.put(key, s);
 	}
 	
-	public void addSample(String key, SoundSample sample)
-	{
+	public void addSample(String key, SoundSample sample){
 		samples.put(key, sample);
 	}
 
-	public Set<SimpleInstrument> getAllBaseInstruments()
-	{
+	public SimpleInstrument getLooseInstrument(String key){
+		if(miscInst == null) return null;
+		return miscInst.get(key);
+	}
+	
+	public Set<SimpleInstrument> getAllBaseInstruments(){
 		List<SimplePreset> plist = getAllPresets();
 		Set<SimpleInstrument> ilist = new HashSet<SimpleInstrument>();
 		if (plist == null) return ilist;
 		if (plist.isEmpty()) return ilist;
-		for (SimplePreset p : plist)
-		{
-			if (p != null)
-			{
+		for (SimplePreset p : plist){
+			if (p != null){
 				Collection<SimpleInstrument> pinst = p.getAllInstruments();
-				if (pinst != null && !pinst.isEmpty())
-				{
+				if (pinst != null && !pinst.isEmpty()){
 					ilist.addAll(pinst);
 				}
 			}
@@ -235,12 +226,10 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 		return ilist;
 	}
 	
-	public List<SimplePreset> getAllPresets()
-	{
+	public List<SimplePreset> getAllPresets(){
 		List<SimplePreset> plist = new LinkedList<SimplePreset>();
 		if (iBanks == null) return plist;
-		for (int i = 0; i < iBanks.length; i++)
-		{
+		for (int i = 0; i < iBanks.length; i++){
 			if (iBanks[i] == null) continue;
 			List<SimplePreset> bank_plist = iBanks[i].getAllPresets();
 			if (bank_plist != null && !bank_plist.isEmpty()) plist.addAll(bank_plist);
@@ -248,19 +237,16 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 		return plist;
 	}
 	
-	public List<SingleBank> getAllBanks()
-	{
+	public List<SingleBank> getAllBanks(){
 		List<SingleBank> blist = new LinkedList<SingleBank>();
 		if (iBanks == null) return blist;
-		for (int i = 0; i < iBanks.length; i++)
-		{
+		for (int i = 0; i < iBanks.length; i++){
 			if (iBanks[i] != null) blist.add(iBanks[i]);
 		}
 		return blist;
 	}
 	
-	public void printInfo()
-	{
+	public void printInfo(){
 		System.out.println("---== Soundbank ==---");
 		System.out.println("Name: " + this.sName);
 		System.out.println("Version: " + this.sVersion);
@@ -271,12 +257,10 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 		List<String> sampleKeys = new LinkedList<String>();
 		sampleKeys.addAll(this.samples.keySet());
 		Collections.sort(sampleKeys);
-		for(String k : sampleKeys)
-		{
+		for(String k : sampleKeys){
 			System.out.println("\t->" + k);
 			SoundSample samp = samples.get(k);
-			if(samp != null)
-			{
+			if(samp != null){
 				Sound s = samp.getSound();
 				if(s.totalChannels() == 1) System.out.println("\tMono, " + s.getSampleRate() + " Hz");
 				else System.out.println("\t" + s.totalChannels() + " Channels, " + s.getSampleRate() + " Hz");	
@@ -286,8 +270,7 @@ public class SimpleBank implements Soundbank, SoundSampleMap{
 		
 		//Banks
 		//int bcount = 0;
-		for(int i = 0; i < iBanks.length; i++)
-		{
+		for(int i = 0; i < iBanks.length; i++){
 			System.out.println();
 			if(iBanks[i] != null) iBanks[i].printInfo();
 		}

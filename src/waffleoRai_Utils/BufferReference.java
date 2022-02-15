@@ -62,6 +62,30 @@ public class BufferReference{
 		return src.longFromFile(pos);
 	}
 	
+	public byte nextByte(){
+		return src.getByte(pos++);
+	}
+	
+	public short nextShort(){
+		short val = src.shortFromFile(pos); pos += 2;
+		return val;
+	}
+	
+	public int next24Bits(){
+		int val = src.shortishFromFile(pos); pos += 3;
+		return val;
+	}
+	
+	public int nextInt(){
+		int val = src.intFromFile(pos); pos += 4;
+		return val;
+	}
+	
+	public long nextLong(){
+		long val = src.longFromFile(pos); pos += 8;
+		return val;
+	}
+	
 	public byte getByte(int offset){
 		return src.getByte(pos+offset);
 	}
