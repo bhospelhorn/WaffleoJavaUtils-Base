@@ -8,7 +8,7 @@ import waffleoRai_Sound.JavaSoundPlayer_16LE;
 import waffleoRai_Sound.JavaSoundPlayer_24LE;
 import waffleoRai_Sound.Sound;
 import waffleoRai_SoundSynth.AudioSampleStream;
-import waffleoRai_Utils.Arunnable;
+import waffleoRai_Threads.Arunnable;
 import waffleoRai_Utils.MathUtils;
 import waffleoRai_Utils.VoidCallbackMethod;
 

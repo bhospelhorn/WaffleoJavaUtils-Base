@@ -12,7 +12,7 @@ import java.util.TreeMap;
 
 import javax.swing.tree.TreeNode;
 
-import waffleoRai_Utils.Treenumeration;
+import waffleoRai_DataContainers.Treenumeration;
 
 public class SoundbankNode implements TreeNode, Comparable<SoundbankNode>{
 	

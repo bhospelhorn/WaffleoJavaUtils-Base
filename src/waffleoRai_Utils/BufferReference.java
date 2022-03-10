@@ -86,6 +86,12 @@ public class BufferReference{
 		return val;
 	}
 	
+	public String nextASCIIString(){
+		String s = src.getASCII_string(pos, '\0');
+		pos += s.length() + 1;
+		return s;
+	}
+	
 	public byte getByte(int offset){
 		return src.getByte(pos+offset);
 	}
@@ -105,6 +111,7 @@ public class BufferReference{
 	public long getLong(int offset){
 		return src.longFromFile(pos+offset);
 	}
+	
 	
 	/*----- Write -----*/
 	

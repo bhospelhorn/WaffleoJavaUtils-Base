@@ -23,6 +23,7 @@ import javax.swing.tree.TreePath;
 
 import waffleoRai_Compression.definitions.AbstractCompDef;
 import waffleoRai_Compression.definitions.CompDefNode;
+import waffleoRai_DataContainers.Treenumeration;
 import waffleoRai_Encryption.DecryptorMethod;
 import waffleoRai_Encryption.StaticDecryption;
 import waffleoRai_Encryption.StaticDecryptor;
@@ -35,7 +36,6 @@ import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBufferStreamer;
 import waffleoRai_Utils.FileUtils;
 import waffleoRai_Utils.MultiFileBuffer;
-import waffleoRai_Utils.Treenumeration;
 
 
 /*

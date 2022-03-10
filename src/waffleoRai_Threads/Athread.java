@@ -1,4 +1,4 @@
-package waffleoRai_Utils;
+package waffleoRai_Threads;
 
 public abstract class Athread extends Thread
 {

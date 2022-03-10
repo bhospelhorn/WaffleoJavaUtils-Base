@@ -14,6 +14,9 @@ import waffleoRai_SoundSynth.SequenceController;
 
 public class BasicMIDIGenerator implements SequenceController{
 	
+	public static final int VIB_AMOUNT_CC = 85; //Using undefined CC for vibrato depth
+	public static final int VIB_SPEED_CC = 86; //Using undefined CC for vibrato speed
+	
 	private Sequence seq;
 	private Track[] tracks;
 	private long tick;
@@ -41,6 +44,18 @@ public class BasicMIDIGenerator implements SequenceController{
 	public void setMasterVolume(byte value) {
 		try {
 			List<MidiMessage> msgs = gen.genVolumeChange(0, value);
+			for(MidiMessage msg : msgs){
+				tracks[0].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setMasterExpression(byte value) {
+		try {
+			List<MidiMessage> msgs = gen.genExpressionChange(0, value);
 			for(MidiMessage msg : msgs){
 				tracks[0].add(new MidiEvent(msg, tick));
 			}
@@ -257,6 +272,80 @@ public class BasicMIDIGenerator implements SequenceController{
 	public void setEffect2(int ch, byte value){
 		try {
 			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, 0xd, value);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setReverbSend(int ch, byte value){
+		//Controller 91 is apparently often used as reverb send
+		try {
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, 0x5b, value);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setVibratoSpeed(int ch, double value){
+		byte bv = (byte)Math.round(value * 127.0);
+		try {
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, VIB_SPEED_CC, bv);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setVibratoAmount(int ch, byte value){
+		try {
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, VIB_AMOUNT_CC, value);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setPortamentoTime(int ch, short value){
+		//Check whether need LSB
+		int iv = (int)value;
+		if((iv & ~0xff) != 0){
+			setControllerValue(ch, 0x25, iv, false);
+		}
+		else{
+			setControllerValue(ch, 0x25, iv, true);
+		}
+	}
+	
+	public void setPortamentoAmount(int ch, byte value){
+		try {
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, 84, value);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setPortamentoOn(int ch, boolean on){
+		try {
+			byte value = on?(byte)127:(byte)0;
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, 65, value);
 			for(MidiMessage msg : msgs){
 				tracks[ch+1].add(new MidiEvent(msg, tick));
 			}

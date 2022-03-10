@@ -5,6 +5,8 @@ import java.util.LinkedList;
 
 import javax.swing.tree.TreeNode;
 
+import waffleoRai_DataContainers.Treenumeration;
+
 /**
  * Wrapper for a FileBuffer - represents a file in memory as a component of a
  * VirDirectory (virtual directory).

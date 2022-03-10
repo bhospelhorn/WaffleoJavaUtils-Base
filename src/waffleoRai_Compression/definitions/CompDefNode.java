@@ -9,8 +9,7 @@ public class CompDefNode implements FileTypeNode{
 	private AbstractCompDef def;
 	private FileTypeNode child;
 	
-	public CompDefNode(AbstractCompDef type)
-	{
+	public CompDefNode(AbstractCompDef type){
 		def = type;
 	}
 	

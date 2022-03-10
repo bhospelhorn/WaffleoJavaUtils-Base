@@ -1,4 +1,4 @@
-package waffleoRai_Utils;
+package waffleoRai_DataContainers;
 
 import java.util.Collection;
 import java.util.Enumeration;

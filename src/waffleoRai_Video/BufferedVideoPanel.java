@@ -17,7 +17,7 @@ import javax.imageio.ImageIO;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 
-import waffleoRai_Utils.Arunnable;
+import waffleoRai_Threads.Arunnable;
 import waffleoRai_Utils.MathUtils;
 import waffleoRai_Utils.VoidCallbackMethod;
 

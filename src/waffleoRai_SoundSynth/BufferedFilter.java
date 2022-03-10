@@ -3,7 +3,7 @@ package waffleoRai_SoundSynth;
 import java.time.OffsetDateTime;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import waffleoRai_Utils.Arunnable;
+import waffleoRai_Threads.Arunnable;
 
 //Worker thread wakes up either every second, or whenever buffer drops below 10%
 //Switch to blocking queue if this seems to be a problem

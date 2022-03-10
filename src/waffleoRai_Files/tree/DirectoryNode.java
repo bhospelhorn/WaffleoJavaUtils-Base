@@ -18,11 +18,11 @@ import java.util.Map;
 
 import javax.swing.tree.TreeNode;
 
+import waffleoRai_DataContainers.Treenumeration;
 import waffleoRai_Files.FileClass;
 import waffleoRai_Files.FileNodeModifierCallback;
 import waffleoRai_Files.NodeMatchCallback;
 import waffleoRai_Utils.FileBuffer;
-import waffleoRai_Utils.Treenumeration;
 
 /*
  * UPDATES --
