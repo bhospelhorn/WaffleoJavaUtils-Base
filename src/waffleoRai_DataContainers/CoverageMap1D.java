@@ -113,6 +113,21 @@ public class CoverageMap1D {
 		return false;
 	}
 	
+	public boolean intersects(CoverageMap1D other){
+		if(other == null) return false;
+		int minscan = 0;
+		int blockcount = blocks.size();
+		for(Block otherblock : other.blocks){
+			for(int i = minscan; i < blockcount; i++){
+				Block myblock = blocks.get(i);
+				if(otherblock.end < myblock.start) continue;
+				if(otherblock.start >= myblock.end){minscan = i; continue;}
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	public void mergeBlocks(){
 		ArrayList<Block> newlist = new ArrayList<Block>(Math.min(blocks.size(), 16));
 		int i = 0;

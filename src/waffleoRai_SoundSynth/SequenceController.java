@@ -11,6 +11,7 @@ public interface SequenceController {
 	public void setMasterPan(byte value);
 	public void setTempo(int tempo_uspqn);
 	public void addMarkerNote(String note);
+	//public void setTimebase(int ppqn);
 	
 	//Channel settings
 	public void setChannelVolume(int ch, byte value);

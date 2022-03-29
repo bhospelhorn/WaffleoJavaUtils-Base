@@ -48,6 +48,10 @@ public class MultiValMap<K extends Comparable<K>,V> {
 		return list.contains(value);
 	}
 	
+	public Map<K, List<V>> getBackingMap(){return map;}
+	
+	public boolean containsKey(K key){return map.containsKey(key);}
+	
 	public boolean isEmpty(){return map.isEmpty();}
 	
 }
