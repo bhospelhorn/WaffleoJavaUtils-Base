@@ -104,6 +104,8 @@ import java.util.TimeZone;
  * 	3.11.0 -> 3.11.1 | Added descriptions to exception throws in createCopy()
  * 2021.11.06
  * 	3.11.1 -> 3.12.0 | Added BufferReference
+ * 2022.03.20
+ * 	3.12.0 -> 3.13.0 | UnsupportedFileTypeException now passes error message to super constructor
  * */
 
 //TODO Bug found - looks like there are issues with writeToStream if overflow is being used - (won't write overflow)
@@ -117,8 +119,8 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.12.0
- * @since November 6, 2021
+ * @version 3.13.0
+ * @since March 30, 2022
  */
 public class FileBuffer 
 {
@@ -4176,28 +4178,21 @@ public class FileBuffer
   	/**
   	 * An exception to throw for parsing, conversion, and serialization errors.
   	 * @author Blythe Hospelhorn
-  	 * @version 2.0.0
+  	 * @version 2.1.0
   	 */
   	public static class UnsupportedFileTypeException extends Exception
   	{
   		private static final long serialVersionUID = 2294917631330134570L;
   		
-  		private String errorMessage;
+  		//private String errorMessage;
   		
-  		public UnsupportedFileTypeException()
-  		{
-  			errorMessage = "";
+  		public UnsupportedFileTypeException(){}
+  		
+  		public UnsupportedFileTypeException(String message){
+  			super(message);
+  			//errorMessage = message;
   		}
   		
-  		public UnsupportedFileTypeException(String message)
-  		{
-  			errorMessage = message;
-  		}
-  		
-  		public String getErrorMessage()
-  		{
-  			return errorMessage;
-  		}
   	}
   
   	/**
