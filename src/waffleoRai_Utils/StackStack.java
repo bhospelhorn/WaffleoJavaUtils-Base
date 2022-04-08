@@ -14,11 +14,19 @@ public class StackStack<T> {
 		states = new TreeMap<Integer, LinkedList<T>>();
 	}
 	
-	public T pop(){return current.pop();}
+	public T pop(){
+		if(current.isEmpty()) return null;
+		return current.pop();
+	}
+	
 	public T peek(){return current.peek();}
 	public T peekBottom(){return current.peekLast();}
 	public void push(T item){current.push(item);}
 	public void add(T item){current.add(item);}
+	
+	public boolean hasState(int state_id){
+		return states.containsKey(state_id);
+	}
 	
 	public boolean loadState(int state_id){
 		LinkedList<T> state = states.remove(state_id);
@@ -39,5 +47,9 @@ public class StackStack<T> {
 	
 	public void clear(){current.clear();}
 	public void clearStates(){states.clear();}
+	
+	public boolean currentEmpty(){
+		return current.isEmpty();
+	}
 	
 }
