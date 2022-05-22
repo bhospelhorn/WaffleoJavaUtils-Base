@@ -20,16 +20,13 @@ public class PCMSampleStream implements AudioSampleStream{
 	
 	/*----- Construction -----*/
 	
-	public PCMSampleStream(RandomAccessSound src)
-	{
+	public PCMSampleStream(RandomAccessSound src){
 		this(src, src.loops());
 	}
 	
-	public PCMSampleStream(RandomAccessSound src, boolean loopme)
-	{
+	public PCMSampleStream(RandomAccessSound src, boolean loopme){
 		source = src;
-		switch(source.getBitDepth())
-		{
+		switch(source.getBitDepth()){
 		case EIGHT_BIT_UNSIGNED: bitsPerSample = 8; break;
 		case SIXTEEN_BIT_SIGNED: bitsPerSample = 16; break;
 		case SIXTEEN_BIT_UNSIGNED: bitsPerSample = 16; break;
@@ -39,14 +36,12 @@ public class PCMSampleStream implements AudioSampleStream{
 		}
 		
 		currentFrame = 0;
-		if(source.loops() && loopme)
-		{
+		if(source.loops() && loopme){
 			loopStart = source.getLoopFrame();
 			loopEnd = source.getLoopEndFrame();
 			maxFrame = loopEnd;
 		}
-		else
-		{
+		else{
 			loopStart = -1;
 			//loopEnd = -1;
 			maxFrame = source.totalFrames();
@@ -57,30 +52,25 @@ public class PCMSampleStream implements AudioSampleStream{
 	/*----- Getters -----*/
 	
 	@Override
-	public float getSampleRate() 
-	{
+	public float getSampleRate() {
 		return (float)source.getSampleRate();
 	}
 
 	@Override
-	public int getBitDepth() 
-	{
+	public int getBitDepth() {
 		return bitsPerSample;
 	}
 
 	@Override
-	public int getChannelCount() 
-	{
+	public int getChannelCount() {
 		return source.totalChannels();
 	}
 	
-	public int oneShotFrames()
-	{
+	public int oneShotFrames(){
 		return source.totalFrames();
 	}
 	
-	public int framesForLoops(int loopCount)
-	{
+	public int framesForLoops(int loopCount){
 		if(loopStart < 0) return oneShotFrames();
 		int preloop = loopStart;
 		int loopsize = loopEnd - loopStart;
@@ -93,8 +83,7 @@ public class PCMSampleStream implements AudioSampleStream{
 	/*----- Stream -----*/
 	
 	@Override
-	public int[] nextSample() throws InterruptedException 
-	{
+	public int[] nextSample() throws InterruptedException {
 		int ccount = source.totalChannels();
 		int[] samps = new int[ccount];
 		if(currentFrame >= loopEnd)
@@ -111,8 +100,7 @@ public class PCMSampleStream implements AudioSampleStream{
 	}
 	
 	@Override
-	public void close() 
-	{
+	public void close() {
 		//Don't need to do anything
 	}
 

@@ -318,8 +318,7 @@ public class WAV implements RandomAccessSound{
 		parseWAV(data);
 	}
 	
-	public WAV(int bitdepth, int channels, int frames)
-	{
+	public WAV(int bitdepth, int channels, int frames){
 		if (channels < 1 || frames < 1 || bitdepth < 1) throw new IllegalArgumentException();
 		bitDepth = bitdepth;
 		//bd_signed = false;
