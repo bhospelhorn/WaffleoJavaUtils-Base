@@ -104,13 +104,14 @@ public class SampleChannel4 implements SampleChannel{
 		int aidx = index/2; if(aidx >= len) throw new IndexOutOfBoundsException();
 		boolean odd = (index % 2 != 0);
 		int doublet = Byte.toUnsignedInt(samples[aidx]);
+		//System.err.println("aidx = " + aidx + ", doublet = 0x" + Integer.toHexString(doublet));
 		if(big_endian){
-			if(odd) return doublet & 0xFF;
-			else return (doublet >>> 4) & 0xFF;
+			if(odd) return doublet & 0xF;
+			else return (doublet >>> 4) & 0xF;
 		}
 		else{
-			if(!odd) return doublet & 0xFF;
-			else return (doublet >>> 4) & 0xFF;
+			if(!odd) return doublet & 0xF;
+			else return (doublet >>> 4) & 0xF;
 		}
 	}
 	

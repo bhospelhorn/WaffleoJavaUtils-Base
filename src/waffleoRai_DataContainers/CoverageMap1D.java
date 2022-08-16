@@ -128,6 +128,11 @@ public class CoverageMap1D {
 		return false;
 	}
 	
+	public int getMaxCoveredValue(){
+		if(blocks.isEmpty()) return 0;
+		return blocks.get(blocks.size()-1).end;
+	}
+	
 	public void mergeBlocks(){
 		ArrayList<Block> newlist = new ArrayList<Block>(Math.min(blocks.size(), 16));
 		int i = 0;

@@ -37,6 +37,7 @@ public abstract class ADPCMTable {
 	public int getLoopCoeffIndex(){return cidx_loop;}
 	
 	public abstract int getCoefficient(int idx_1d);
+	public abstract int getCoefficient(int predictor, int order);
 	
 	/*----- Setters -----*/
 	

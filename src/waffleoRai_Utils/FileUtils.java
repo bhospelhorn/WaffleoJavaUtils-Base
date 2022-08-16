@@ -16,6 +16,36 @@ import waffleoRai_Files.tree.FileNode;
 
 public class FileUtils {
 	
+	public static String getUserHomeDir(){
+		return System.getProperty("user.home");
+	}
+	
+	public static String getUserAppdataDir(){
+		String osname = System.getProperty("os.name");
+		osname = osname.toLowerCase();
+		String homedir = System.getProperty("user.home");
+		if(homedir.endsWith("/") || homedir.endsWith("\\")) {
+			homedir = homedir.substring(0, homedir.length()-1);
+		}
+		
+		if(osname.startsWith("win")){
+			//Assumed Windows
+			if(homedir.endsWith("Documents")){
+				//Screw Documents! Remove!
+				homedir = homedir.substring(0, homedir.length()-9);
+			}
+			return homedir + "\\AppData\\Local";
+		}
+		else if(osname.startsWith("macos") || osname.startsWith("osx")){
+			//Assumed Mac
+			return homedir + "/Library/Preferences";
+		}
+		else{
+			//Assumed Unix misc.
+			return homedir + "/.appdata";
+		}
+	}
+	
 	public static byte[] getSHA1Hash(byte[] data){
 
 		try{
