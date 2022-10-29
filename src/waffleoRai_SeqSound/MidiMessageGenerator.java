@@ -127,8 +127,8 @@ public class MidiMessageGenerator {
 		List<MidiMessage> list = new LinkedList<MidiMessage>();
 		int msb = (bank >>> 7)&0x7F;
 		int lsb = bank &0x7F;
-		if(msb != lastBank_msb){list.add(new ShortMessage(status, 0x00, msb)); lastBank_msb = msb;}
-		if(lsb != lastBank_lsb){list.add(new ShortMessage(status, 0x20, lsb)); lastBank_lsb = lsb;}
+		if(msb != lastBank_msb){list.add(new ShortMessage(status, MIDIControllers.BANK_SELECT, msb)); lastBank_msb = msb;}
+		if(lsb != lastBank_lsb){list.add(new ShortMessage(status, MIDIControllers.BANK_SELECT_LSB, lsb)); lastBank_lsb = lsb;}
 		return list;
 	}
 	
@@ -140,8 +140,8 @@ public class MidiMessageGenerator {
 		List<MidiMessage> list = new LinkedList<MidiMessage>();
 		int msb = (level >>> 7)&0x7F;
 		int lsb = level &0x7F;
-		if(msb != lastModLevel_msb){list.add(new ShortMessage(status, 0x01, msb)); lastModLevel_msb = msb;}
-		if(lsb != lastModLevel_lsb){list.add(new ShortMessage(status, 0x21, lsb)); lastModLevel_lsb = lsb;}
+		if(msb != lastModLevel_msb){list.add(new ShortMessage(status, MIDIControllers.MOD_WHEEL, msb)); lastModLevel_msb = msb;}
+		if(lsb != lastModLevel_lsb){list.add(new ShortMessage(status, MIDIControllers.MOD_WHEEL_LSB, lsb)); lastModLevel_lsb = lsb;}
 		return list;
 	}
 	
@@ -161,8 +161,8 @@ public class MidiMessageGenerator {
 		List<MidiMessage> list = new LinkedList<MidiMessage>();
 		int msb = (value >>> 7)&0x7F;
 		int lsb = value &0x7F;
-		if(msb != lastPortaTime_msb){list.add(new ShortMessage(status, 0x05, msb)); lastPortaTime_msb = msb;}
-		if(lsb != lastPortaTime_lsb){list.add(new ShortMessage(status, 0x25, lsb)); lastPortaTime_lsb = lsb;}
+		if(msb != lastPortaTime_msb){list.add(new ShortMessage(status, MIDIControllers.PORTAMENTO_TIME, msb)); lastPortaTime_msb = msb;}
+		if(lsb != lastPortaTime_lsb){list.add(new ShortMessage(status, MIDIControllers.PORTAMENTO_TIME_LSB, lsb)); lastPortaTime_lsb = lsb;}
 		return list;
 	}
 	
@@ -182,8 +182,8 @@ public class MidiMessageGenerator {
 		List<MidiMessage> list = new LinkedList<MidiMessage>();
 		int msb = (level >>> 7)&0x7F;
 		int lsb = level &0x7F;
-		if(msb != lastVolume_msb){list.add(new ShortMessage(status, 0x07, msb)); lastVolume_msb = msb;}
-		if(lsb != lastVolume_lsb){list.add(new ShortMessage(status, 0x27, lsb)); lastVolume_lsb = lsb;}
+		if(msb != lastVolume_msb){list.add(new ShortMessage(status, MIDIControllers.VOLUME, msb)); lastVolume_msb = msb;}
+		if(lsb != lastVolume_lsb){list.add(new ShortMessage(status, MIDIControllers.VOLUME_LSB, lsb)); lastVolume_lsb = lsb;}
 		return list;
 	}
 	
@@ -203,8 +203,8 @@ public class MidiMessageGenerator {
 		List<MidiMessage> list = new LinkedList<MidiMessage>();
 		int msb = (value >>> 7)&0x7F;
 		int lsb = value &0x7F;
-		if(msb != lastPan_msb){list.add(new ShortMessage(status, 0x0A, msb)); lastPan_msb = msb;}
-		if(lsb != lastPan_lsb){list.add(new ShortMessage(status, 0x2A, lsb)); lastPan_lsb = lsb;}
+		if(msb != lastPan_msb){list.add(new ShortMessage(status, MIDIControllers.PAN, msb)); lastPan_msb = msb;}
+		if(lsb != lastPan_lsb){list.add(new ShortMessage(status, MIDIControllers.PAN_LSB, lsb)); lastPan_lsb = lsb;}
 		return list;
 	}
 	
@@ -223,8 +223,8 @@ public class MidiMessageGenerator {
 		List<MidiMessage> list = new LinkedList<MidiMessage>();
 		int msb = (level >>> 7)&0x7F;
 		int lsb = level &0x7F;
-		if(msb != lastExp_msb){list.add(new ShortMessage(status, 0x0B, msb)); lastExp_msb = msb;}
-		if(lsb != lastExp_lsb){list.add(new ShortMessage(status, 0x2B, lsb)); lastExp_lsb = lsb;}
+		if(msb != lastExp_msb){list.add(new ShortMessage(status, MIDIControllers.EXPRESSION, msb)); lastExp_msb = msb;}
+		if(lsb != lastExp_lsb){list.add(new ShortMessage(status, MIDIControllers.EXPRESSION_LSB, lsb)); lastExp_lsb = lsb;}
 		return list;
 	}
 	
@@ -262,7 +262,7 @@ public class MidiMessageGenerator {
 		int status = 0xB0 | (channel & 0xF);
 		int v = 0;
 		if(on) v = 0x7F;
-		return new ShortMessage(status, 0x40, v);
+		return new ShortMessage(status, MIDIControllers.DAMPER_PEDAL_ON, v);
 	}
 	
 	public MidiMessage genPortamentoSet(int channel, boolean on) throws InvalidMidiDataException
@@ -272,7 +272,7 @@ public class MidiMessageGenerator {
 		int status = 0xB0 | (channel & 0xF);
 		int v = 0;
 		if(on) v = 0x7F;
-		return new ShortMessage(status, 0x41, v);
+		return new ShortMessage(status, MIDIControllers.PORTAMENTO_ON, v);
 	}
 	
 	public MidiMessage genReleaseTimeChange(int channel, int value) throws InvalidMidiDataException
@@ -281,7 +281,7 @@ public class MidiMessageGenerator {
 		if(value == lastReleaseSetting) return null;
 		lastReleaseSetting = value;
 		int status = 0xB0 | (channel & 0xF);
-		return new ShortMessage(status, 0x48, value);
+		return new ShortMessage(status, MIDIControllers.RELEASE_TIME, value);
 	}
 	
 	public MidiMessage genAttackTimeChange(int channel, int value) throws InvalidMidiDataException
@@ -290,7 +290,7 @@ public class MidiMessageGenerator {
 		if(value == lastAttackSetting) return null;
 		lastAttackSetting = value;
 		int status = 0xB0 | (channel & 0xF);
-		return new ShortMessage(status, 0x49, value);
+		return new ShortMessage(status, MIDIControllers.ATTACK_TIME, value);
 	}
 	
 	public MidiMessage genPortamentoControl(int channel, int sourceNote) throws InvalidMidiDataException
@@ -299,7 +299,7 @@ public class MidiMessageGenerator {
 		if(sourceNote == lastPortaCtrlSetting) return null;
 		lastPortaCtrlSetting = sourceNote;
 		int status = 0xB0 | (channel & 0xF);
-		return new ShortMessage(status, 0x54, sourceNote);
+		return new ShortMessage(status, MIDIControllers.PORTAMENTO_CONTROL, sourceNote);
 	}
 	
 	public List<MidiMessage> genNRPN(int channel, int index, int value, boolean omitFine) throws InvalidMidiDataException
@@ -314,10 +314,10 @@ public class MidiMessageGenerator {
 		int msbi = (index >>> 7) & 0x7F;
 		int lsbi = index &0x7F;
 
-		list.add(new ShortMessage(status, 0x62, lsbi)); 
-		list.add(new ShortMessage(status, 0x63, msbi)); 
-		list.add(new ShortMessage(status, 0x06, msb)); 
-		if(!omitFine) list.add(new ShortMessage(status, 0x26, lsb));
+		list.add(new ShortMessage(status, MIDIControllers.NRPN_LSB, lsbi)); 
+		list.add(new ShortMessage(status, MIDIControllers.NRPN_MSB, msbi)); 
+		list.add(new ShortMessage(status, MIDIControllers.DATA_ENTRY, msb)); 
+		if(!omitFine) list.add(new ShortMessage(status, MIDIControllers.DATA_ENTRY_LSB, lsb));
 		
 		//Do I really need these?
 		//list.add(new ShortMessage(status, 0x62, 0x7F)); 
@@ -337,10 +337,10 @@ public class MidiMessageGenerator {
 		int msbi = (index >>> 7) & 0x7F;
 		int lsbi = index &0x7F;
 
-		list.add(new ShortMessage(status, 0x64, lsbi)); 
-		list.add(new ShortMessage(status, 0x65, msbi)); 
-		list.add(new ShortMessage(status, 0x06, msb)); 
-		if(!omitFine) list.add(new ShortMessage(status, 0x26, lsb));
+		list.add(new ShortMessage(status, MIDIControllers.RPN_LSB, lsbi)); 
+		list.add(new ShortMessage(status, MIDIControllers.RPN_MSB, msbi)); 
+		list.add(new ShortMessage(status, MIDIControllers.DATA_ENTRY, msb)); 
+		if(!omitFine) list.add(new ShortMessage(status, MIDIControllers.DATA_ENTRY_LSB, lsb));
 		
 		//Do I really need these?
 		//list.add(new ShortMessage(status, 0x64, 0x7F)); 
