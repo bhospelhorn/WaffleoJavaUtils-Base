@@ -40,6 +40,10 @@ public class BufferReference{
 		if(listeners != null) listeners.clear();
 	}
 	
+	public void setByteOrder(boolean big_endian){
+		src.setEndian(big_endian);
+	}
+	
 	/*----- Read -----*/
 	
 	public byte getByte(){
