@@ -1,8 +1,11 @@
 package waffleoRai_AutoCode.typedefs;
 
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 
 import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
@@ -23,6 +26,8 @@ public class BingennerTypedef {
 	protected String description;
 	protected DataFieldDef[] fields;
 	
+	protected Map<String, String> xml_attr; //Unparsed attributes
+	
 	protected int byte_order = Bingenner.BYTEORDER_PARENT;
 	
 	/*----- Init -----*/
@@ -32,6 +37,7 @@ public class BingennerTypedef {
 		if(parent_pack != null){
 			parent_pack.addChildType(this);
 		}
+		xml_attr = new HashMap<String, String>();
 		
 		if(xml_element == null) return;
 		if(xml_element.hasAttribute(ATTR_NAME)) type_name = xml_element.getAttribute(ATTR_NAME);
@@ -47,6 +53,22 @@ public class BingennerTypedef {
 			}
 			else if(val.equals("system")){
 				byte_order = Bingenner.BYTEORDER_SYSTEM;
+			}
+		}
+		
+		//Other attributes
+		NamedNodeMap allattr = xml_element.getAttributes();
+		int attrcount = allattr.getLength();
+		for(int i = 0; i < attrcount; i++){
+			Node a = allattr.item(i);
+			if(a.getNodeType() == Node.ATTRIBUTE_NODE){
+				String k = a.getNodeName();
+				String v = a.getNodeValue();
+				//System.err.println("BingennerTypedef.<init> || Attr found: " + k + " = " + v);
+				if(k.equals(ATTR_NAME)) continue;
+				if(k.equals(ATTR_DESC)) continue;
+				if(k.equals(ATTR_BYTEORDER)) continue;
+				xml_attr.put(k, v);
 			}
 		}
 		
@@ -107,6 +129,7 @@ public class BingennerTypedef {
 	public String getName(){return type_name;}
 	public String getDescription(){return description;}
 	public int getPreferredByteOrder(){return byte_order;}
+	public String getMiscAttribute(String key){return xml_attr.get(key);}
 	
 	public DataFieldDef[] getFields(){return fields;}
 	

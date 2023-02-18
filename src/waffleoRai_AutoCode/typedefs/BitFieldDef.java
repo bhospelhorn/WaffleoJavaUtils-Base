@@ -7,6 +7,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import waffleoRai_AutoCode.BingennerTarget;
+import waffleoRai_Files.XMLReader;
 
 public class BitFieldDef extends DataFieldDef{
 	
@@ -33,6 +34,7 @@ public class BitFieldDef extends DataFieldDef{
 					this.bit_width = 1; //Set to 1.
 				}
 			}
+			xml_attr = XMLReader.getAttributes(xml_element);
 		}
 		
 		public int getWidth(){return bit_width;}

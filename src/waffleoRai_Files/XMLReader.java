@@ -2,6 +2,8 @@ package waffleoRai_Files;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
@@ -9,6 +11,8 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
 
 public class XMLReader {
@@ -43,5 +47,20 @@ public class XMLReader {
 	public static void clearStatic(){
 		static_reader = null;
 	}
-
+	
+	public static Map<String, String> getAttributes(Node node){
+		Map<String, String> map = new HashMap<String, String>();
+		NamedNodeMap allattr = node.getAttributes();
+		int attrcount = allattr.getLength();
+		for(int i = 0; i < attrcount; i++){
+			Node a = allattr.item(i);
+			if(a.getNodeType() == Node.ATTRIBUTE_NODE){
+				String k = a.getNodeName();
+				String v = a.getNodeValue();
+				map.put(k, v);
+			}
+		}
+		return map;
+	}
+	
 }

@@ -7,6 +7,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import waffleoRai_AutoCode.BingennerTarget;
+import waffleoRai_Files.XMLReader;
 
 public class AnonStructFieldDef extends DataFieldDef{
 	
@@ -19,6 +20,7 @@ public class AnonStructFieldDef extends DataFieldDef{
 		if(xml_element == null) return;
 		if(xml_element.hasAttribute(ATTR_NAME)) super.name = xml_element.getAttribute(ATTR_NAME);
 		if(xml_element.hasAttribute(ATTR_DESC)) super.description = xml_element.getAttribute(ATTR_DESC);
+		xml_attr = XMLReader.getAttributes(xml_element);
 		
 		LinkedList<DataFieldDef> templist = new LinkedList<DataFieldDef>();
 		

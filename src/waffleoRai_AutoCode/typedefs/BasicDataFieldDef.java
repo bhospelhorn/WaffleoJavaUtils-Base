@@ -4,6 +4,7 @@ import org.w3c.dom.Element;
 
 import waffleoRai_AutoCode.Bingenner;
 import waffleoRai_AutoCode.BingennerTarget;
+import waffleoRai_Files.XMLReader;
 
 public class BasicDataFieldDef extends DataFieldDef{
 	
@@ -24,6 +25,7 @@ public class BasicDataFieldDef extends DataFieldDef{
 		if(xml_element.hasAttribute(ATTR_DESC)) super.description = xml_element.getAttribute(ATTR_DESC);
 		if(xml_element.hasAttribute(ATTR_TYPE)) type_name = xml_element.getAttribute(ATTR_TYPE);
 		if(xml_element.hasAttribute(ATTR_DEFOVAL)) default_value = xml_element.getAttribute(ATTR_DEFOVAL);
+		xml_attr = XMLReader.getAttributes(xml_element);
 	}
 	
 	public String getTypeName(){return type_name;}

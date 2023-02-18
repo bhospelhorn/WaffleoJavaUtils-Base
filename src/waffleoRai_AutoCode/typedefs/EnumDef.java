@@ -59,7 +59,7 @@ public class EnumDef {
 	public String getDescription(){return description;}
 	public BingennerPackage getPackage(){return parent_pkg;}
 
-	public int getValueCounts(){
+	public int getValueCount(){
 		if(values == null) return 0;
 		return values.length;
 	}

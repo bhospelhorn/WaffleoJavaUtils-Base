@@ -1,6 +1,8 @@
 package waffleoRai_AutoCode;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,6 +12,7 @@ import waffleoRai_AutoCode.java.BingenJavaTarget;
 import waffleoRai_AutoCode.typedefs.BingennerTypedef;
 import waffleoRai_AutoCode.typedefs.DataFieldDef;
 import waffleoRai_AutoCode.typedefs.EnumDef;
+import waffleoRai_AutoCode.typedefs.EnumVal;
 
 public class BingennerJava extends Bingenner{
 	
@@ -45,7 +48,61 @@ public class BingennerJava extends Bingenner{
 	}
 
 	protected void outputEnumType(EnumDef def) throws IOException{
-		//TODO
+		String e_name = def.getName().replace("Enum:", ""); //Shouldn't have that, but just in case.
+		BingennerPackage pkg = def.getPackage();
+		String desc = def.getDescription();
+		
+		//Figure out type
+		String e_type = def.getTypeString();
+		String putType = null;
+		boolean sixtyfour = false;
+		if(e_type.equalsIgnoreCase("u8") || e_type.equalsIgnoreCase("s8")){
+			putType = "byte";
+		}
+		else if(e_type.equalsIgnoreCase("u16") || e_type.equalsIgnoreCase("s16")){
+			putType = "short";
+		}
+		else if(e_type.equalsIgnoreCase("u32") || e_type.equalsIgnoreCase("s32")){
+			putType = "int";
+		}
+		else if(e_type.equalsIgnoreCase("u64") || e_type.equalsIgnoreCase("s64")){
+			putType = "long";
+			sixtyfour = true;
+		}
+		else{
+			System.err.println("BingennerJava.outputEnumType || Type \"" + e_type + "\" not currently supported for enums. Skipping.");
+			return;
+		}
+		
+		String outpath = super.current_output_dir + File.separator + e_name + ".java";
+		BufferedWriter bw = new BufferedWriter(new FileWriter(outpath));
+		bw.write("package " + pkg.getFullPackageString() + ";\n\n");
+		if(desc != null){
+			bw.write("/*" + desc + "*/\n");
+		}
+		bw.write("public class " + e_name + "{\n\n");
+		
+		int valcount = def.getValueCount();
+		for(int i = 0; i < valcount; i++){
+			EnumVal eval = def.getValue(i);
+			String v = eval.getValueString();
+			bw.write("\tpublic static final ");
+			bw.write(putType);
+			bw.write(" ");
+			bw.write(eval.getName());
+			bw.write(" = ");
+			bw.write(v);
+			if(sixtyfour && !v.endsWith("L")) bw.write("L");
+			bw.write(";");
+			desc = eval.getDescription();
+			if(desc != null){
+				bw.write("//" + desc);
+			}
+			bw.write("\n");
+		}
+		
+		bw.write("\n}\n");
+		bw.close();
 	}
 	
 	protected void outputType(BingennerTypedef def) throws IOException {
