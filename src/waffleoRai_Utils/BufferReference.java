@@ -90,6 +90,12 @@ public class BufferReference{
 		return val;
 	}
 	
+	public String nextASCIIString(int len){
+		String s = src.getASCII_string(pos, len);
+		pos += s.length();
+		return s;
+	}
+	
 	public String nextASCIIString(){
 		String s = src.getASCII_string(pos, '\0');
 		pos += s.length() + 1;

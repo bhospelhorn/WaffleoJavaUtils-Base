@@ -34,6 +34,7 @@ public class BingenJavaTarget implements BingennerTarget{
 	public static final String IMPORT_FILEBUFFER = "waffleoRai_Utils.FileBuffer";
 	public static final String IMPORT_BUFFERREF = "waffleoRai_Utils.BufferReference";
 	public static final String IMPORT_MULTIBUFF = "waffleoRai_Utils.MultiFileBuffer";
+	public static final String IMPORT_FTEX = "waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException";
 	
 	public static final String WRITER_BUFFERNAME = "output";
 	public static final String VARNAME_INDATA = "input";
@@ -41,12 +42,15 @@ public class BingenJavaTarget implements BingennerTarget{
 	public static final String VARNAME_READER_COUNT = "bytesRead";
 	public static final String VARNAME_WRITER_COUNT = "wsize";
 	
+	public static final String EXNAME_IO = "IOException";
+	public static final String EXNAME_UNSUPFILE = "UnsupportedFileTypeException";
+	
 	public static final String FUNCNAME_READER = "readDataIn";
 	public static final String FUNCNAME_WRITER = "writeDataOut";
 	public static final String FUNCNAME_SIZECALC = "estAllocSize";
-	public static final String FUNCSIG_READER = "public long " + FUNCNAME_READER + "(BufferReference input)";
-	public static final String FUNCSIG_WRITER_A = "public FileBuffer " + FUNCNAME_WRITER + "()";
-	public static final String FUNCSIG_WRITER_B = "public long " + FUNCNAME_WRITER + "(FileBuffer output)";
+	public static final String FUNCSIG_READER = "public long " + FUNCNAME_READER + "(BufferReference input) throws " + EXNAME_IO + ", " + EXNAME_UNSUPFILE;
+	public static final String FUNCSIG_WRITER_A = "public FileBuffer " + FUNCNAME_WRITER + "() throws " + EXNAME_IO;
+	public static final String FUNCSIG_WRITER_B = "public long " + FUNCNAME_WRITER + "(FileBuffer output) throws " + EXNAME_IO;
 	public static final String FUNCSIG_SIZECALC = "public int " + FUNCNAME_SIZECALC + "()";
 	
 	/*----- Instance Variables -----*/
@@ -61,7 +65,7 @@ public class BingenJavaTarget implements BingennerTarget{
 	//Open doc
 	private String out_dir;
 	private String current_pkg_string;
-	private String typename;
+	protected String typename;
 	private String desc;
 	private List<String> imports;
 	
@@ -130,6 +134,7 @@ public class BingenJavaTarget implements BingennerTarget{
 	}
 	
 	/*----- Getters -----*/
+	public boolean getOutputByteOrder(){return this.output_byteorder;}
 	
 	/*----- Setters -----*/
 	
@@ -769,7 +774,7 @@ public class BingenJavaTarget implements BingennerTarget{
 	public boolean openDoc(String dir, BingennerTypedef def){
 		if(def == null) return false;
 		out_dir = dir;
-		typename = def.getName().substring(0,1).toUpperCase() + def.getName().substring(1);
+		typename = StringUtils.capitalize(def.getName());
 		desc = def.getDescription();
 		BingennerPackage pkg = def.getPackage();
 		if(pkg != null) this.current_pkg_string = pkg.getFullPackageString();
@@ -783,9 +788,12 @@ public class BingenJavaTarget implements BingennerTarget{
 		BufferedWriter bw = new BufferedWriter(new FileWriter(out_path));
 		
 		if(current_pkg_string != null) bw.write("package " + current_pkg_string + ";\n\n");
+		bw.write("import java.io.IOException;\n");
 		bw.write("import " + IMPORT_FILEBUFFER + ";\n");
 		bw.write("import " + IMPORT_BUFFERREF + ";\n");
-		bw.write("import " + IMPORT_MULTIBUFF + ";\n\n");
+		bw.write("import " + IMPORT_MULTIBUFF + ";\n");
+		bw.write("import " + IMPORT_FTEX + ";\n\n");
+		
 		
 		if(!imports.isEmpty()){
 			for(String str : imports){
@@ -1189,11 +1197,5 @@ public class BingenJavaTarget implements BingennerTarget{
 
 	/*----- Static Util -----*/
 	
-	public static String resolveEnumTypeClassName(String input_str){
-		if(input_str == null) return null;
-		String ename = input_str.replace("Enum:", "");
-		String cap = ename.substring(0,1).toUpperCase();
-		return cap + ename.substring(1);
-	}
 	
 }

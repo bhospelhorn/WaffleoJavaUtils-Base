@@ -142,4 +142,13 @@ public class BingennerJava extends Bingenner{
 		javawriter.closeCurrentDoc();
 	}
 
+/*----- Static Util -----*/
+	
+	public static String resolveEnumTypeClassName(String input_str){
+		if(input_str == null) return null;
+		String ename = input_str.replace("Enum:", "");
+		String cap = ename.substring(0,1).toUpperCase();
+		return cap + ename.substring(1);
+	}
+	
 }

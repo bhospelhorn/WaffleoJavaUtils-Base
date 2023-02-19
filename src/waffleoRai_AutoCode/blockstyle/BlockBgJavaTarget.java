@@ -3,18 +3,14 @@ package waffleoRai_AutoCode.blockstyle;
 import java.io.BufferedWriter;
 import java.io.IOException;
 
+import waffleoRai_AutoCode.BingennerJava;
 import waffleoRai_AutoCode.java.BingenJavaTarget;
 import waffleoRai_AutoCode.typedefs.AnonStructFieldDef;
 import waffleoRai_AutoCode.typedefs.ArrayFieldDef;
 import waffleoRai_AutoCode.typedefs.BasicDataFieldDef;
-import waffleoRai_AutoCode.typedefs.BingennerTypedef;
 import waffleoRai_AutoCode.typedefs.BitFieldDef;
 import waffleoRai_AutoCode.typedefs.DataFieldDef;
-import waffleoRai_AutoCode.typedefs.EnumDef;
 import waffleoRai_AutoCode.typedefs.ListDef;
-
-//TODO Readers also need if statement added if there is a versince
-//	That way field not read if trying to read older versions
 
 public class BlockBgJavaTarget extends BingenJavaTarget{
 
@@ -26,6 +22,7 @@ public class BlockBgJavaTarget extends BingenJavaTarget{
 	
 	public static final String XMLKEY_VER_START = "VersionSince";
 	public static final String XMLKEY_VER_END = "VersionUntil";
+	public static final String XMLKEY_VER_NOW = "CurrentVersion";
 	public static final String XMLKEY_BLOCKID = "BlockId";
 	
 	protected static final String KEY_VERMAJ = "VER_MAJOR";
@@ -35,12 +32,13 @@ public class BlockBgJavaTarget extends BingenJavaTarget{
 	protected static final String IVARNAME_VERMAJ = "versionMajor";
 	protected static final String IVARNAME_VERMIN = "versionMinor";
 	
-	public static final String FUNCNAME_READER = "readBlockIn";
-	public static final String FUNCNAME_WRITER = "writeBlockOut";
+	//public static final String FUNCNAME_READER = "readBlockIn";
+	public static final String FUNCNAME_BLOCK_WRITER = "writeBlockOut";
 	public static final String FUNCNAME_SKIP = "skipRead";
-	public static final String FUNCSIG_READER = "public void " + FUNCNAME_READER + "(BufferReference input)";
-	public static final String FUNCSIG_WRITER = "public FileBuffer " + FUNCNAME_WRITER + "()";
-	public static final String FUNCSIG_SKIP = "public static void " + FUNCNAME_SKIP + "(BufferReference input)";
+	//public static final String FUNCSIG_READER = "public void " + FUNCNAME_READER + "(BufferReference input)";
+	public static final String FUNCSIG_BLOCK_WRITER_A = "public FileBuffer " + FUNCNAME_BLOCK_WRITER + "() throws " + EXNAME_IO;
+	public static final String FUNCSIG_BLOCK_WRITER_B = "public long " + FUNCNAME_BLOCK_WRITER + "(FileBuffer output) throws " + EXNAME_IO;
+	public static final String FUNCSIG_SKIP = "public static void " + FUNCNAME_SKIP + "(BufferReference input) throws " + EXNAME_IO + ", " + EXNAME_UNSUPFILE;
 	
 	/*----- Instance Variables -----*/
 	
@@ -66,9 +64,6 @@ public class BlockBgJavaTarget extends BingenJavaTarget{
 		ver_major = vmaj;
 		ver_minor = vmin;
 		fixed_size = false;
-		super.lines_rfunc.add("short " + IVARNAME_VERMAJ + ";");
-		super.lines_rfunc.add("short " + IVARNAME_VERMIN + ";");
-		//TODO Add read lines for blockID, size, and version? Or maybe just override that function altogether?
 	}
 	
 	/*----- Util -----*/
@@ -246,7 +241,7 @@ public class BlockBgJavaTarget extends BingenJavaTarget{
 		if(!versionUntilOkay(data_field)){
 			String vuntil = data_field.getAttribute(XMLKEY_VER_END);
 			Version v = new Version(vuntil);
-			String eclassname = BingenJavaTarget.resolveEnumTypeClassName(data_field.getTypeName());
+			String eclassname = BingennerJava.resolveEnumTypeClassName(data_field.getTypeName());
 			String szstr = eclassname + "." + CONSTNAME_ENUMSIZE;
 			String[] readlines = {VARNAME_INDATA + ".add(" + szstr + ");"};
 			addRFuncIfLessThanVer(v, readlines);
@@ -338,17 +333,109 @@ public class BlockBgJavaTarget extends BingenJavaTarget{
 	/*----- Internal -----*/
 	
 	protected void writeReaderFunction(BufferedWriter bw, int extra_indent) throws IOException{
-		//TODO
 		//Also adds the skip function here.
+		if(blockID != null){
+			outputLine(FUNCSIG_READER + "{", bw, 1 + extra_indent);
+			outputLine("long stpos = " + VARNAME_INDATA + ".getBufferPosition();", bw, 2 + extra_indent);
+			
+			//Add header read
+			outputLine("short " + IVARNAME_VERMAJ + ";", bw, 2 + extra_indent);
+			outputLine("short " + IVARNAME_VERMIN + ";", bw, 2 + extra_indent);
+			outputLine("String idcheck = " + VARNAME_INDATA + ".nextASCIIString(4);", bw, 2 + extra_indent);
+			outputLine("if (!idcheck.equals(" + KEY_BLOCKID + "){", bw, 2 + extra_indent);
+			outputLine("throw new " + EXNAME_UNSUPFILE + "(\"" + super.typename +"." + FUNCNAME_READER + " || Block ID did not match!\");", bw, 3 + extra_indent);
+			outputLine("}", bw, 2 + extra_indent);
+			outputLine(IVARNAME_VERMAJ + " = " + VARNAME_INDATA + ".nextShort();", bw, 2 + extra_indent);
+			outputLine(IVARNAME_VERMIN + " = " + VARNAME_INDATA + ".nextShort();", bw, 2 + extra_indent);
+			outputLine(VARNAME_INDATA +  ".nextInt();", bw, 2 + extra_indent); //Just skip size field.
+			
+			//Body
+			outputLine(VARNAME_INDATA + ".setByteOrder(" + super.getOutputByteOrder() + ");", bw, 2 + extra_indent);
+			for(String line : lines_rfunc){
+				outputLine(line, bw, 2 + extra_indent);
+			}
+			//return
+			outputLine("return (" + VARNAME_INDATA + ".getBufferPosition() - stpos);", bw, 2 + extra_indent);
+			outputLine("}", bw, 1 + extra_indent);
+			newline(bw);
+		}
+		else{
+			super.writeReaderFunction(bw, extra_indent);
+		}
+		
+		//Skip function
+		outputLine(FUNCSIG_SKIP + "{", bw, 1 + extra_indent);
+		if(this.fixed_size){
+			//Just add
+			int skip_size = 0;
+			for(BlockInfo block : ser_blocks){
+				skip_size += block.base_alloc;
+			}
+			outputLine(VARNAME_INDATA + ".add(" + skip_size + ");", bw, 2 + extra_indent);
+		}
+		else{
+			//Just call readDataIn
+			outputLine(super.typename + " me = new " + super.typename + "();", bw, 2 + extra_indent);
+			outputLine("me." + FUNCNAME_READER + "(" + VARNAME_INDATA + ");", bw, 2 + extra_indent);
+		}
+		outputLine("}", bw, 1 + extra_indent);
+		newline(bw);
 	}
 	
-	protected void writeBlockWriterFunction(BufferedWriter bw, int extra_indent) throws IOException{
-		
+	protected void writeBlockWriterFunctions(BufferedWriter bw, int extra_indent) throws IOException{
+		if(blockID != null){
+			outputLine(FUNCSIG_BLOCK_WRITER_B + "{", bw, 1 + extra_indent);
+			outputLine("if (" + WRITER_BUFFERNAME + " instanceof MultiFileBuffer){", bw, 2 + extra_indent);
+			outputLine("return " + FUNCNAME_BLOCK_WRITER + "();", bw, 3 + extra_indent);
+			outputLine("}", bw, 2 + extra_indent);
+			outputLine("else {", bw, 2 + extra_indent);
+			outputLine(WRITER_BUFFERNAME + ".printASCIIToFile(" + KEY_BLOCKID + ");", bw, 3 + extra_indent);
+			outputLine(WRITER_BUFFERNAME + ".addToFile(" + KEY_VERMAJ + ");", bw, 3 + extra_indent);
+			outputLine(WRITER_BUFFERNAME + ".addToFile(" + KEY_VERMIN + ");", bw, 3 + extra_indent);
+			outputLine("long szpos = " + WRITER_BUFFERNAME + ".getCurrentPosition();", bw, 3 + extra_indent);
+			outputLine(WRITER_BUFFERNAME + ".addToFile((int)0);", bw, 3 + extra_indent); //Size dummy.
+			outputLine(FUNCNAME_WRITER + "(" + WRITER_BUFFERNAME + ");", bw, 3 + extra_indent);
+			outputLine("long cpos = " + WRITER_BUFFERNAME + ".getCurrentPosition();", bw, 3 + extra_indent);
+			outputLine("long blockSize = cpos - szpos - 4;", bw, 3 + extra_indent);
+			outputLine(WRITER_BUFFERNAME + ".replaceInt((int)blockSize, szpos);", bw, 3 + extra_indent);
+			outputLine("return (blockSize + 12);", bw, 3 + extra_indent);
+			outputLine("}", bw, 2 + extra_indent);
+			outputLine("}", bw, 1 + extra_indent);
+			newline(bw);
+			
+			outputLine(FUNCSIG_BLOCK_WRITER_A + "{", bw, 1 + extra_indent);
+			outputLine("MultiFileBuffer output = new MultiFileBuffer(2);", bw, 2 + extra_indent);
+			outputLine("FileBuffer blockhdr = new FileBuffer(12, " + super.getOutputByteOrder() + ");", bw, 2 + extra_indent);
+			outputLine("blockhdr.printASCIIToFile(" + KEY_BLOCKID + ");", bw, 2 + extra_indent);
+			outputLine("blockhdr.addToFile(" + KEY_VERMAJ + ");", bw, 2 + extra_indent);
+			outputLine("blockhdr.addToFile(" + KEY_VERMIN + ");", bw, 2 + extra_indent);
+			newline(bw);
+			outputLine("FileBuffer blockdata = " + FUNCNAME_WRITER + "();", bw, 2 + extra_indent);
+			outputLine("blockhdr.addToFile((int)blockdata.getFileSize());", bw, 2 + extra_indent);
+			outputLine("output.addToFile(blockhdr);", bw, 2 + extra_indent);
+			outputLine("output.addToFile(blockdata);", bw, 2 + extra_indent);
+			outputLine("return output;", bw, 2 + extra_indent);
+			outputLine("}", bw, 1 + extra_indent);
+			newline(bw);
+		}
+		else{
+			outputLine(FUNCSIG_BLOCK_WRITER_B + "{", bw, 1 + extra_indent);
+			outputLine("return " + FUNCNAME_WRITER + "(" + WRITER_BUFFERNAME + ");", bw, 2 + extra_indent);
+			outputLine("}", bw, 1 + extra_indent);
+			newline(bw);
+			
+			outputLine(FUNCSIG_BLOCK_WRITER_A + "{", bw, 1 + extra_indent);
+			outputLine("return " + FUNCNAME_WRITER + "();", bw, 2 + extra_indent);
+			outputLine("}", bw, 1 + extra_indent);
+			newline(bw);
+		}
 	}
 	
 	protected void writeWriterFunctions(BufferedWriter bw, String wfunc_name, int extra_indent) throws IOException{
 		//Calls super, but also adds writeBlockWriterFunction
 		//Ignores wfunc_name given to it and subsitutes its own
+		super.writeWriterFunctions(bw, FUNCNAME_BLOCK_WRITER, extra_indent);
+		writeBlockWriterFunctions(bw, extra_indent);
 	}
 	
 	
