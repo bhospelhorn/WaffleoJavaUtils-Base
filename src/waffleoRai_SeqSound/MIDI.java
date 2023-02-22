@@ -150,6 +150,8 @@ public class MIDI {
 		return this.contents;
 	}
 	
+	public int getTPQN(){return this.TicksPerQNote;}
+	
 	/*--- Setters ---*/
 	
 	public void setInternalName(String name)
@@ -666,7 +668,7 @@ public class MIDI {
 		return true;
 	}
 	
-	private boolean serialize(OutputStream out) throws IOException
+	public boolean serializeTo(OutputStream out) throws IOException
 	{
 		Track[] tList = contents.getTracks();
 		boolean good = true;
@@ -686,7 +688,7 @@ public class MIDI {
 		try 
 		{
 			BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(path));
-			serialize(bos);
+			serializeTo(bos);
 			bos.close();
 		} 
 		catch (IOException e) 
