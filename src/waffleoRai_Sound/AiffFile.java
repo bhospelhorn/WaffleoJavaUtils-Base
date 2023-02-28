@@ -409,6 +409,8 @@ public class AiffFile {
 		exp += 0x3fff;
 		exp |= sign << 15;
 		mbits = (1L << 63) | (mbits << (63-52));
+		data.addToFile((short)exp);
+		data.addToFile(mbits);
 		return true;
 	}
 	
