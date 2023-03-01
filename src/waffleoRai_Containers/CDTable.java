@@ -1,12 +1,5 @@
 package waffleoRai_Containers;
 
-import java.util.Calendar;
-import java.util.GregorianCalendar;
-import java.util.TimeZone;
-
-import waffleoRai_Utils.FileBuffer;
-
-
 /*
  * UPDATES
  * 
@@ -14,14 +7,16 @@ import waffleoRai_Utils.FileBuffer;
  * 	Updated all file offset values to be long instead of int
  * 	Added javadoc annotation
  * 	Updated to use Gregorian Calendar timestamping instead of arbitrary "Date" class.
+ * 2023.02.28 | 1.1.0 -> 1.2.0
+ * 	Updated timestamping again to use CDDateTime
  */
 
 /**
  * Interface to represent a top directory table of a CD image.
  * <br> Can be used to correlate file names and offsets with locations and sectors on CD image.
  * @author Blythe Hospelhorn
- * @version 1.1.0
- * @since October 31, 2017
+ * @version 1.2.0
+ * @since February 28, 2023
  */
 public interface CDTable {
 	
@@ -30,8 +25,8 @@ public interface CDTable {
 	 * refer to a file on the CD and contain information such as the file's name, size,
 	 * and the sector it begins at.
 	 * @author Blythe Hospelhorn
-	 * @version 1.1.0
-	 * @since October 31, 2017
+	 * @version 1.2.0
+	 * @since February 28, 2023
 	 */
 	public static class CDTEntry implements Comparable<CDTEntry>
 	{
@@ -40,7 +35,7 @@ public interface CDTable {
 		private long size;
 		private boolean isDir;
 		
-		private GregorianCalendar dateCreated;
+		private CDDateTime dateCreated;
 		
 		/* -- Constructors -- */
 		
@@ -48,8 +43,7 @@ public interface CDTable {
 		 * Construct an empty CD table entry.
 		 * All instance variables are set to default values.
 		 */
-		public CDTEntry()
-		{
+		public CDTEntry(){
 			this.fileName = null;
 			this.location = -1;
 			this.size = 0;
@@ -62,8 +56,7 @@ public interface CDTable {
 		 * @param name File or directory name.
 		 * @param startBlock Relative index of the first sector containing data for the file.
 		 */
-		public CDTEntry(String name, int startBlock)
-		{
+		public CDTEntry(String name, int startBlock){
 			this.fileName = name;
 			this.location = startBlock;
 			this.size = 0;
@@ -77,8 +70,7 @@ public interface CDTable {
 		 * Get the name of the file or directory referenced by this CD table entry.
 		 * @return String containing the file name.
 		 */
-		public String getName()
-		{
+		public String getName(){
 			return this.fileName;
 		}
 		
@@ -88,8 +80,7 @@ public interface CDTable {
 		 * @return An integer representing the relative index of the first sector(block)
 		 * of the file.
 		 */
-		public int getStartBlock()
-		{
+		public int getStartBlock(){
 			return this.location;
 		}
 		
@@ -98,8 +89,7 @@ public interface CDTable {
 		 * @return A long integer representing the size in bytes of the file or directory
 		 * referenced by this CD entry.
 		 */
-		public long getFileSize()
-		{
+		public long getFileSize(){
 			return this.size;
 		}
 		
@@ -108,47 +98,40 @@ public interface CDTable {
 		 * @return True - If this entry refers to a directory.
 		 * <br>False - If this entry refers to a file or something else.
 		 */
-		public boolean isDirectory()
-		{
+		public boolean isDirectory(){
 			return this.isDir;
 		}
 		
 		/**
 		 * Get the timestamp for the file or directory this entry refers to.
-		 * @return A GregorianCalendar containing the date this file was created.
+		 * @return A CDDateTime containing the date this file was created.
 		 */
-		public Calendar getDate()
-		{
+		public CDDateTime getDate(){
 			return this.dateCreated;
 		}
 
 		/**
 		 * Get the year the file referred to by this entry was created.
-		 * @return Integer representing the time stamped year according to the Gregorian calendar.
+		 * @return Integer representing the time stamped year.
 		 */
-		public int getTimestampYear()
-		{
-			return this.dateCreated.get(Calendar.YEAR);
+		public int getTimestampYear(){
+			return this.dateCreated.getYear();
 		}
 		
 		/**
 		 * Get the month the file referred to by this entry was created.
-		 * @return Integer representing the time stamped month (with January starting at 0) 
-		 * according to the Gregorian calendar.
+		 * @return Integer representing the time stamped month (with January starting at 1).
 		 */
-		public int getTimestampMonth()
-		{
-			return this.dateCreated.get(Calendar.MONTH);
+		public int getTimestampMonth(){
+			return this.dateCreated.getMonth();
 		}
 		
 		/**
 		 * Get the day of the month the file referred to by this entry was created.
-		 * @return Integer representing the time stamped day (1 - 31) 
-		 * according to the Gregorian calendar.
+		 * @return Integer representing the time stamped day (1 - 31).
 		 */
-		public int getTimestampDay()
-		{
-			return this.dateCreated.get(Calendar.DAY_OF_MONTH);
+		public int getTimestampDay(){
+			return this.dateCreated.getDay();
 		}
 		
 		/**
@@ -156,27 +139,24 @@ public interface CDTable {
 		 * @return Integer representing the time stamped hour according to the 24 hour clock.
 		 * (Hour returned refers to military time).
 		 */
-		public int getTimestampHour()
-		{
-			return this.dateCreated.get(Calendar.HOUR_OF_DAY);
+		public int getTimestampHour(){
+			return this.dateCreated.getHour();
 		}
 		
 		/**
 		 * Get the minute the file referred to by this entry was created.
 		 * @return Integer representing the time stamped minute according to the 24 hour clock.
 		 */
-		public int getTimestampMinute()
-		{
-			return this.dateCreated.get(Calendar.MINUTE);
+		public int getTimestampMinute(){
+			return this.dateCreated.getMinute();
 		}
 		
 		/**
 		 * Get the second the file referred to by this entry was created.
 		 * @return Integer representing the time stamped second according to the 24 hour clock.
 		 */
-		public int getTimestampSecond()
-		{
-			return this.dateCreated.get(Calendar.SECOND);
+		public int getTimestampSecond(){
+			return this.dateCreated.getSecond();
 		}
 		
 		/**
@@ -184,18 +164,8 @@ public interface CDTable {
 		 * this entry was created and time stamped in.
 		 * @return Integer representing an offset from GMT.
 		 */
-		public int getTimestampZoneOffset()
-		{
-			return this.dateCreated.get(Calendar.ZONE_OFFSET);
-		}
-		
-		/**
-		 * Get the timezone the file referenced by this entry was time stamped in.
-		 * @return TimeZone object containing timezone information for this file.
-		 */
-		public TimeZone getTimestampTimezone()
-		{
-			return this.dateCreated.getTimeZone();
+		public int getTimestampZoneOffset(){
+			return this.dateCreated.getTimezone();
 		}
 		
 		/**
@@ -203,8 +173,7 @@ public interface CDTable {
 		 * this entry.
 		 * @return An integer representing the file size in sectors.
 		 */
-		public int getSizeInSectors()
-		{
+		public int getSizeInSectors() {
 			int sectorCount = (int)(this.size / 0x930L);
 			if (this.size % 0x930L != 0) sectorCount++;
 			return sectorCount;
@@ -253,12 +222,11 @@ public interface CDTable {
 		}
 		
 		/**
-		 * Set the timestamp (date of file/directory creation) by providing a Gregorian Calendar
+		 * Set the timestamp (date of file/directory creation) by providing a CDDateTime
 		 * containing information on the date, time, and timezone.
-		 * @param stamp GregorianCalendar specifying the timestamp to set.
+		 * @param stamp CDDateTime specifying the timestamp to set.
 		 */
-		public void setDate(GregorianCalendar stamp)
-		{
+		public void setDate(CDDateTime stamp){
 			this.dateCreated = stamp;
 		}
 		
@@ -286,14 +254,13 @@ public interface CDTable {
 		 * Get an extended string providing information on the entry beyond the file/directory name.
 		 * @return A multi-line string in English containing information about the entry.
 		 */
-		public String getInformation()
-		{
+		public String getInformation() {
 			String s = "";
 			s += this.fileName + "\n";
 			s += "\t" + "Starting Sector: " + this.location + "\n";
 			s += "\t" + "File Size: 0x" + Long.toHexString(size) + "\n";
 			s += "\t" + "Is Directory: " + this.isDir + "\n";
-			s += "\t" + "Timestamp: " + FileBuffer.formatTimeAmerican(this.dateCreated) + "\n";
+			s += "\t" + "Timestamp: " + this.dateCreated.toString() + "\n";
 			//s += "\t" + "Number of Sectors: " +  + "\n"; PUT ON OUTSIDE
 			
 			return s;

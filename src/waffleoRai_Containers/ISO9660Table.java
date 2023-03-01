@@ -2,12 +2,10 @@ package waffleoRai_Containers;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.TimeZone;
 
 import waffleoRai_Containers.ISO.Sector;
 import waffleoRai_Utils.BitStreamer;
@@ -23,18 +21,20 @@ import waffleoRai_Utils.FileBuffer;
  * 	Fixed some parsing issues, especially with timestamp
  * 2017.11.18 | 1.3.0 -> 1.4.0
  * 	Updated for compatibility with Java 9 (removed Observer/Observable usage)
+ * 2023.02.28 | 1.4.0 -> 1.5.0
+ * 	Updated to use CDDateTime instead of GregorianCalendar
  */
 
 /**
  * CDTable class specific to ISO9660 standard (no extensions).
  * Can parse an ISO object upon construction to deduce a ISO9660 encoded CD image's file structure.
  * @author Blythe Hospelhorn
- * @version 1.4.0
- * @since November 18, 2017
+ * @version 1.5.0
+ * @since February 28, 2023
  *
  */
-public class ISO9660Table implements CDTable
-{
+public class ISO9660Table implements CDTable {
+	
 	/**
 	 * The (relative) sector where the Primary Volume Descriptor in an ISO9660
 	 * encoded image is found.
@@ -61,8 +61,7 @@ public class ISO9660Table implements CDTable
 	 * @version 1.0.0
 	 * @since August 31, 2017
 	 */
-	public static class ISO9660Entry extends CDTable.CDTEntry 
-	{
+	public static class ISO9660Entry extends CDTable.CDTEntry {
 		private int volumeSeqNumber;
 		private boolean rawFile;
 		
@@ -142,37 +141,8 @@ public class ISO9660Table implements CDTable
 			super.setFileSize(isoData.intFromFile(cPos));
 			cPos += 4;
 			
-			GregorianCalendar c = FileBuffer.getVanillaTimestamp();
-			int year = 1900 + Byte.toUnsignedInt(isoData.getByte(cPos));
-			cPos++;
-			
-			int month = Byte.toUnsignedInt(isoData.getByte(cPos)) - 1;
-			cPos++;
-			
-			int date = Byte.toUnsignedInt(isoData.getByte(cPos));
-			cPos++;
-			
-			int hourOfDay = Byte.toUnsignedInt(isoData.getByte(cPos));
-			cPos++;
-			
-			int minute = Byte.toUnsignedInt(isoData.getByte(cPos));
-			cPos++;
-			
-			int second = Byte.toUnsignedInt(isoData.getByte(cPos));
-			cPos++;
-			
-			c.set(year, month, date, hourOfDay, minute, second);
-			
-			int tz = (int)isoData.getByte(cPos);
-			tz *= 15 * 60 * 1000;
-			cPos++;
-			String[] possible = TimeZone.getAvailableIDs(tz);
-			if (possible != null && possible.length > 0)
-			{
-				String tzID = possible[0];
-				c.setTimeZone(TimeZone.getTimeZone(tzID));
-				super.setDate(c);
-			}
+			super.setDate(CDDateTime.readFromFileEntry(isoData.getReferenceAt(cPos)));
+			cPos += 7;
 			
 			byte flags = isoData.getByte(cPos);
 			cPos++;

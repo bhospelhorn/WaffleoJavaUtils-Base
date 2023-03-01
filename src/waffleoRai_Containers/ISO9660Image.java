@@ -2,8 +2,6 @@ package waffleoRai_Containers;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.GregorianCalendar;
-import java.util.TimeZone;
 
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeModel;
@@ -36,6 +34,8 @@ import waffleoRai_Utils.VirDirectory;
  * 	For compatibility with Java 9, took out all Observer/Observable usage
  * 2020.06.15 | 1.4.0 -> 2.0.0
  * 	Internal dir structure overhaul to use DirectoryNode instead of VirDirectory
+ * 2023.02.28 | 2.0.0 -> 2.1.0
+ * 	Use CDDateTime instead of GregorianCalendar for timestamps
  * 
  */
 
@@ -45,8 +45,8 @@ import waffleoRai_Utils.VirDirectory;
  * <br>This class allows for quick access to contents of CD by referencing either the file path or
  * the sector index.
  * @author Blythe Hospelhorn
- * @version 2.0.0
- * @since June 15, 2020
+ * @version 2.1.0
+ * @since February 28, 2023
  *
  */
 @SuppressWarnings("deprecation")
@@ -76,7 +76,8 @@ public class ISO9660Image implements CDImage{
 	private String dataPrepIdent;
 	private String applicationIdent;
 	
-	private GregorianCalendar dateCreated;
+	private CDDateTime dateCreated;
+	private CDDateTime dateModified;
 	private String CDXAtag;
 
 	/* --- Construction --- */
@@ -180,8 +181,7 @@ public class ISO9660Image implements CDImage{
 	 * @param myISO Raw image to parse.
 	 * @throws UnsupportedFileTypeException If there is an error parsing volume information.
 	 */
-	protected void readInformation(ISO myISO) throws UnsupportedFileTypeException
-	{
+	protected void readInformation(ISO myISO) throws UnsupportedFileTypeException{
 		int cPos = 1;
 		FileBuffer pvd = myISO.getSectorRelative(16).getData();
 		pvd.setEndian(true);
@@ -237,38 +237,12 @@ public class ISO9660Image implements CDImage{
 		cPos += 128 + (37 * 3);
 		
 		//Insert 17 byte timestamp read here
-		GregorianCalendar time = FileBuffer.getVanillaTimestamp();
-		String y = pvd.getASCII_string(cPos, 4); cPos += 4;
-		String m = pvd.getASCII_string(cPos, 2); cPos += 2;
-		String d = pvd.getASCII_string(cPos, 2); cPos += 2;
-		String h = pvd.getASCII_string(cPos, 2); cPos += 2;
-		String i = pvd.getASCII_string(cPos, 2); cPos += 2;
-		String n = pvd.getASCII_string(cPos, 2); cPos += 4;
-		byte tz = pvd.getByte(cPos); cPos++;
-		try
-		{
-			int year = Integer.parseInt(y);
-			int month = Integer.parseInt(m) - 1;
-			int date = Integer.parseInt(d);
-			int hourOfDay = Integer.parseInt(h);
-			int minute = Integer.parseInt(i);
-			int second = Integer.parseInt(n);
-			time.set(year, month, date, hourOfDay, minute, second);
-			int itz = (int)tz;
-			itz *= 15 * 60 * 1000;
-			String[] possibleZones = TimeZone.getAvailableIDs(itz);
-			if (possibleZones != null && possibleZones.length > 0)
-			{
-				time.setTimeZone(TimeZone.getTimeZone(possibleZones[0]));
-			}
-		}
-		catch(NumberFormatException ex)
-		{
-			throw new FileBuffer.UnsupportedFileTypeException();
-		}
-		this.dateCreated = time;
+		this.dateCreated = CDDateTime.readFromVolumeDescriptor(pvd.getReferenceAt(cPos));
+		cPos += 17;
+		this.dateModified = CDDateTime.readFromVolumeDescriptor(pvd.getReferenceAt(cPos));
+		cPos += 17;
 		
-		cPos += (17 * 3) + 2 + 141;
+		cPos += (17 * 2) + 2 + 141;
 		
 		this.CDXAtag = pvd.getASCII_string(cPos, 8);	
 	}
@@ -540,8 +514,7 @@ public class ISO9660Image implements CDImage{
 	 * @return GregorianCalendar object containing the timestamp. Calendar lacks fraction of second
 	 * information.
 	 */
-	public GregorianCalendar getDateCreated()
-	{
+	public CDDateTime getDateCreated() {
 		return this.dateCreated;
 	}
 
@@ -611,7 +584,8 @@ public class ISO9660Image implements CDImage{
  		System.out.println("Publisher Ident: " + this.publisherIdent);
  		System.out.println("Data Prepper Ident: " + this.dataPrepIdent);
  		System.out.println("Application Ident: " + this.applicationIdent);
- 		System.out.println("Timestamp: " + FileBuffer.formatTimeAmerican(this.dateCreated));
+ 		System.out.println("Creation Timestamp: " + this.dateCreated.toString());
+ 		System.out.println("Modified Timestamp: " + this.dateModified.toString());
  		System.out.println("XA Tag: " + this.CDXAtag);
  		//System.out.println("Has Event Container: " + (this.eventContainer != null));
  		System.out.println();
