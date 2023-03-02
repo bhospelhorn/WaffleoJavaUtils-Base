@@ -228,6 +228,7 @@ public interface CDTable {
 		 */
 		public void setDate(CDDateTime stamp){
 			this.dateCreated = stamp;
+			//System.out.println("Date set. Non-null: " + (this.dateCreated != null));
 		}
 		
 		/* -- Sorting -- */
@@ -260,7 +261,12 @@ public interface CDTable {
 			s += "\t" + "Starting Sector: " + this.location + "\n";
 			s += "\t" + "File Size: 0x" + Long.toHexString(size) + "\n";
 			s += "\t" + "Is Directory: " + this.isDir + "\n";
-			s += "\t" + "Timestamp: " + this.dateCreated.toString() + "\n";
+			if(this.dateCreated != null){
+				s += "\t" + "Timestamp: " + this.dateCreated.toString() + "\n";
+			}
+			else{
+				s += "\t" + "Timestamp: <None>\n";
+			}
 			//s += "\t" + "Number of Sectors: " +  + "\n"; PUT ON OUTSIDE
 			
 			return s;

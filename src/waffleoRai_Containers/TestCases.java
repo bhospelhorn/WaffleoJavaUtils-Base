@@ -10,7 +10,7 @@ public class TestCases {
 	
 	public static String standardImage = "C:\\Users\\Blythe\\Documents\\Desktop\\Dogz 4.iso";
 	public static String sectorDataOnlyImage = "C:\\Users\\Blythe\\Documents\\Desktop\\MathJourneyTrimmed.iso";
-	public static String XAImage = "C:\\Users\\Blythe\\Documents\\Game Stuff\\PSX\\Games\\Track 01.iso";
+	public static String XAImage = "C:\\Users\\Blythe\\Documents\\Game Stuff\\PSX\\Games\\Tokyo Mew Mew PSX 01.iso";
 	public static String largeImage = "C:\\Users\\Blythe\\Documents\\Desktop\\Fedora-Workstation-Live-x86_64-26-1.5.iso";
 
 	public static void testStandardImage()
@@ -156,13 +156,13 @@ public class TestCases {
 		System.out.println("------------------------------------------------");
 		System.out.println();
 		
-	//	testXAImage();
+		testXAImage();
 		System.out.println("XA image test complete!");
 		System.out.println("------------------------------------------------");
 		System.out.println("------------------------------------------------");
 		System.out.println();
 		
-		testLargeImage();
+		//testLargeImage();
 		System.out.println("Large image test complete!");
 		System.out.println("------------------------------------------------");
 		System.out.println("------------------------------------------------");

@@ -103,7 +103,8 @@ public class CDDateTime {
 	
 	public ZonedDateTime toZonedDateTime(){
 		int nano = (int)(Math.round(((double)frame/75.0) * 1000000000.0));
-		ZoneId zone = ZoneId.ofOffset("GMT", ZoneOffset.ofHours(timezone));
+		//ZoneId zone = ZoneId.ofOffset("GMT", ZoneOffset.ofHours(timezone));
+		ZoneId zone = ZoneId.ofOffset("GMT", ZoneOffset.ofHours(0));
 		return ZonedDateTime.of(year, month, day, 
 				hour, minute, second, nano, zone);
 	}
