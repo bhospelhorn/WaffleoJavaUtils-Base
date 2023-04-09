@@ -122,6 +122,16 @@ public class BufferReference{
 		return src.longFromFile(pos+offset);
 	}
 	
+	public String nextVariableLengthString(BinFieldSize lensz, int padTo){
+		return nextVariableLengthString("UTF8", lensz, padTo);
+	}
+	
+	public String nextVariableLengthString(String encoding, BinFieldSize lensz, int padTo){
+		SerializedString ss = this.src.readVariableLengthString(encoding, pos, lensz, padTo);
+		String val = ss.getString();
+		pos += ss.getSizeOnDisk();
+		return val;
+	}
 	
 	/*----- Write -----*/
 	
