@@ -41,6 +41,13 @@ public class MultiValMap<K extends Comparable<K>,V> {
 		if(list != null) copy.addAll(list);
 		return copy;
 	}
+	
+	public V getFirstValueWithKey(K key){
+		List<V> list = map.get(key);
+		if(list == null) return null;
+		if(list.isEmpty()) return null;
+		return list.get(0);
+	}
 
 	public boolean hasValueAt(K key, V value){
 		List<V> list = map.get(key);

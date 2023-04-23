@@ -15,13 +15,13 @@ public abstract class Region {
 	private int iVolume; //In units of 1/(signed int max) of max volume
 	private short iPan; //Positive values to right - % of short max
 	
-	private byte iUnityKey; //0-127
-	private byte iFineTune; //In cents
+	private int iUnityKey; //0-127
+	private int iFineTune; //In cents
 	
-	private byte iMinKey; //0-127
-	private byte iMaxKey; //0-127
-	private byte iMinVelocity; //0-127
-	private byte iMaxVelocity; //0-127
+	private int iMinKey; //0-127
+	private int iMaxKey; //0-127
+	private int iMinVelocity; //0-127
+	private int iMaxVelocity; //0-127
 	
 	private int iPitchBendMin; //Semitones
 	private int iPitchBendMax; //Semitones
@@ -35,8 +35,7 @@ public abstract class Region {
 	private List<Modulator> iMods;
 	private List<Generator> iGens;
 	
-	public void resetDefaults()
-	{
+	public void resetDefaults(){
 		iVolume = Integer.MAX_VALUE;
 		iPan = 0;
 		iUnityKey = -1; //This is an override to the sound unity key. If -1, then no override entered.
@@ -75,26 +74,24 @@ public abstract class Region {
 		this.iPan = pan;
 	}
 
-	public byte getUnityKey()
-	{
-		return iUnityKey;
-	}
+	public byte getUnityKey(){return (byte)iUnityKey;}
+	public int getUnityKeyInt(){return iUnityKey;}
 	
-	public void setUnityKey(byte pitch)
-	{
+	public void setUnityKey(byte pitch){
 		if (pitch < 0) pitch = 0;
 		iUnityKey = pitch;
 	}
 	
-	public byte getFineTuneCents()
-	{
-		return iFineTune;
+	public void setUnityKey(int pitch){
+		if (pitch < 0) pitch = 0;
+		iUnityKey = pitch;
 	}
 	
-	public void setFineTune(byte cents)
-	{
-		iFineTune = cents;
-	}
+	public byte getFineTuneCents(){return (byte)iFineTune;}
+	public int getFineTuneCentsInt(){return iFineTune;}
+	
+	public void setFineTune(byte cents){iFineTune = cents;}
+	public void setFineTune(int cents){iFineTune = cents;}
 	
 	public int getPitchBendMin()
 	{
@@ -112,46 +109,54 @@ public abstract class Region {
 		iPitchBendMax = max;
 	}
 	
-	public byte getMinKey() 
-	{
-		return iMinKey;
-	}
+	public byte getMinKey() {return (byte)iMinKey;}
+	public int getMinKeyInt(){return iMinKey;}
 
-	public void setMinKey(byte pitch) 
-	{
+	public void setMinKey(byte pitch){
 		if (pitch < 0) pitch = 0;
 		this.iMinKey = pitch;
 	}
 	
-	public byte getMaxKey() 
-	{
-		return iMaxKey;
+	public void setMinKey(int pitch){
+		if (pitch < 0) pitch = 0;
+		this.iMinKey = pitch;
 	}
+	
+	public byte getMaxKey(){return (byte)iMaxKey;}
+	public int getMaxKeyInt(){return iMaxKey;}
 
-	public void setMaxKey(byte pitch) 
-	{
+	public void setMaxKey(byte pitch){
 		if (pitch < 0) pitch = 0;
 		this.iMaxKey = pitch;
 	}
 	
-	public byte getMinVelocity() 
-	{
-		return iMinVelocity;
+	public void setMaxKey(int pitch){
+		if (pitch < 0) pitch = 0;
+		this.iMaxKey = pitch;
 	}
+	
+	public byte getMinVelocity(){return (byte)iMinVelocity;}
+	public int getMinVelocityInt(){return iMinVelocity;}
 
-	public void setMinVelocity(byte v) 
-	{
+	public void setMinVelocity(byte v) {
 		if (v < 0) v = 0;
 		this.iMinVelocity = v;
 	}
 	
-	public byte getMaxVelocity() 
-	{
-		return iMaxVelocity;
+	public void setMinVelocity(int v) {
+		if (v < 0) v = 0;
+		this.iMinVelocity = v;
 	}
+	
+	public byte getMaxVelocity(){return (byte)iMaxVelocity;}
+	public int getMaxVelocityInt(){return iMaxVelocity;}
 
-	public void setMaxVelocity(byte v) 
-	{
+	public void setMaxVelocity(byte v){
+		if (v < 0) v = 0;
+		this.iMaxVelocity = v;
+	}
+	
+	public void setMaxVelocity(int v){
 		if (v < 0) v = 0;
 		this.iMaxVelocity = v;
 	}
