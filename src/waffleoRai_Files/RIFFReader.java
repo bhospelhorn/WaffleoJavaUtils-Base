@@ -3,8 +3,10 @@ package waffleoRai_Files;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import waffleoRai_DataContainers.MultiValMap;
 import waffleoRai_Files.tree.FileNode;
@@ -62,6 +64,19 @@ public class RIFFReader {
 			if(list != null) list.clearCache();
 		}
 		
+		public int getDataSize(){
+			if(chunk == null) return 0;
+			return (int)chunk.getLength();
+		}
+		
+		public int getFullChunkSize(){
+			//Includes header
+			if(chunk == null) return 0;
+			int datsize = (int)chunk.getLength();
+			if(list != null) return datsize + 12;
+			return datsize + 8;
+		}
+		
 	}
 	
 	public static class RIFFList{
@@ -113,6 +128,29 @@ public class RIFFReader {
 			}
 		}
 		
+	}
+	
+	public static class RIFFINFO{
+		private String key;
+		private String value;
+		
+		public void readFromChunk(RIFFChunk chunk) throws IOException{
+			if(chunk == null) return;
+			key = chunk.getMagicNumber();
+			FileBuffer buff = chunk.openBuffer();
+			value = buff.getASCII_string(0L, '\0');
+		}
+		
+		public void readFromChunk(RIFFChunk chunk, String encoding) throws IOException{
+			if(chunk == null) return;
+			key = chunk.getMagicNumber();
+			FileBuffer buff = chunk.openBuffer();
+			value = buff.readEncoded_string(encoding, 0L, '\0');
+		}
+		
+		public String getKey(){return key;}
+		public String getValue(){return value;}
+
 	}
 	
 	/*----- Instance Variables -----*/
@@ -238,6 +276,25 @@ public class RIFFReader {
 		}
 		
 		return rdr;
+	}
+	
+	public static Map<String, String> readINFOList(RIFFChunk info) throws IOException{
+
+		if(info == null || !info.isList()) return null;
+		if(!info.magic.equals("INFO")) return null;
+		
+		Map<String, String> map = new HashMap<String, String>();
+		RIFFList ilist = info.getListContents();
+		if(ilist.contents == null) return map;
+		
+		for(int i = 0; i < ilist.contents.length; i++){
+			if(ilist.contents[i] == null) continue;
+			RIFFINFO inode = new RIFFINFO();
+			inode.readFromChunk(ilist.contents[i]);
+			map.put(inode.key, inode.value);
+		}
+		
+		return map;
 	}
 	
 	/*----- Getters -----*/

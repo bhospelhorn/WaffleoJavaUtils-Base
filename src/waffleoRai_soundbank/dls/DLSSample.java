@@ -1,8 +1,10 @@
 package waffleoRai_soundbank.dls;
 
 import java.io.IOException;
+import java.util.Map;
 
 import waffleoRai_DataContainers.MultiValMap;
+import waffleoRai_Files.RIFFReader;
 import waffleoRai_Files.RIFFReader.RIFFChunk;
 import waffleoRai_Files.RIFFReader.RIFFList;
 import waffleoRai_Sound.wav.WAVFormat;
@@ -26,6 +28,8 @@ public class DLSSample {
 	/*----- Instance Variables -----*/
 	
 	private DLSID id;
+	private Map<String, String> info;
+	
 	private WAVFormat fmt;
 	private byte[] sampleData;
 	
@@ -42,6 +46,15 @@ public class DLSSample {
 	private DLSSample(){}
 	
 	/*----- Getters -----*/
+	
+	public String getNameTag(){
+		return getInfoTag("INAM");
+	}
+	
+	public String getInfoTag(String key){
+		if(info == null) return null;
+		return info.get(key);
+	}
 	
 	public DLSID getID(){return id;}
 	public WAVFormat getWaveFormatInfo(){return fmt;}
@@ -103,6 +116,12 @@ public class DLSSample {
 			if(loopcount == 1){
 				samp.loop = DLSSampleLoop.read(ptr);
 			}
+		}
+		
+		//Info
+		child = listMap.getFirstValueWithKey(DLSFile.MAGIC_INFO);
+		if(child != null && child.isList()){
+			samp.info = RIFFReader.readINFOList(child);
 		}
 		
 		return samp;

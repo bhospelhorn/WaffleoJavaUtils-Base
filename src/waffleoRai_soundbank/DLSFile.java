@@ -78,6 +78,8 @@ public class DLSFile {
 	/*----- Instance Variables -----*/
 	
 	private DLSID id; //Optional
+	private Map<String, String> info;
+	
 	private ArrayList<DLSInstrument> instruments;
 	private ArrayList<DLSSample> samples; //If these seem wonkily mapped, try loading in the pool table too
 	
@@ -88,6 +90,27 @@ public class DLSFile {
 	private DLSFile(){}
 	
 	/*----- Getters -----*/
+	
+	public DLSID getID(){return id;}
+	
+	public String getNameTag(){
+		return getInfoTag("INAM");
+	}
+	
+	public String getInfoTag(String key){
+		if(info == null) return null;
+		return info.get(key);
+	}
+	
+	public int getInstrumentCount(){
+		if(instruments == null) return 0;
+		return instruments.size();
+	}
+	
+	public int getSampleCount(){
+		if(samples == null) return 0;
+		return samples.size();
+	}
 	
 	/*----- Setters -----*/
 	
@@ -158,14 +181,20 @@ public class DLSFile {
 			}
 			
 			i++;
-			pos += (int)gc.getChunkReference().getLength() + 12;
+			pos += gc.getFullChunkSize();
 		}
 		
 		//dlid
-		chunk = riff_rdr.getFirstTopLevelChunk(DLSFile.MAGIC_DLID);
+		chunk = riff_rdr.getFirstTopLevelChunk(MAGIC_DLID);
 		if(chunk != null){
 			dls.id = new DLSID();
 			dls.id.readIn(chunk.open());
+		}
+		
+		//INFO
+		chunk = riff_rdr.getFirstTopLevelChunk(MAGIC_INFO);
+		if(chunk != null && chunk.isList()){
+			dls.info = RIFFReader.readINFOList(chunk);
 		}
 		
 		riff_rdr.clearDataCache();

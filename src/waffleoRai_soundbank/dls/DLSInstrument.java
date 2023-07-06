@@ -3,8 +3,10 @@ package waffleoRai_soundbank.dls;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import waffleoRai_DataContainers.MultiValMap;
+import waffleoRai_Files.RIFFReader;
 import waffleoRai_Files.RIFFReader.RIFFChunk;
 import waffleoRai_Files.RIFFReader.RIFFList;
 import waffleoRai_Utils.BufferReference;
@@ -25,6 +27,8 @@ public class DLSInstrument {
 	/*----- Instance Variables -----*/
 	
 	private DLSID id; //Optional
+	private Map<String, String> info;
+	
 	private int ulBank; //Program index
 	private int ulInstrument; //Program index
 	private ArrayList<DLSRegion> regions;
@@ -37,6 +41,35 @@ public class DLSInstrument {
 	private DLSInstrument(int regAlloc, int artAlloc){
 		regions = new ArrayList<DLSRegion>(regAlloc);
 		globalArt = new ArrayList<DLSArticulator>(artAlloc);
+	}
+	
+	/*----- Getters -----*/
+	
+	public String getNameTag(){
+		return getInfoTag("INAM");
+	}
+	
+	public String getInfoTag(String key){
+		if(info == null) return null;
+		return info.get(key);
+	}
+	
+	public int getRegionCount(){
+		if(regions == null) return 0;
+		return regions.size();
+	}
+	
+	public int getArticulatorCount(){
+		if(globalArt == null) return 0;
+		return globalArt.size();
+	}
+	
+	public int getBankIndex(){
+		return ulBank;
+	}
+	
+	public int getInstrumentIndex(){
+		return ulInstrument;
 	}
 	
 	/*----- Readers -----*/
@@ -119,6 +152,12 @@ public class DLSInstrument {
 					inst.globalArt.add(artobj);
 				}
 			}
+		}
+		
+		//Info
+		child = listMap.getFirstValueWithKey(DLSFile.MAGIC_INFO);
+		if(child != null && child.isList()){
+			inst.info = RIFFReader.readINFOList(child);
 		}
 		
 		return inst;

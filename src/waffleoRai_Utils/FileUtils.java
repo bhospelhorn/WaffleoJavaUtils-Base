@@ -6,6 +6,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.LinkedList;
 import java.util.List;
@@ -91,7 +92,7 @@ public class FileUtils {
 
 	}
 
-	public static boolean moveDirectory(String src, String dest) throws IOException{
+	public static boolean moveDirectory(String src, String dest, boolean overwrite) throws IOException{
 
 		if(!FileBuffer.directoryExists(src)) return false;
 		
@@ -101,12 +102,17 @@ public class FileUtils {
 		for(Path p : src_str){
 			if(Files.isDirectory(p)){
 				String myname = p.getFileName().toString();
-				b = b && moveDirectory(p.toAbsolutePath().toString(), dest + File.separator + myname);
+				b = b && moveDirectory(p.toAbsolutePath().toString(), dest + File.separator + myname, overwrite);
 			}
 			else{
 				//Just move.
 				String tpath = p.toAbsolutePath().toString().replace(src, dest);
-				Files.move(p, Paths.get(tpath));
+				if(!overwrite && FileBuffer.fileExists(tpath)){
+					Files.delete(Paths.get(tpath));
+				}
+				else{
+					Files.move(p, Paths.get(tpath), StandardCopyOption.REPLACE_EXISTING);	
+				}
 			}
 		}
 		src_str.close();
