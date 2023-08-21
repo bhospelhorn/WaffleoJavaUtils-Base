@@ -3,6 +3,8 @@ package waffleoRai_GUITools;
 import java.awt.Component;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import javax.swing.JButton;
@@ -14,32 +16,38 @@ import javax.swing.JToggleButton;
 public class ComponentGroup {
 
 	private Map<String, Component> compMap;
+	private List<ComponentGroup> children;
 	
-	public ComponentGroup()
-	{
+	public ComponentGroup(){
 		compMap = new HashMap<String, Component>();
+		children = new LinkedList<ComponentGroup>();
 	}
 	
-	public void addComponent(String name, Component comp)
-	{
+	public void addComponent(String name, Component comp){
 		compMap.put(name, comp);
 	}
 	
-	public void removeComponent(String name)
-	{
-		if (compMap.containsKey(name))
-		{
+	public void removeComponent(String name){
+		if (compMap.containsKey(name)){
 			compMap.remove(name);
 		}
 	}
 	
-	public Component getComponent(String name)
-	{
+	public ComponentGroup newChild(){
+		ComponentGroup child = new ComponentGroup();
+		children.add(child);
+		return child;
+	}
+	
+	public void clearChildren(){
+		children.clear();
+	}
+	
+	public Component getComponent(String name){
 		return compMap.get(name);
 	}
 	
-	public JTextField getTextBox(String name)
-	{
+	public JTextField getTextBox(String name){
 		Component c = getComponent(name);
 		if (c == null) return null;
 		if (!(c instanceof JTextField)) return null;
@@ -47,8 +55,7 @@ public class ComponentGroup {
 		return t;
 	}
 	
-	public JLabel getLabel(String name)
-	{
+	public JLabel getLabel(String name){
 		Component c = getComponent(name);
 		if (c == null) return null;
 		if (!(c instanceof JLabel)) return null;
@@ -56,8 +63,7 @@ public class ComponentGroup {
 		return l;
 	}
 	
-	public JCheckBox getCheckbox(String name)
-	{
+	public JCheckBox getCheckbox(String name){
 		Component c = getComponent(name);
 		if (c == null) return null;
 		if (!(c instanceof JCheckBox)) return null;
@@ -65,8 +71,7 @@ public class ComponentGroup {
 		return cb;
 	}
 	
-	public JToggleButton getToggle(String name)
-	{
+	public JToggleButton getToggle(String name){
 		Component c = getComponent(name);
 		if (c == null) return null;
 		if (!(c instanceof JToggleButton)) return null;
@@ -74,8 +79,7 @@ public class ComponentGroup {
 		return tb;
 	}
 	
-	public JButton getButton(String name)
-	{
+	public JButton getButton(String name){
 		Component c = getComponent(name);
 		if (c == null) return null;
 		if (!(c instanceof JButton)) return null;
@@ -83,21 +87,20 @@ public class ComponentGroup {
 		return b;
 	}
 	
-	public boolean hasComponent(String name)
-	{
+	public boolean hasComponent(String name){
 		return compMap.containsKey(name);
 	}
 	
-	public void setEnabling(boolean enabled)
-	{
+	public void setEnabling(boolean enabled){
 		Collection<Component> allComps = compMap.values();
 		for (Component c : allComps) c.setEnabled(enabled);
+		for(ComponentGroup g : children) g.setEnabling(enabled);
 	}
 	
-	public void repaint()
-	{
+	public void repaint(){
 		Collection<Component> allComps = compMap.values();
 		for (Component c : allComps) c.repaint();
+		for(ComponentGroup g : children) g.repaint();
 	}
 	
 }
