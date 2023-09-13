@@ -47,6 +47,10 @@ public class ComponentGroup {
 		return compMap.get(name);
 	}
 	
+	public void clear(){
+		compMap.clear();
+	}
+	
 	public JTextField getTextBox(String name){
 		Component c = getComponent(name);
 		if (c == null) return null;
@@ -95,6 +99,12 @@ public class ComponentGroup {
 		Collection<Component> allComps = compMap.values();
 		for (Component c : allComps) c.setEnabled(enabled);
 		for(ComponentGroup g : children) g.setEnabling(enabled);
+	}
+	
+	public void setVisible(boolean visible){
+		Collection<Component> allComps = compMap.values();
+		for (Component c : allComps) c.setVisible(visible);
+		for(ComponentGroup g : children) g.setVisible(visible);
 	}
 	
 	public void repaint(){
