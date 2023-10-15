@@ -351,4 +351,9 @@ public class RIFFReader {
 		}
 	}
 	
+	public void close(){
+		clearDataCache();
+		top_level.clearValues();
+	}
+	
 }

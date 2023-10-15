@@ -1,27 +1,24 @@
 package waffleoRai_GUITools;
 
-import javax.swing.JRadioButton;
+import javax.swing.AbstractButton;
 
 public class RadioButtonGroup {
 	
-	private JRadioButton[] buttons;
+	private AbstractButton[] buttons;
 	private int selected;
 	
-	public RadioButtonGroup(int buttonNumber)
-	{
+	public RadioButtonGroup(int buttonNumber){
 		if (buttonNumber <= 0) buttonNumber = 16;
-		buttons = new JRadioButton[buttonNumber];
+		buttons = new AbstractButton[buttonNumber];
 	}
 	
-	public void addButton(JRadioButton button, int index)
-	{
+	public void addButton(AbstractButton button, int index){
 		if (index < 0 || index >= buttons.length) throw new IndexOutOfBoundsException();
 		buttons[index] = button;
 		selected = 0;
 	}
 	
-	public void select(int index)
-	{
+	public void select(int index){
 		if (index < 0 || index >= buttons.length) return;
 		selected = index;
 		for (int i = 0; i < buttons.length; i++)
@@ -38,8 +35,7 @@ public class RadioButtonGroup {
 		}
 	}
 	
-	public void select(JRadioButton button)
-	{
+	public void select(AbstractButton button){
 		if (button == null) return;
 		if (!button.isEnabled()) return;
 		boolean found = false;
@@ -56,18 +52,15 @@ public class RadioButtonGroup {
 		}
 	}
 	
-	public int getSelectedIndex()
-	{
+	public int getSelectedIndex(){
 		return selected;
 	}
 	
-	public JRadioButton getSelectedButton()
-	{
+	public AbstractButton getSelectedButton(){
 		return buttons[selected];
 	}
 
-	private int firstEnabledButton()
-	{
+	private int firstEnabledButton(){
 		for (int i = 0; i < buttons.length; i++)
 		{
 			if (buttons[i] != null)
@@ -78,8 +71,7 @@ public class RadioButtonGroup {
 		return -1;
 	}
 	
-	public void disable(int index)
-	{
+	public void disable(int index){
 		if (index < 0 || index >= buttons.length) return;
 		if (buttons[index] != null)
 		{
@@ -88,8 +80,7 @@ public class RadioButtonGroup {
 		}
 	}
 	
-	public void enable(int index)
-	{
+	public void enable(int index){
 		if (index < 0 || index >= buttons.length) return;
 		if (buttons[index] != null)
 		{
@@ -97,24 +88,20 @@ public class RadioButtonGroup {
 		}
 	}
 	
-	public void disableAll()
-	{
+	public void disableAll(){
 		setEnabledAll(false);
 	}
 	
-	public void enableAll()
-	{
+	public void enableAll(){
 		setEnabledAll(true);
 	}
 	
-	public void setEnabledAll(boolean b)
-	{
-		for (JRadioButton rb : buttons) rb.setEnabled(b);
+	public void setEnabledAll(boolean b){
+		for (AbstractButton rb : buttons) rb.setEnabled(b);
 	}
 	
-	public void repaintAll()
-	{
-		for (JRadioButton rb : buttons) rb.repaint();
+	public void repaintAll(){
+		for (AbstractButton rb : buttons) rb.repaint();
 	}
 	
 }

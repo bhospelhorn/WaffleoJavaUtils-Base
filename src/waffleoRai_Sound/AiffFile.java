@@ -1,11 +1,12 @@
 package waffleoRai_Sound;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
+import waffleoRai_Files.AIFFReader;
+import waffleoRai_Files.AIFFReader.AIFFChunk;
+import waffleoRai_Utils.BufferReference;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
 import waffleoRai_Utils.MultiFileBuffer;
@@ -16,40 +17,48 @@ public class AiffFile {
 	
 	public static final String MAGIC_FORM = "FORM";
 	public static final String MAGIC_AIFF = "AIFF";
+	public static final String MAGIC_AIFC = "AIFC";
 	
 	public static final String MAGIC_COMM = "COMM";
 	public static final String MAGIC_INST = "INST";
 	public static final String MAGIC_SSND = "SSND";
+	public static final String MAGIC_APPL = "APPL";
 	
 	public static final short LOOPMODE_NONE = 0;
 	public static final short LOOPMODE_FWD = 1;
 	public static final short LOOPMODE_PINGPONG = 2;
+	
+	private static final float MAX_16 = 0x7fff;
 
 	/*----- Instance Variables -----*/
 	
+	protected AIFFReader reader; //Store reference to additional chunks.
+	
 	//COMM
-	private short channelCount;
-	private int frameCount = 0;
-	private short bitDepth;
-	private double sampleRate;
+	protected short channelCount;
+	protected int frameCount = 0;
+	protected short bitDepth;
+	protected double sampleRate;
+	protected int compressionId = 0;
+	protected String compressionName = null;
 	
 	//INST
-	private boolean includeInst = false;
-	private byte baseNote = 60;
-	private byte detune = 0;
-	private byte lowNote = 0;
-	private byte highNote = 127;
-	private byte lowVel = 0;
-	private byte highVel = 127;
-	private short gain = 0;
+	protected boolean includeInst = false;
+	protected byte baseNote = 60;
+	protected byte detune = 0;
+	protected byte lowNote = 0;
+	protected byte highNote = 127;
+	protected byte lowVel = 0;
+	protected byte highVel = 127;
+	protected short gain = 0;
 	
-	private short loops_playMode = LOOPMODE_NONE;
-	private short loops_start;
-	private short loops_end;
+	protected short loops_playMode = LOOPMODE_NONE;
+	protected short loops_start;
+	protected short loops_end;
 	
-	private short loopr_playMode = LOOPMODE_NONE;
-	private short loopr_start;
-	private short loopr_end;
+	protected short loopr_playMode = LOOPMODE_NONE;
+	protected short loopr_start;
+	protected short loopr_end;
 	
 	//SSND
 	//Store data in memory?
@@ -59,7 +68,7 @@ public class AiffFile {
 	
 	/*----- Init -----*/
 	
-	private AiffFile(){
+	protected AiffFile(){
 		samples = new LinkedList<float[][]>();
 	}
 	
@@ -73,10 +82,63 @@ public class AiffFile {
 	
 	/*----- Getters -----*/
 	
+	public boolean isCompressed(){return compressionId != 0;}
 	public short getChannelCount(){return channelCount;}
 	public int getFrameCount(){return frameCount;}
 	public short getBitDepth(){return bitDepth;}
 	public double getSampleRate(){return sampleRate;}
+	public int getCompressionId(){return compressionId;}
+	public String getCompressionName(){return compressionName;}
+	public boolean hasSustainLoop(){return loops_playMode != LOOPMODE_NONE;}
+	public boolean hasReleaseLoop(){return loopr_playMode != LOOPMODE_NONE;}
+	public int getSustainLoopMode(){return loops_playMode;}
+	public int getReleaseLoopMode(){return loopr_playMode;}
+	public int getSustainLoopStart(){return loops_start;}
+	public int getSustainLoopEnd(){return loops_end;}
+	public int getReleaseLoopStart(){return loopr_start;}
+	public int getReleaseLoopEnd(){return loopr_end;}
+	
+	public float[] getSamples(int channel){
+		if(frameCount < 1) return null;
+		float[] samps = new float[frameCount];
+		
+		int i = 0;
+		for(float[][] block : samples){
+			int bsize = block[channel].length;
+			for(int j = 0; j < bsize; j++){
+				samps[i++] = block[channel][j];
+			}
+		}
+		
+		if(add_block != null){
+			for(int j = 0; j < block_pos; j++){
+				samps[i++] = add_block[channel][j];
+			}
+		}
+		
+		return samps;
+	}
+	
+	public int[] getSamples16(int channel){
+		if(frameCount < 1) return null;
+		int[] samps = new int[frameCount];
+
+		int i = 0;
+		for(float[][] block : samples){
+			int bsize = block[channel].length;
+			for(int j = 0; j < bsize; j++){
+				samps[i++] = Math.round(block[channel][j] * MAX_16);
+			}
+		}
+		
+		if(add_block != null){
+			for(int j = 0; j < block_pos; j++){
+				samps[i++] = Math.round(add_block[channel][j] * MAX_16);
+			}
+		}
+		
+		return samps;
+	}
 	
 	/*----- Setters -----*/
 	
@@ -150,101 +212,121 @@ public class AiffFile {
 	
 	/*----- Reading -----*/
 	
-	public static AiffFile readAiff(FileBuffer inputData) throws UnsupportedFileTypeException{
-		long pos = inputData.findString(0L, 4L, MAGIC_FORM);
-		if(pos != 0L) throw new FileBuffer.UnsupportedFileTypeException("AiffFile.readAiff || FORM magic number not found!");
+	protected void readCOMM(BufferReference data){
+		channelCount = data.nextShort();
+		frameCount = data.nextInt();
+		bitDepth = data.nextShort();
 		
-		pos = inputData.findString(8L, 12L, MAGIC_FORM);
-		if(pos != 8L) throw new FileBuffer.UnsupportedFileTypeException("AiffFile.readAiff || AIFF magic number not found!");
+		FileBuffer buffer = new FileBuffer(10, true);
+		for(int i = 0; i < 10; i++) buffer.addToFile(data.nextByte());
+		sampleRate = AiffFile.readFloat80(buffer);
 		
-		//From the AIFF header, read all other chunks
-		Map<String, FileBuffer> chunkdata = new HashMap<String, FileBuffer>();
-		long fsize = inputData.getFileSize();
-		pos = 12L;
-		while(pos < fsize){
-			String chid = inputData.getASCII_string(pos, 4); pos += 4;
-			int chsz = inputData.intFromFile(pos); pos += 4;
-			FileBuffer chdat = inputData.createReadOnlyCopy(pos, pos+chsz);
-			chunkdata.put(chid, chdat);
-			pos += chsz;
+		//Compression, if AIFC
+		if(reader.getAIFFFileType().equals(MAGIC_AIFC)){
+			compressionId = data.nextInt();
+			int strsize = data.nextByte();
+			compressionName = data.nextASCIIString(strsize);
 		}
-		
-		//Read known blocks
-		AiffFile file = new AiffFile();
-		FileBuffer chunk = chunkdata.get("COMM");
-		if(chunk == null) throw new FileBuffer.UnsupportedFileTypeException("AiffFile.readAiff || COMM chunk not found!");
-		chunk.setCurrentPosition(0L);
-		file.channelCount = chunk.nextShort();
-		file.frameCount = chunk.nextInt();
-		file.bitDepth = chunk.nextShort();
-		try {
-			file.sampleRate = AiffFile.readFloat80(chunk.createCopy(8, 18));
-		} catch (IOException e) {
-			e.printStackTrace();
+		else{
+			compressionId = 0;
+			compressionName = null;
 		}
+	}
+	
+	protected void readSSND(BufferReference data){
+		//Only auto read if not compressed.
+		if(compressionId == 0) return;
 		
-		chunk = chunkdata.get("SSND");
-		if(chunk == null) throw new FileBuffer.UnsupportedFileTypeException("AiffFile.readAiff || SSND chunk not found!");
-		float max = (float)(1 << (file.bitDepth - 1)) - 1;
-		float[][] sample_dat = new float[file.channelCount][file.frameCount];
+		float max = (float)(1 << (bitDepth - 1)) - 1;
+		float[][] sample_dat = new float[channelCount][frameCount];
 		int rawsmpl = 0;
-		chunk.setCurrentPosition(8L);
-		for(int f = 0; f < file.frameCount; f++){
-			for(int c = 0; c < file.channelCount; c++){
-				switch(file.bitDepth){
+		for(int f = 0; f < frameCount; f++){
+			for(int c = 0; c < channelCount; c++){
+				switch(bitDepth){
 				case 8:
-					rawsmpl = (int)chunk.nextByte();
+					rawsmpl = (int)data.nextByte();
 					break;
 				case 16:
-					rawsmpl = (int)chunk.nextShort();
+					rawsmpl = (int)data.nextShort();
 					break;
 				case 24:
-					rawsmpl = chunk.nextShortish();
+					rawsmpl = data.next24Bits();
 					break;
 				case 32:
-					rawsmpl = chunk.nextInt();
+					rawsmpl = data.nextInt();
 					break;
 				}
 				sample_dat[c][f] = ((float)rawsmpl)/max;
 			}
 		}
+	}
+	
+	protected void readINST(BufferReference data){
+		baseNote = data.nextByte();
+		detune = data.nextByte();
+		lowNote = data.nextByte();
+		highNote = data.nextByte();
+		lowVel = data.nextByte();
+		highVel = data.nextByte();
+		gain = data.nextShort();
 		
-		chunk = chunkdata.get("INST");
+		loops_playMode = data.nextShort();
+		loops_start = data.nextShort();
+		loops_end = data.nextShort();
+		loopr_playMode = data.nextShort();
+		loopr_start = data.nextShort();
+		loopr_end = data.nextShort();
+		includeInst = true;
+	}
+	
+	public static AiffFile readAiff(FileBuffer inputData) throws UnsupportedFileTypeException, IOException{
+		if(inputData == null) return null;
+		return readAiff(inputData.getReferenceAt(0L));
+	}
+	
+	public static AiffFile readAiff(BufferReference inputData) throws UnsupportedFileTypeException, IOException{
+		if(inputData == null) return null;
+		AiffFile aiff = new AiffFile();
+		aiff.reader = AIFFReader.readFile(inputData, true);
+		if((!aiff.reader.getAIFFFileType().equals(MAGIC_AIFF)) && (!aiff.reader.getAIFFFileType().equals(MAGIC_AIFC))){
+			throw new FileBuffer.UnsupportedFileTypeException("AiffFile.readAiff || File form type not recognized!");
+		}
+		
+		//Look for COMM (throw if not found)
+		AIFFChunk chunk = aiff.reader.getFirstTopLevelChunk(MAGIC_COMM);
+		if(chunk == null) throw new FileBuffer.UnsupportedFileTypeException("AiffFile.readAiff || COMM chunk not found!");
+		aiff.readCOMM(chunk.open());
+		chunk.clearCache();
+		
+		//Look for SSND (throw if not found)
+		chunk = aiff.reader.getFirstTopLevelChunk(MAGIC_SSND);
+		if(chunk == null) throw new FileBuffer.UnsupportedFileTypeException("AiffFile.readAiff || SSND chunk not found!");
+		aiff.readSSND(chunk.open());
+		chunk.clearCache();
+		
+		//Look for INST
+		chunk = aiff.reader.getFirstTopLevelChunk(MAGIC_INST);
 		if(chunk != null){
-			chunk.setCurrentPosition(0L);
-			file.baseNote = chunk.nextByte();
-			file.detune = chunk.nextByte();
-			file.lowNote = chunk.nextByte();
-			file.highNote = chunk.nextByte();
-			file.lowVel = chunk.nextByte();
-			file.highVel = chunk.nextByte();
-			file.gain = chunk.nextShort();
-			
-			file.loops_playMode = chunk.nextShort();
-			file.loops_start = chunk.nextShort();
-			file.loops_end = chunk.nextShort();
-			file.loopr_playMode = chunk.nextShort();
-			file.loopr_start = chunk.nextShort();
-			file.loopr_end = chunk.nextShort();
-			file.includeInst = true;
+			aiff.readINST(chunk.open());
+			chunk.clearCache();
 		}
 		
-		//Free all sub-buffers in the chunk map before returning
-		for(FileBuffer ch : chunkdata.values()){
-			try{ch.dispose();}
-			catch(IOException ex){
-				ex.printStackTrace();
-			}
-		}
-		chunkdata.clear();
+		aiff.reader.clearDataCache();
 		
-		return file;
+		return aiff;
 	}
 	
 	/*----- Writing -----*/
 	
  	public FileBuffer serializeCOMM(){
-		FileBuffer out = new FileBuffer(26,true);
+ 		int alloc = 26;
+ 		if(compressionId != 0){
+ 			alloc += 4;
+ 			if(compressionName != null) alloc += compressionName.length() + 2;
+ 		}
+ 		
+ 		
+		FileBuffer out = new FileBuffer(alloc,true);
 		out.printASCIIToFile(MAGIC_COMM);
 		out.addToFile(18);
 		
@@ -252,6 +334,23 @@ public class AiffFile {
 		out.addToFile(frameCount);
 		out.addToFile(bitDepth);
 		AiffFile.writeFloat80(sampleRate, out);
+		
+		//Compressed?
+		if(compressionId != 0){
+			out.addToFile(compressionId);
+			if(compressionName != null){
+				int strlen = compressionName.length();
+				out.addToFile((byte)strlen);
+				out.printASCIIToFile(compressionName);
+				if(strlen % 2 == 0) out.addToFile((byte)0);
+			}
+			else{
+				out.addToFile((short)0);
+			}
+			
+			//Update size as well
+			out.replaceInt((int)(out.getFileSize() - 8), 4L);
+		}
 		
 		return out;
 	}
@@ -288,8 +387,8 @@ public class AiffFile {
 		
 		out.printASCIIToFile(MAGIC_SSND);
 		out.addToFile(sdat_size+8);
-		out.addToFile(0);
-		out.addToFile(0);
+		out.addToFile(0); //Offset (usually 0 anyway)
+		out.addToFile(0); //Block size (usually 0 anyway)
 		for(float[][] smplblock : samples){
 			int fcount = smplblock[0].length;
 			for(int f = 0; f < fcount; f++){

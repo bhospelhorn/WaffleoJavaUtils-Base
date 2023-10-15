@@ -111,6 +111,16 @@ public class PCM16Sound implements PCMSound{
 	public void setUnityKey(byte note){unityKey = note;}
 	public void setFineTune(int cents){this.fineTune_cents = cents;}
 	
+	public void setSample(int channel, int frame, short sample){
+		if(channel < 0 || channel >= data.length) return;
+		data[channel].setSample(frame, (int)sample);
+	}
+	
+	public void addSample(int channel, short sample){
+		if(channel < 0 || channel >= data.length) return;
+		data[channel].addSample((int)sample);
+	}
+	
 	public void setLoopPoints(int stpos, int edpos){
 		loopStart = stpos; loopEnd = edpos;
 		//System.err.println("Loop points set: " + loopStart + " - " + loopEnd);
