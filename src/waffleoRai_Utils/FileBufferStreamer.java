@@ -6,48 +6,39 @@ public class FileBufferStreamer implements StreamWrapper{
 	private long f_pos;
 	private long e_pos;
 	
-	public FileBufferStreamer(FileBuffer file)
-	{
+	public FileBufferStreamer(FileBuffer file){
 		buffer = file;
 		f_pos = 0;
 		e_pos = file.getFileSize();
 	}
 	
-	@Override
-	public byte get() 
-	{
+	public byte get() {
 		if(f_pos >= e_pos) return 0;
 		return buffer.getByte(f_pos++);
 	}
 
-	@Override
-	public int getFull() 
-	{
+	public int getFull(){
 		return Byte.toUnsignedInt(get());
 	}
 
-	@Override
-	public void push(byte b) 
-	{
+	public void push(byte b){
 		buffer.addToFile(b, 0);
+		e_pos++;
 	}
 
-	@Override
-	public void put(byte b) 
-	{
+	public void put(byte b){
 		buffer.addToFile(b);
+		e_pos++;
 	}
 
-	@Override
-	public boolean isEmpty() 
-	{
+	public boolean isEmpty(){
 		return (f_pos >= e_pos);
 	}
 
-	@Override
 	public void close() {}
 
-	@Override
 	public void rewind() {f_pos = 0;}
+	
+	public FileBuffer getData(){return buffer;}
 
 }

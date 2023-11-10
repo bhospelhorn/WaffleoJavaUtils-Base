@@ -44,6 +44,8 @@ import java.util.Random;
  * 1.3.0 | September 27, 2020
  * 	Added methods to directly check page size and count, made constructors protected
  * 
+ * 1.3.1 | November 8, 2023
+ * 	Code cleanup
  */
 
 /**
@@ -53,7 +55,7 @@ import java.util.Random;
  * <br>The size of each page and the number of pages (with data in memory) can be modified.
  * <br>WARNING: This class is not threadsafe.
  * @author Blythe Hospelhorn
- * @version 1.3.0
+ * @version 1.3.1
  * @since September 27, 2020
  */
 public class CacheFileBuffer extends FileBuffer{
@@ -93,8 +95,7 @@ public class CacheFileBuffer extends FileBuffer{
 	
 	/* ----- Cache ----- */
 	
-	protected class CachePage
-	{
+	protected class CachePage {
 		/*--- Instance Variables ---*/
 		
 		private String src_path;
@@ -117,8 +118,7 @@ public class CacheFileBuffer extends FileBuffer{
 		
 		/*--- Construction ---*/
 		
-		public CachePage(String srcpath, long srcoff, long myoff, int size)
-		{
+		public CachePage(String srcpath, long srcoff, long myoff, int size) {
 			src_path = srcpath;
 			src_offset = srcoff;
 			isDirty = false;
@@ -128,36 +128,27 @@ public class CacheFileBuffer extends FileBuffer{
 		
 		/*--- Disk ---*/
 		
-		public void loadData() throws IOException
-		{
+		public void loadData() throws IOException {
 			loaded_data = new FileBuffer(src_path, src_offset, src_offset + size, isBigEndian());
 		}
 		
-		public void freeData()
-		{
-			loaded_data = null;
-		}
+		public void freeData(){loaded_data = null;}
 		
-		public void freeMemory() throws IOException
-		{
+		public void freeMemory() throws IOException{
 			//If dirty, write to disk...
-			if(isDirty())
-			{
+			if(isDirty()){
 				loaded_data.writeFile(src_path);
 			}
 			loaded_data = null;
 		}
 		
-		public boolean writeDataTo(OutputStream out) throws IOException
-		{
+		public boolean writeDataTo(OutputStream out) throws IOException{
 			if(loaded_data == null) return false;
-			if(isDirty)
-			{
+			if(isDirty){
 				out.write(loaded_data.getBytes(0, loaded_data.getFileSize()));
 				return true;
 			}
-			else
-			{
+			else{
 				out.write(loaded_data.getBytes());
 				return true;
 			}
@@ -180,11 +171,9 @@ public class CacheFileBuffer extends FileBuffer{
 		public CachePage getNextPage(){return next;}
 		public CachePage getPreviousPage(){return previous;}
 		
-		public FileBuffer getDataBufferForWrite()
-		{
+		public FileBuffer getDataBufferForWrite() {
 			setDirty();
-			if(size == 0)
-			{
+			if(size == 0) {
 				loaded_data = new FileBuffer(page_size, isBigEndian());
 			}
 			return this.loaded_data;
@@ -200,15 +189,12 @@ public class CacheFileBuffer extends FileBuffer{
 		public void decrementSize(){this.size--; current_file_size--;}
 		public void decrementSize(int n){this.size-=n; current_file_size-=n;}
 		
-		public boolean copyFromBuffer(FileBuffer src, long start, long end)
-		{
+		public boolean copyFromBuffer(FileBuffer src, long start, long end) {
 			isDirty = true;
-			try 
-			{
+			try {
 				loaded_data = src.createCopy(start, end);
 			} 
-			catch (IOException e) 
-			{
+			catch (IOException e) {
 				e.printStackTrace();
 				return false;
 			}
@@ -218,28 +204,23 @@ public class CacheFileBuffer extends FileBuffer{
 		
 		/*--- Other ---*/
 		
-		public boolean equals(Object o)
-		{
-			return (this == o);
-		}
+		public boolean equals(Object o){return (this == o);}
 		
-		public boolean onPage(long offset)
-		{
+		public boolean onPage(long offset) {
 			if(offset < this.offset_value) return false;
 			if(offset >= this.offset_value + this.size) return false;
 			return true;
 		}
 		
-		public long estimateMemorySize()
-		{
+		public long estimateMemorySize() {
 			long est = 40 + 8+8+8+4+1+8;
 			if(src_path != null) est += src_path.length() << 1;
 			if(loaded_data != null) est += loaded_data.getMinimumMemoryUsage();
 			return est;
 		}
 		
-		public CachePage split(long page_offset) throws IOException //Returns page to insert new page BEFORE
-		{
+		public CachePage split(long page_offset) throws IOException {
+			//Returns page to insert new page BEFORE
 			if(page_offset == 0) return this;
 			if(page_offset >= getSize()) return next;
 			if(!dataLoaded()) loadData();
@@ -280,8 +261,7 @@ public class CacheFileBuffer extends FileBuffer{
 			if(last_page == this) last_page = right;
 			
 			left.parent = this.parent;
-			if(this.parent != null)
-			{
+			if(this.parent != null){
 				if(this.parent.child_l == this) this.parent.child_l = left;
 				else if (this.parent.child_r == this) this.parent.child_r = left;
 			}
@@ -300,12 +280,9 @@ public class CacheFileBuffer extends FileBuffer{
 			return right;
 		}
 		
-		public void loadToCache() throws IOException
-		{
-			if(!this.dataLoaded()) 
-			{
-				if(freeQueue.size() >= page_count)
-				{
+		public void loadToCache() throws IOException{
+			if(!this.dataLoaded()) {
+				if(freeQueue.size() >= page_count){
 					CachePage old = freeQueue.pop();
 					old.freeMemory();
 				}	
@@ -315,34 +292,28 @@ public class CacheFileBuffer extends FileBuffer{
 			freeQueue.add(this);
 		}
 		
-		public void writeToStream(OutputStream out) throws IOException
-		{
+		public void writeToStream(OutputStream out) throws IOException{
 			loadToCache();
 			//out.write(loaded_data.getBytes(0, (long)size));
 			loaded_data.writeToStream(out, 0, (long)size);
 		}
 		
-		public void writeToStream(OutputStream out, long stpos, long edpos) throws IOException
-		{
+		public void writeToStream(OutputStream out, long stpos, long edpos) throws IOException{
 			loadToCache();
 			//out.write(loaded_data.getBytes(stpos, edpos));
 			loaded_data.writeToStream(out, stpos, edpos);
 		}
 		
-		public void appendToFile(Path path, long stpos, long edpos) throws IOException
-		{
+		public void appendToFile(Path path, long stpos, long edpos) throws IOException{
 			loadToCache();
 			Files.write(path, loaded_data.getBytes(stpos, edpos), StandardOpenOption.APPEND);
 		}
 		
-		public CachePage createWritableCopy(long stpos, int sz)
-		{
+		public CachePage createWritableCopy(long stpos, int sz){
 			CachePage copy = new CachePage(src_path, src_offset + stpos, offset_value, sz);
 			
-			try
-			{
-				if(write_flag)
-				{
+			try{
+				if(write_flag){
 					copy.write_flag = true;
 					//Change source path...
 					String temppath = tempdir + File.separator + 
@@ -355,8 +326,7 @@ public class CacheFileBuffer extends FileBuffer{
 					copy.src_offset = 0;
 				}
 			}
-			catch(IOException x)
-			{
+			catch(IOException x){
 				x.printStackTrace();
 				return null;
 			}
@@ -368,14 +338,12 @@ public class CacheFileBuffer extends FileBuffer{
 	
 	/* ----- Construction ----- */
 	
-	protected CacheFileBuffer() throws IOException
-	{
+	protected CacheFileBuffer() throws IOException{
 		//This is just an override to prevent use of defo constructor
 		this(DEFO_PAGE_SIZE, DEFO_PAGE_NUM, false);
 	}
 	
-	protected CacheFileBuffer(int pageSize, int pageCount, boolean allowWrite) throws IOException
-	{
+	protected CacheFileBuffer(int pageSize, int pageCount, boolean allowWrite) throws IOException {
 		rng = new Random();
 		tempdir = FileBuffer.getTempDir();
 		
@@ -392,8 +360,7 @@ public class CacheFileBuffer extends FileBuffer{
 
 	/* ----- Static Object Generators ----- */
 	
-	protected void loadReadOnlyCacheBuffer(String filepath, long stoff, long edoff) throws IOException
-	{
+	protected void loadReadOnlyCacheBuffer(String filepath, long stoff, long edoff) throws IOException {
 		//Build reference tree
 		if(!FileBuffer.fileExists(filepath)) throw new IOException();
 		//current_file_size = FileBuffer.fileSize(filepath);
@@ -443,8 +410,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return Cached buffer that allows random read-only access to specified file.
 	 * @throws IOException If file could not be found or opened.
 	 */
-	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath) throws IOException
-	{
+	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath) throws IOException {
 		return getReadOnlyCacheBuffer(filepath, DEFO_PAGE_SIZE, DEFO_PAGE_NUM, 0, FileBuffer.fileSize(filepath), true);
 	}
 	
@@ -455,8 +421,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return Cached buffer that allows random read-only access to specified file.
 	 * @throws IOException If file could not be found or opened.
 	 */
-	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, boolean bigEndian) throws IOException
-	{
+	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, boolean bigEndian) throws IOException {
 		return getReadOnlyCacheBuffer(filepath, DEFO_PAGE_SIZE, DEFO_PAGE_NUM, 0, FileBuffer.fileSize(filepath), bigEndian);
 	}
 	
@@ -467,8 +432,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return Cached buffer that allows random read-only access to specified file.
 	 * @throws IOException If file could not be found or opened.
 	 */
-	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize) throws IOException
-	{
+	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize) throws IOException {
 		return getReadOnlyCacheBuffer(filepath, pageSize, DEFO_PAGE_NUM, 0, FileBuffer.fileSize(filepath), true);
 	}
 	
@@ -480,8 +444,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return Cached buffer that allows random read-only access to specified file.
 	 * @throws IOException If file could not be found or opened.
 	 */
-	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, boolean bigEndian) throws IOException
-	{
+	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, boolean bigEndian) throws IOException {
 		return getReadOnlyCacheBuffer(filepath, pageSize, DEFO_PAGE_NUM, 0, FileBuffer.fileSize(filepath), bigEndian);
 	}
 	
@@ -493,8 +456,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return Cached buffer that allows random read-only access to specified file.
 	 * @throws IOException If file could not be found or opened.
 	 */
-	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, int pageCount) throws IOException
-	{
+	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, int pageCount) throws IOException {
 		return getReadOnlyCacheBuffer(filepath, pageSize, pageCount, 0, FileBuffer.fileSize(filepath), true);
 	}
 	
@@ -507,8 +469,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return Cached buffer that allows random read-only access to specified file.
 	 * @throws IOException If file could not be found or opened.
 	 */
-	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, int pageCount, boolean bigEndian) throws IOException
-	{
+	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, int pageCount, boolean bigEndian) throws IOException {
 		return getReadOnlyCacheBuffer(filepath, pageSize, pageCount, 0, FileBuffer.fileSize(filepath), bigEndian);
 	}
 	
@@ -521,8 +482,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return Cached buffer that allows random read-only access to specified file.
 	 * @throws IOException If file could not be found or opened.
 	 */
-	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, long stPos, long edPos) throws IOException
-	{
+	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, long stPos, long edPos) throws IOException {
 		return getReadOnlyCacheBuffer(filepath, DEFO_PAGE_SIZE, DEFO_PAGE_NUM, stPos, edPos, true);
 	}
 	
@@ -536,8 +496,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return Cached buffer that allows random read-only access to specified file.
 	 * @throws IOException If file could not be found or opened.
 	 */
-	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, long stPos, long edPos, boolean bigEndian) throws IOException
-	{
+	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, long stPos, long edPos, boolean bigEndian) throws IOException {
 		return getReadOnlyCacheBuffer(filepath, DEFO_PAGE_SIZE, DEFO_PAGE_NUM, stPos, edPos, bigEndian);
 	}
 	
@@ -552,8 +511,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return Cached buffer that allows random read-only access to specified file.
 	 * @throws IOException If file could not be found or opened.
 	 */
-	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, int pageCount, long stPos, long edPos) throws IOException
-	{
+	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, int pageCount, long stPos, long edPos) throws IOException {
 		return getReadOnlyCacheBuffer(filepath, pageSize, pageCount, stPos, edPos, true);
 	}
 	
@@ -569,8 +527,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return Cached buffer that allows random read-only access to specified file.
 	 * @throws IOException If file could not be found or opened.
 	 */
-	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, int pageCount, long stPos, long edPos, boolean bigEndian) throws IOException
-	{
+	public static CacheFileBuffer getReadOnlyCacheBuffer(String filepath, int pageSize, int pageCount, long stPos, long edPos, boolean bigEndian) throws IOException {
 		CacheFileBuffer buffer = new CacheFileBuffer(pageSize, pageCount, false);
 		
 		buffer.setDir(FileBuffer.chopPathToDir(filepath));
@@ -589,8 +546,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return A write-enabled cached buffer.
 	 * @throws IOException If the cached buffer could not be created.
 	 */
-	public static CacheFileBuffer getWritableCacheBuffer() throws IOException
-	{
+	public static CacheFileBuffer getWritableCacheBuffer() throws IOException {
 		return getWritableCacheBuffer(DEFO_PAGE_SIZE, DEFO_PAGE_NUM, true);
 	}
 	
@@ -601,8 +557,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return A write-enabled cached buffer.
 	 * @throws IOException If the cached buffer could not be created.
 	 */
-	public static CacheFileBuffer getWritableCacheBuffer(boolean bigEndian) throws IOException
-	{
+	public static CacheFileBuffer getWritableCacheBuffer(boolean bigEndian) throws IOException {
 		return getWritableCacheBuffer(DEFO_PAGE_SIZE, DEFO_PAGE_NUM, bigEndian);
 	}
 	
@@ -613,8 +568,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return A write-enabled cached buffer.
 	 * @throws IOException If the cached buffer could not be created.
 	 */
-	public static CacheFileBuffer getWritableCacheBuffer(int pageSize) throws IOException 
-	{
+	public static CacheFileBuffer getWritableCacheBuffer(int pageSize) throws IOException {
 		return getWritableCacheBuffer(pageSize, DEFO_PAGE_NUM, true);
 	}
 	
@@ -626,8 +580,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return A write-enabled cached buffer.
 	 * @throws IOException If the cached buffer could not be created.
 	 */
-	public static CacheFileBuffer getWritableCacheBuffer(int pageSize, int pageCount) throws IOException
-	{
+	public static CacheFileBuffer getWritableCacheBuffer(int pageSize, int pageCount) throws IOException {
 		return getWritableCacheBuffer(pageSize, pageCount, true);
 	}
 	
@@ -640,8 +593,7 @@ public class CacheFileBuffer extends FileBuffer{
 	 * @return A write-enabled cached buffer.
 	 * @throws IOException If the cached buffer could not be created.
 	 */
-	public static CacheFileBuffer getWritableCacheBuffer(int pageSize, int pageCount, boolean bigEndian) throws IOException
-	{
+	public static CacheFileBuffer getWritableCacheBuffer(int pageSize, int pageCount, boolean bigEndian) throws IOException {
 		CacheFileBuffer buffer = new CacheFileBuffer(pageSize, pageCount, true);
 		buffer.setEndian(bigEndian);
 		
@@ -650,14 +602,12 @@ public class CacheFileBuffer extends FileBuffer{
 	
 	/* ----- Page Management ----- */
 	
-	private void rebuildTree()
-	{
+	private void rebuildTree() {
 		p_add_count = 0;
 		
 		int pcount = 0;
 		CachePage page = first_page;
-		while(page != null)
-		{
+		while(page != null) {
 			pcount++;
 			page.parent = null;
 			page.child_l = null;
@@ -668,8 +618,7 @@ public class CacheFileBuffer extends FileBuffer{
 		CachePage[] pages = new CachePage[pcount];
 		page = first_page;
 		int i = 0;
-		while(page != null)
-		{
+		while(page != null) {
 			pages[i] = page;
 			page = page.getNextPage();
 			i++;
@@ -680,17 +629,14 @@ public class CacheFileBuffer extends FileBuffer{
 		buildPageTree(root_idx, pages, 0, pcount);
 	}
 	
-	private void buildPageTree(int pidx, CachePage[] pages, int st, int ed)
-	{
+	private void buildPageTree(int pidx, CachePage[] pages, int st, int ed) {
 		if(st >= (ed-1)) return;
 		CachePage parent = pages[pidx];
 		
 		//Left
-		if(pidx > st)
-		{
+		if(pidx > st){
 			int mid = (pidx-st >>> 1) + st;
-			if(mid < pidx)
-			{
+			if(mid < pidx){
 				parent.child_l = pages[mid];
 				parent.child_l.parent = parent;
 				buildPageTree(mid, pages, st, pidx);	
@@ -698,11 +644,9 @@ public class CacheFileBuffer extends FileBuffer{
 		}
 		
 		//Right
-		if(pidx < ed)
-		{
+		if(pidx < ed){
 			int mid = (ed-pidx >>> 1) + pidx;
-			if(mid > pidx)
-			{
+			if(mid > pidx){
 				parent.child_r = pages[mid];
 				parent.child_r.parent = parent;
 				buildPageTree(mid, pages, pidx+1, ed);	
@@ -711,13 +655,11 @@ public class CacheFileBuffer extends FileBuffer{
 		
 	}
 	
-	private void updateDirtyOffsets()
-	{
+	private void updateDirtyOffsets(){
 		if(!dirty_offsets) return;
 		long pos = 0;
 		CachePage page = first_page;
-		while(page != null)
-		{
+		while(page != null){
 			page.setOffset(pos);
 			pos += page.getSize();
 			page = page.getNextPage();
@@ -725,20 +667,16 @@ public class CacheFileBuffer extends FileBuffer{
 		dirty_offsets = false;
 	}
 	
-	private CachePage getPage(long offset)
-	{
+	private CachePage getPage(long offset){
 		updateDirtyOffsets();
 		
 		CachePage page = root_page;
-		while(page != null)
-		{
-			if(offset < page.getOffset())
-			{
+		while(page != null){
+			if(offset < page.getOffset()){
 				page = page.getLeftChild();
 				continue;
 			}
-			if(offset >= (page.getOffset() + page.getSize()))
-			{
+			if(offset >= (page.getOffset() + page.getSize())){
 				page = page.getRightChild();
 				continue;
 			}
@@ -748,22 +686,18 @@ public class CacheFileBuffer extends FileBuffer{
 		return null;
 	}
 	
-	private CachePage getLoadedPage(long offset) throws IOException
-	{
+	private CachePage getLoadedPage(long offset) throws IOException{
 		CachePage page = getPage(offset);
 		
-		if(!page.dataLoaded())
-		{
+		if(!page.dataLoaded()){
 			//Free oldest page...
-			if(freeQueue.size() >= page_count)
-			{
+			if(freeQueue.size() >= page_count){
 				CachePage oldpage = freeQueue.pop();
 				oldpage.freeMemory();
 			}
 			page.loadData();
 		}
-		else
-		{
+		else{
 			//Put at back of queue...
 			freeQueue.removeFirstOccurrence(page);
 		}
@@ -772,8 +706,7 @@ public class CacheFileBuffer extends FileBuffer{
 		return page;
 	}
 	
-	private CachePage newPageBefore(CachePage target)
-	{
+	private CachePage newPageBefore(CachePage target){
 		//New page
 		String temppath = tempdir + File.separator + 
 				"cachebuff_page_" + Long.toHexString(OffsetDateTime.now().toEpochSecond()) +
@@ -796,8 +729,7 @@ public class CacheFileBuffer extends FileBuffer{
 		temp_files.add(temppath);
 		
 		//Free old page if needed
-		if(freeQueue.size() >= page_count)
-		{
+		if(freeQueue.size() >= page_count){
 			CachePage old = freeQueue.pop();
 			try{old.freeMemory();}
 			catch(Exception e){e.printStackTrace();}
@@ -807,8 +739,7 @@ public class CacheFileBuffer extends FileBuffer{
 		return page;
 	}
 	
-	private void addPageToEnd()
-	{
+	private void addPageToEnd(){
 		//New page
 		String temppath = tempdir + File.separator + 
 				"cachebuff_page_" + Long.toHexString(OffsetDateTime.now().toEpochSecond()) +
@@ -820,8 +751,7 @@ public class CacheFileBuffer extends FileBuffer{
 		page.previous = last_page;
 		CachePage p = last_page;
 		CachePage rc = p.getRightChild();
-		while(rc != null)
-		{
+		while(rc != null){
 			p = rc;
 			rc = p.getRightChild();
 		}
@@ -839,8 +769,7 @@ public class CacheFileBuffer extends FileBuffer{
 		if(p_add_count >= TREE_RESTRUCT_PAGES) rebuildTree();
 		
 		//Free old page if needed
-		if(freeQueue.size() >= page_count)
-		{
+		if(freeQueue.size() >= page_count){
 			CachePage old = freeQueue.pop();
 			try{old.freeMemory();}
 			catch(Exception e){e.printStackTrace();}
@@ -848,16 +777,12 @@ public class CacheFileBuffer extends FileBuffer{
 		freeQueue.add(page);
 	}
 	
-	private CachePage getEndPageForWrite() throws IOException
-	{
-		if(last_page == null || (last_page.getSize() >= page_size << 1))
-		{
+	private CachePage getEndPageForWrite() throws IOException{
+		if(last_page == null || (last_page.getSize() >= page_size << 1)){
 			addPageToEnd();
 		}
-		else
-		{
-			if(freeQueue.peekLast() != last_page)
-			{
+		else{
+			if(freeQueue.peekLast() != last_page){
 				freeQueue.remove(last_page);
 				freeQueue.add(last_page);	
 			}
@@ -866,8 +791,7 @@ public class CacheFileBuffer extends FileBuffer{
 		return last_page;
 	}
 	
-	private CachePage getWritablePage(long offset) throws IOException
-	{
+	private CachePage getWritablePage(long offset) throws IOException{
 		updateDirtyOffsets();
 		
 		//Get page matching offset
@@ -876,14 +800,12 @@ public class CacheFileBuffer extends FileBuffer{
 		else page = getLoadedPage(offset);
 		
 		//See if it has space. If not, insert new page.
-		if(page.getSize() >= (page_size << 1))
-		{
+		if(page.getSize() >= (page_size << 1))	{
 			long pg_off = offset - page.getOffset();
 			CachePage n = page.split(pg_off);
 			page = newPageBefore(n);
 		}
-		else
-		{
+		else{
 			//Put at back of freequeue
 			freeQueue.remove(page);
 			freeQueue.add(page);
@@ -891,8 +813,7 @@ public class CacheFileBuffer extends FileBuffer{
 		
 		//See if page has ever been written to.
 		//If not, need to change source path.
-		if(!page.writeFlag())
-		{
+		if(!page.writeFlag()){
 			String temppath = tempdir + File.separator + 
 					"cachebuff_page_" + Long.toHexString(OffsetDateTime.now().toEpochSecond()) +
 					"_" + Long.toHexString(rng.nextLong()) + ".tmp";
@@ -907,8 +828,7 @@ public class CacheFileBuffer extends FileBuffer{
 		return page;
 	}
 	
-	private CachePage getNewWritablePage(long offset) throws IOException
-	{
+	private CachePage getNewWritablePage(long offset) throws IOException {
 		updateDirtyOffsets();
 		
 		//Get page matching offset
@@ -940,49 +860,40 @@ public class CacheFileBuffer extends FileBuffer{
 		return current_file_size;
 	}
   
-	public long getBaseCapacity()
-	{
+	public long getBaseCapacity() {
 		long maxpsz = (long)page_size << 1;
 		long maxpgs = (long)page_count;
 		
 		return maxpgs * maxpsz;
 	}
 	
-	public byte getByte(int position)
-	{
+	public byte getByte(int position) {
 		return getByte(Integer.toUnsignedLong(position));
 	}
   
-	public byte getByte(long position)
-	{
-		if(last_read_page != null && last_read_page.onPage(position))
-		{
+	public byte getByte(long position){
+		if(last_read_page != null && last_read_page.onPage(position)){
 			long pos = position - last_read_page.getOffset();
 			return last_read_page.getDataBuffer().getByte(pos);
 		}
-		else
-		{
-			try
-			{
+		else{
+			try{
 				last_read_page = getLoadedPage(position);
 				long pos = position - last_read_page.getOffset();
 				return last_read_page.getDataBuffer().getByte(pos);
 			}
-			catch(IOException e)
-			{
+			catch(IOException e){
 				e.printStackTrace();
 				throw new IllegalStateException();
 			}
 		}
 	}
 
-  	public long getMinimumMemoryUsage()
-  	{
+  	public long getMinimumMemoryUsage(){
   		long est = 4+4+8+1+(8*6);
   		
   		CachePage page = first_page;
-  		while(page != null)
-  		{
+  		while(page != null){
   			est += page.estimateMemorySize();
   			page = page.getNextPage();
   		}
@@ -1000,20 +911,17 @@ public class CacheFileBuffer extends FileBuffer{
   	
   	/* ----- CAPACITY MANAGEMENT ----- */
     
-	public void changeBaseCapacity(int newCapacity)
-	{
+	public void changeBaseCapacity(int newCapacity){
 		throw new UnsupportedOperationException();
 	}
   
-	public void adjustBaseCapacityToSize()
-	{
+	public void adjustBaseCapacityToSize(){
 		throw new UnsupportedOperationException();
 	}
  
     /* ----- ADDITION TO FILE ----- */
   
-	public void addToFile(byte i8)
-	{  
+	public void addToFile(byte i8){  
 		if(readOnly()) throw new UnsupportedOperationException();
 		
 		CachePage page = null;
@@ -1024,16 +932,13 @@ public class CacheFileBuffer extends FileBuffer{
 		page.incrementSize();
  	}
   
-	public void addToFile(byte i8, int position)
-	{
+	public void addToFile(byte i8, int position){
 		addToFile(i8, Integer.toUnsignedLong(position));
 	}
   
-	public void addToFile(byte i8, long position)
-	{
+	public void addToFile(byte i8, long position){
 		if(readOnly()) throw new UnsupportedOperationException();
-		if(position == current_file_size)
-		{
+		if(position == current_file_size){
 			addToFile(i8);
 			return;
 		}
@@ -1052,8 +957,7 @@ public class CacheFileBuffer extends FileBuffer{
 		super.shiftReferencesAfter(position, 1);
 	}
   
-	public void addToFile(short i16)
-	{
+	public void addToFile(short i16){
 		if(readOnly()) throw new UnsupportedOperationException();
 		
 		CachePage page = null;
@@ -1064,16 +968,13 @@ public class CacheFileBuffer extends FileBuffer{
 		page.incrementSize(2);
 	}	
   
-	public void addToFile(short i16, int position)
-	{
+	public void addToFile(short i16, int position){
 		addToFile(i16, Integer.toUnsignedLong(position));
 	}
 
-	public void addToFile(short i16, long position)
-	{
+	public void addToFile(short i16, long position){
 		if(readOnly()) throw new UnsupportedOperationException();
-		if(position == current_file_size)
-		{
+		if(position == current_file_size){
 			addToFile(i16);
 			return;
 		}
@@ -1092,8 +993,7 @@ public class CacheFileBuffer extends FileBuffer{
 		super.shiftReferencesAfter(position, 2);
 	}
   
-	public void addToFile(int i32)
-	{
+	public void addToFile(int i32){
 		if(readOnly()) throw new UnsupportedOperationException();
 		
 		CachePage page = null;
@@ -1104,16 +1004,13 @@ public class CacheFileBuffer extends FileBuffer{
 		page.incrementSize(4); 
 	}
   
-	public void addToFile(int i32, int position)
-	{
+	public void addToFile(int i32, int position){
 		addToFile(i32, Integer.toUnsignedLong(position));
 	}
 
-	public void addToFile(int i32, long position)
-	{
+	public void addToFile(int i32, long position){
 		if(readOnly()) throw new UnsupportedOperationException();
-		if(position == current_file_size)
-		{
+		if(position == current_file_size){
 			addToFile(i32);
 			return;
 		}
@@ -1132,8 +1029,7 @@ public class CacheFileBuffer extends FileBuffer{
 		super.shiftReferencesAfter(position, 4);
 	}
   
-	public void addToFile(long i64)
-	{
+	public void addToFile(long i64){
 		if(readOnly()) throw new UnsupportedOperationException();
 		
 		CachePage page = null;
@@ -1144,16 +1040,13 @@ public class CacheFileBuffer extends FileBuffer{
 		page.incrementSize(8); 
 	}
 
-	public void addToFile(long i64, int position)
-	{
+	public void addToFile(long i64, int position){
 		addToFile(i64, Integer.toUnsignedLong(position));
 	}
   
-	public void addToFile(long i64, long position)
-	{
+	public void addToFile(long i64, long position){
 		if(readOnly()) throw new UnsupportedOperationException();
-		if(position == current_file_size)
-		{
+		if(position == current_file_size){
 			addToFile(i64);
 			return;
 		}
@@ -1172,8 +1065,7 @@ public class CacheFileBuffer extends FileBuffer{
 		super.shiftReferencesAfter(position, 8);
 	}
   
-	public void add24ToFile(int i24)
-	{	 
+	public void add24ToFile(int i24){	 
 		if(readOnly()) throw new UnsupportedOperationException();
 		
 		CachePage page = null;
@@ -1184,16 +1076,13 @@ public class CacheFileBuffer extends FileBuffer{
 		page.incrementSize(2); 
 	}
   
-	public void add24ToFile(int i24, int position)
-	{
+	public void add24ToFile(int i24, int position){
 		add24ToFile(i24, Integer.toUnsignedLong(position));
 	}
   
-	public void add24ToFile(int i24, long position)
-	{
+	public void add24ToFile(int i24, long position){
 		if(readOnly()) throw new UnsupportedOperationException();
-		if(position == current_file_size)
-		{
+		if(position == current_file_size){
 			add24ToFile(i24);
 			return;
 		}
@@ -1212,18 +1101,15 @@ public class CacheFileBuffer extends FileBuffer{
 		super.shiftReferencesAfter(position, 3);
 	}
   
-	public void addToFile(FileBuffer addition)
-	{
+	public void addToFile(FileBuffer addition){
 		addToFile(addition, 0, addition.getFileSize());
 	}
   
-	public void addToFile(FileBuffer addition, int stPos, int edPos)
-	{
+	public void addToFile(FileBuffer addition, int stPos, int edPos){
 		addToFile(addition, Integer.toUnsignedLong(stPos), Integer.toUnsignedLong(edPos));
 	}
   
-	public void addToFile(FileBuffer addition, long stPos, long edPos)
-	{
+	public void addToFile(FileBuffer addition, long stPos, long edPos){
 		if(readOnly()) throw new UnsupportedOperationException();
 		
 		//Determine how many pages need to be added.
@@ -1233,8 +1119,7 @@ public class CacheFileBuffer extends FileBuffer{
 		
 		long st = stPos;
 		long ed = st + page_size;
-		for(int i = 0; i < add_pages; i++)
-		{
+		for(int i = 0; i < add_pages; i++){
 			addPageToEnd();
 			CachePage page = last_page;
 			page.copyFromBuffer(addition, st, ed);
@@ -1242,8 +1127,7 @@ public class CacheFileBuffer extends FileBuffer{
 			ed = st + page_size;
 		}
 		
-		if(partial_pg)
-		{
+		if(partial_pg){
 			ed = edPos;
 			addPageToEnd();
 			CachePage page = last_page;
@@ -1252,26 +1136,22 @@ public class CacheFileBuffer extends FileBuffer{
 		
 	}
 
-	public void addToFile(FileBuffer addition, int insertPos, int stPos, int edPos)
-	{
+	public void addToFile(FileBuffer addition, int insertPos, int stPos, int edPos){
 		addToFile(addition, Integer.toUnsignedLong(insertPos), Integer.toUnsignedLong(stPos), Integer.toUnsignedLong(edPos));
 	}
   
-	public void addToFile(FileBuffer addition, long insertPos, long stPos, long edPos)
-	{
+	public void addToFile(FileBuffer addition, long insertPos, long stPos, long edPos){
 		if(readOnly()) throw new UnsupportedOperationException();
 		
 		long fsz = edPos - stPos;
 		int add_pages = (int)(fsz/page_size);
 		int mod = (int)(fsz % page_size);
 		
-		try
-		{
+		try{
 			CachePage last = null;
 		
 			long ed = edPos;
-			if(mod != 0)
-			{
+			if(mod != 0){
 				last = getNewWritablePage(insertPos);
 				long st = edPos - mod;
 				last.copyFromBuffer(addition, st, edPos);
@@ -1279,8 +1159,7 @@ public class CacheFileBuffer extends FileBuffer{
 			}
 		
 			long st = ed - page_size;
-			for(int i = add_pages-1; i >= 0; i--)
-			{
+			for(int i = add_pages-1; i >= 0; i--){
 				if(last == null) last = getNewWritablePage(insertPos);
 				else last = newPageBefore(last);
 				last.copyFromBuffer(addition, st, edPos);
@@ -1293,15 +1172,13 @@ public class CacheFileBuffer extends FileBuffer{
 			
 			super.shiftReferencesAfter(insertPos, (int)(edPos - stPos));
 		}
-		catch(Exception x)
-		{
+		catch(Exception x){
 			x.printStackTrace();
 		}
 		
 	}
  	
-	public void addToFile(int value, BinFieldSize size)
-	{
+	public void addToFile(int value, BinFieldSize size){
 		if(readOnly()) throw new UnsupportedOperationException();
 		switch(size)
 		{
@@ -1316,14 +1193,12 @@ public class CacheFileBuffer extends FileBuffer{
 	
 	/* ----- CONTENT RETRIEVAL ----- */
 	  
-	public byte[] getBytes()
-	{
+	public byte[] getBytes(){
 		if(current_file_size <= 0x7FFFFFFF) return getBytes(0, current_file_size);
 		throw new IndexOutOfBoundsException("CachedBuffer is too large to store in byte array!");
 	}
 	
-	public byte[] getBytes(long stOff, long edOff)
-	{
+	public byte[] getBytes(long stOff, long edOff){
 		long sz = edOff - stOff;
 		if(sz > 0x7FFFFFFFL) throw new IndexOutOfBoundsException("Cannot have byte array of > 2GB!");
 		
@@ -1375,16 +1250,13 @@ public class CacheFileBuffer extends FileBuffer{
 
 	/* ----- DELETION ----- */
 	  
-	public void deleteFromFile(int stOff)
-	{
+	public void deleteFromFile(int stOff){
 		deleteFromFile(Integer.toUnsignedLong(stOff));
 	}
 
-	public void deleteFromFile(long stOff)
-	{
+	public void deleteFromFile(long stOff){
 		if(readOnly()) throw new UnsupportedOperationException();
-		if(stOff == 0)
-		{
+		if(stOff == 0){
 			//Clear whole thing
 			first_page = null;
 			last_page = null;
@@ -1396,20 +1268,17 @@ public class CacheFileBuffer extends FileBuffer{
 			catch(IOException e){e.printStackTrace(); throw new CacheDiskAccessException("deleteFromFile | File cache modification failed!");}
 		}
 		
-		try
-		{
+		try{
 			CachePage page = getWritablePage(stOff);
 			
 			//Toss everything after stOff in this page.
 			long pg_off = stOff - page.getOffset();
-			if(pg_off > 0)
-			{
+			if(pg_off > 0){
 				FileBuffer dat = page.getDataBufferForWrite();	
 				dat.deleteFromFile(pg_off);
 				page.decrementSize((int)pg_off);
 			}
-			else
-			{
+			else{
 				page = page.getPreviousPage();
 			}
 			last_page = page;
@@ -1418,8 +1287,7 @@ public class CacheFileBuffer extends FileBuffer{
 			CachePage tossHead = page.getNextPage();
 			page.next = null;
 			CachePage p = tossHead;
-			while(p != null)
-			{
+			while(p != null){
 				p.freeMemory();
 				freeQueue.remove(p);
 				p = p.getNextPage();
@@ -1428,40 +1296,33 @@ public class CacheFileBuffer extends FileBuffer{
 			//Restructure
 			rebuildTree();
 		}
-		catch(IOException x)
-		{
+		catch(IOException x){
 			x.printStackTrace();
 			throw new CacheDiskAccessException("deleteFromFile | File cache modification failed!");
 		}
 		
 	}
   
-	public void deleteFromFile(int stOff, int edOff)
-	{
+	public void deleteFromFile(int stOff, int edOff){
 		deleteFromFile(Integer.toUnsignedLong(stOff), Integer.toUnsignedLong(edOff));
 	}
 
-	public void deleteFromFile(long stOff, long edOff)
-	{
+	public void deleteFromFile(long stOff, long edOff){
 		if(edOff >= getFileSize()){deleteFromFile(stOff); return;}
 		if(readOnly()) throw new UnsupportedOperationException();
 		
-		try
-		{
+		try{
 			CachePage page = getWritablePage(stOff);
 			CachePage head = page.getNextPage();
 			long fpos = stOff;
 			long ppos = stOff - page.getOffset();
 			
-			while(fpos < edOff)
-			{
+			while(fpos < edOff){
 				ppos = fpos - page.getOffset();
 				boolean endInPage = (page.onPage(edOff));
-				if(ppos != 0)
-				{
+				if(ppos != 0){
 					//See if edpos is within this page.
-					if(endInPage)
-					{
+					if(endInPage){
 						FileBuffer dat = page.getDataBufferForWrite();	
 						long ped = edOff - page.getOffset();
 						int amt = (int)(ped - ppos);
@@ -1470,29 +1331,23 @@ public class CacheFileBuffer extends FileBuffer{
 						fpos += amt;
 						break;
 					}
-					else
-					{
+					else{
 						FileBuffer dat = page.getDataBufferForWrite();	
 						dat.deleteFromFile(ppos);
 						page.decrementSize((int)ppos);
 					}
 				}
-				else
-				{
+				else{
 					//Either remove first part of page, or whole page.
-					if(endInPage)
-					{
-						if(!page.dataLoaded())
-						{
-							if(freeQueue.size() >= page_count)
-							{
+					if(endInPage){
+						if(!page.dataLoaded()){
+							if(freeQueue.size() >= page_count){
 								CachePage old = freeQueue.pop();
 								old.freeMemory();
 							}
 							page.loadData();
 						}
-						else
-						{
+						else{
 							freeQueue.remove(page);
 							freeQueue.add(page);
 						}
@@ -1505,8 +1360,7 @@ public class CacheFileBuffer extends FileBuffer{
 						fpos += amt;
 						break;
 					}
-					else
-					{
+					else{
 						//Remove whole page.
 						if(page == last_page) last_page = page.previous;
 						if(page == first_page) first_page = head;
@@ -1524,8 +1378,7 @@ public class CacheFileBuffer extends FileBuffer{
 			}
 			
 		}
-		catch(IOException e)
-		{
+		catch(IOException e){
 			e.printStackTrace();
 			throw new CacheDiskAccessException("deleteFromFile | File cache modification failed!");
 		}
@@ -1536,25 +1389,21 @@ public class CacheFileBuffer extends FileBuffer{
   
   /* ----- REPLACEMENT ----- */
   
-	public boolean replaceByte(byte b, int position)
-	{
+	public boolean replaceByte(byte b, int position){
 		return replaceByte(b, Integer.toUnsignedLong(position));
 	}
   
-	public boolean replaceByte(byte b, long position)
-	{
+	public boolean replaceByte(byte b, long position){
 		if(readOnly()) throw new UnsupportedOperationException();
 		
-		try
-		{
+		try{
 			CachePage page = getWritablePage(position);
 			long pg_off = position - page.getOffset();
 
 			FileBuffer dat = page.getDataBufferForWrite();
 			dat.replaceByte(b, pg_off);
 		}
-		catch(IOException e)
-		{
+		catch(IOException e){
 			e.printStackTrace();
 			throw new CacheDiskAccessException("replaceByte | File cache modification failed!");
 		}
@@ -1562,38 +1411,31 @@ public class CacheFileBuffer extends FileBuffer{
 		return true;
 	}
   
-	public boolean replaceShort(short s, int position)
-	{
+	public boolean replaceShort(short s, int position){
 		return replaceShort(s, Integer.toUnsignedLong(position));
 	}
   
-	public boolean replaceShort(short s, long position)
-	{
+	public boolean replaceShort(short s, long position){
 		if(readOnly()) throw new UnsupportedOperationException();
 		
-		try
-		{
+		try{
 			CachePage page = getWritablePage(position);
 			long pg_off = position - page.getOffset();
 
 			FileBuffer dat = page.getDataBufferForWrite();
 			if(page.onPage(position+1)) dat.replaceShort(s, pg_off);
-			else
-			{
+			else{
 				byte[] bytes = FileBuffer.numToByStr(s);
 				long pos = position;
-				if(this.isBigEndian())
-				{
+				if(this.isBigEndian()){
 					for(int i = 0; i < 2; i++) {replaceByte(bytes[i], pos); pos++;}
 				}
-				else
-				{
+				else{
 					for(int i = 1; i >= 0; i--) {replaceByte(bytes[i], pos); pos++;}
 				}
 			}
 		}
-		catch(IOException e)
-		{
+		catch(IOException e){
 			e.printStackTrace();
 			throw new CacheDiskAccessException("replaceShort | File cache modification failed!");
 		}
@@ -1601,38 +1443,31 @@ public class CacheFileBuffer extends FileBuffer{
 		return true;
 	}
   
-	public boolean replaceShortish(int s, int position)
-	{
+	public boolean replaceShortish(int s, int position){
 		return replaceShortish(s, Integer.toUnsignedLong(position));
 	}
 	
-	public boolean replaceShortish(int s, long position)
-	{
+	public boolean replaceShortish(int s, long position){
 		if(readOnly()) throw new UnsupportedOperationException();
 		
-		try
-		{
+		try{
 			CachePage page = getWritablePage(position);
 			long pg_off = position - page.getOffset();
 
 			FileBuffer dat = page.getDataBufferForWrite();
 			if(page.onPage(position+2)) dat.replaceShortish(s, pg_off);
-			else
-			{
+			else{
 				byte[] bytes = FileBuffer.numToByStr(s);
 				long pos = position;
-				if(this.isBigEndian())
-				{
+				if(this.isBigEndian()){
 					for(int i = 1; i < 4; i++) {replaceByte(bytes[i], pos); pos++;}
 				}
-				else
-				{
+				else{
 					for(int i = 2; i >= 0; i--) {replaceByte(bytes[i], pos); pos++;}
 				}
 			}
 		}
-		catch(IOException e)
-		{
+		catch(IOException e){
 			e.printStackTrace();
 			throw new CacheDiskAccessException("replaceShortish | File cache modification failed!");
 		}
@@ -1640,38 +1475,31 @@ public class CacheFileBuffer extends FileBuffer{
 		return true;
 	}
 	
-	public boolean replaceInt(int i, int position)
-	{
+	public boolean replaceInt(int i, int position){
 		return replaceInt(i, Integer.toUnsignedLong(position));
 	}
   
-	public boolean replaceInt(int i, long position)
-	{
+	public boolean replaceInt(int i, long position){
 		if(readOnly()) throw new UnsupportedOperationException();
 		
-		try
-		{
+		try{
 			CachePage page = getWritablePage(position);
 			long pg_off = position - page.getOffset();
 
 			FileBuffer dat = page.getDataBufferForWrite();
 			if(page.onPage(position+3)) dat.replaceInt(i, pg_off);
-			else
-			{
+			else{
 				byte[] bytes = FileBuffer.numToByStr(i);
 				long pos = position;
-				if(this.isBigEndian())
-				{
+				if(this.isBigEndian()){
 					for(int j = 0; j < 4; j++) {replaceByte(bytes[j], pos); pos++;}
 				}
-				else
-				{
+				else{
 					for(int j = 3; j >= 0; j--) {replaceByte(bytes[j], pos); pos++;}
 				}
 			}
 		}
-		catch(IOException e)
-		{
+		catch(IOException e){
 			e.printStackTrace();
 			throw new CacheDiskAccessException("replaceInt | File cache modification failed!");
 		}
@@ -1679,38 +1507,31 @@ public class CacheFileBuffer extends FileBuffer{
 		return true;
 	}
   
-	public boolean replaceLong(long l, int position)
-	{
+	public boolean replaceLong(long l, int position){
 		return replaceLong(l, Integer.toUnsignedLong(position));
 	}
   
-	public boolean replaceLong(long l, long position)
-	{
+	public boolean replaceLong(long l, long position){
 		if(readOnly()) throw new UnsupportedOperationException();
 		
-		try
-		{
+		try{
 			CachePage page = getWritablePage(position);
 			long pg_off = position - page.getOffset();
 
 			FileBuffer dat = page.getDataBufferForWrite();
 			if(page.onPage(position+7)) dat.replaceLong(l, pg_off);
-			else
-			{
+			else{
 				byte[] bytes = FileBuffer.numToByStr(l);
 				long pos = position;
-				if(this.isBigEndian())
-				{
+				if(this.isBigEndian()){
 					for(int j = 0; j < 8; j++) {replaceByte(bytes[j], pos); pos++;}
 				}
-				else
-				{
+				else{
 					for(int j = 7; j >= 0; j--) {replaceByte(bytes[j], pos); pos++;}
 				}
 			}
 		}
-		catch(IOException e)
-		{
+		catch(IOException e){
 			e.printStackTrace();
 			throw new CacheDiskAccessException("replaceLong | File cache modification failed!");
 		}
@@ -1720,25 +1541,21 @@ public class CacheFileBuffer extends FileBuffer{
   
 	/* ----- WRITING TO DISK ----- */
 
-  	public void writeFile(String path, long stPos, long edPos) throws IOException
-  	{
+  	public void writeFile(String path, long stPos, long edPos) throws IOException {
   		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(path));
   		writeToStream(bos, stPos, edPos);
   		bos.close();
   	}
 
-  	public void appendToFile(String path, long stPos, long edPos) throws IOException, NoSuchFileException
-  	{
+  	public void appendToFile(String path, long stPos, long edPos) throws IOException, NoSuchFileException {
   		long cpos = stPos;
   		CachePage page = getLoadedPage(stPos);
   		Path mypath = Paths.get(path);
   		
-  		while(cpos < edPos)
-  		{
+  		while(cpos < edPos){
   			long st = cpos - page.getOffset();
   	  		long ed = page.size;
-  			if(page.onPage(edPos))
-  			{
+  			if(page.onPage(edPos)){
   				ed = edPos - page.getOffset();
   			}
   			
@@ -1759,14 +1576,12 @@ public class CacheFileBuffer extends FileBuffer{
   		CachePage page = getLoadedPage(stPos);
   		//int pidx = 0; //DEBUG
   		
-  		while(cpos < edPos)
-  		{
+  		while(cpos < edPos) {
   			//System.err.println("Page " + pidx + ": Offset = 0x" + Long.toHexString(page.getOffset()));
   			//System.err.println("\tcpos = 0x" + Long.toHexString(cpos));
   			long st = cpos - page.getOffset();
   	  		long ed = page.size;
-  			if(page.onPage(edPos))
-  			{
+  			if(page.onPage(edPos)) {
   				ed = edPos - page.getOffset();
   			}
   			
@@ -1785,26 +1600,22 @@ public class CacheFileBuffer extends FileBuffer{
 
   	/* ----- STATUS CHECKERS ----- */
     
-  	public boolean isEmpty()
-  	{
+  	public boolean isEmpty()	{
   		return (current_file_size == 0);
   	}
   
-  	public boolean offsetValid(int off)
-  	{
+  	public boolean offsetValid(int off){
   		return offsetValid(Integer.toUnsignedLong(off));
   	}
   
-  	public boolean offsetValid(long off)
-  	{
+  	public boolean offsetValid(long off){
   		if(off < 0) return false;
   		if(off >= current_file_size) return false;
   		
   		return true;
   	}
   
-  	public boolean checkOffsetPair(long stOff, long edOff)
-  	{
+  	public boolean checkOffsetPair(long stOff, long edOff){
   		if(!offsetValid(stOff)) return false;
   		if(!offsetValid(edOff-1)) return false;
   		return true;
@@ -1814,19 +1625,16 @@ public class CacheFileBuffer extends FileBuffer{
     
   	/* ----- CONVERSION ----- */
     
-  	public ByteBuffer toByteBuffer()
-  	{
+  	public ByteBuffer toByteBuffer(){
   		if(current_file_size > 0x7FFFFFFF) throw new IndexOutOfBoundsException("Cannot store >2GB in byte buffer!");
   		return toByteBuffer(0, current_file_size);
   	}
   
-  	public ByteBuffer toByteBuffer(int stPos, int edPos)
-  	{
+  	public ByteBuffer toByteBuffer(int stPos, int edPos){
   		return toByteBuffer(Integer.toUnsignedLong(stPos), Integer.toUnsignedLong(edPos));
   	}
   
-  	public ByteBuffer toByteBuffer(long stPos, long edPos)
-  	{
+  	public ByteBuffer toByteBuffer(long stPos, long edPos){
   		long sz = edPos - stPos;
   		if(sz > 0x7FFFFFFF) throw new IndexOutOfBoundsException("Cannot store >2GB in byte buffer!");
   		
@@ -1839,26 +1647,22 @@ public class CacheFileBuffer extends FileBuffer{
   		return bb;
   	}
   
-  	public FileBuffer createCopy(int stPos, int edPos) throws IOException
-  	{
+  	public FileBuffer createCopy(int stPos, int edPos) throws IOException{
   		return createCopy(Integer.toUnsignedLong(stPos), Integer.toUnsignedLong(edPos));
   	}
   
-  	public FileBuffer createCopy(long stPos, long edPos) throws IOException
-  	{
+  	public FileBuffer createCopy(long stPos, long edPos) throws IOException{
   		final long COPY_SIZE_THRESHOLD = 0x08000000; //128MB
   		
   		long sz = edPos - stPos;
-  		if(sz < COPY_SIZE_THRESHOLD)
-  		{
+  		if(sz < COPY_SIZE_THRESHOLD){
   			//Just make a regular FileBuffer
   			FileBuffer copy = new FileBuffer((int)sz, this.isBigEndian());
   			
   			long cpos = stPos;
   			CachePage page = getLoadedPage(stPos);
 
-  			while(cpos < edPos)
-  			{
+  			while(cpos < edPos){
   				long st = cpos - page.getOffset();
   				long ed = page.size;
   				if(page.onPage(edPos)) ed = edPos - page.getOffset();
@@ -1870,8 +1674,7 @@ public class CacheFileBuffer extends FileBuffer{
   				cpos = page.getOffset() + ed;
   			}
   		}
-  		else
-  		{
+  		else{
   			//Make a new CacheFileBuffer
   			updateDirtyOffsets();
   			CacheFileBuffer copy = new CacheFileBuffer(page_size, page_count, !readOnly());
@@ -1879,8 +1682,7 @@ public class CacheFileBuffer extends FileBuffer{
   			CachePage p_page = null;
   			CachePage page = getPage(stPos);
   			long cpos = stPos;
-  			while(cpos < edPos)
-  			{
+  			while(cpos < edPos){
   				long st = cpos - page.getOffset();
   				int psz = page.size;
   				if(page.onPage(edPos))
@@ -1916,19 +1718,14 @@ public class CacheFileBuffer extends FileBuffer{
   
   	 /* ----- FILE STATISTICS/ INFO ----- */
   	
-  	public String typeString()
-  	{
-  		return "CacheFileBuffer";
-  	}
+  	public String typeString(){return "CacheFileBuffer";}
     
   	/* ----- Cleanup ----- */
   	
-  	public void dispose() throws IOException
-  	{
+  	public void dispose() throws IOException {
   		//Deletes all temp files and clears memory
   		
-  		while(!freeQueue.isEmpty())
-  		{
+  		while(!freeQueue.isEmpty()) {
   			CachePage page = freeQueue.pop();
   			page.freeMemory();
   		}
@@ -1955,8 +1752,7 @@ public class CacheFileBuffer extends FileBuffer{
   	 * @author Blythe Hospelhorn
   	 * @version 1.1.0
   	 */
-  	public static class CacheDiskAccessException extends RuntimeException
-  	{
+  	public static class CacheDiskAccessException extends RuntimeException{
 
 		private static final long serialVersionUID = 3156914180197673406L;
   		
@@ -1966,16 +1762,14 @@ public class CacheFileBuffer extends FileBuffer{
 		 * Construct a CacheDiskAccessException with the specified error message.
 		 * @param message Error message to pass along.
 		 */
-		public CacheDiskAccessException(String message)
-		{
+		public CacheDiskAccessException(String message){
 			msg = message;
 		}
 		
 		/**
 		 * Retrieve the error message that was set when the exception was thrown.
 		 */
-		public String getErrorMessage()
-		{
+		public String getErrorMessage(){
 			return msg;
 		}
 		

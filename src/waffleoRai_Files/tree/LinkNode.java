@@ -213,13 +213,11 @@ public class LinkNode extends FileNode{
 	
 	/* --- Other --- */
 	
-	public FileNode copy(DirectoryNode parent_copy)
-	{
+	public FileNode copy(DirectoryNode parent_copy){
 		return copy(parent_copy, null);
 	}
 	
-	public FileNode copy(DirectoryNode parent_copy, FileNode link_copy)
-	{
+	public FileNode copy(DirectoryNode parent_copy, FileNode link_copy){
 		LinkNode copy = new LinkNode(parent_copy, link_copy, super.getFileName());
 		
 		copy.setSourcePath(this.getSourcePath());

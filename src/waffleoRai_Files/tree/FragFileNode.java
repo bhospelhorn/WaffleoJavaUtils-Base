@@ -16,6 +16,9 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 	Documentation
  * 	Update to FileNode 3.0.0 compatibility
  * 
+ * 2023.11.08 | 2.1.0
+ * 	Update to FileNode 3.6.1 compatibility
+ * 
  */
 
 /**
@@ -23,8 +26,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * non-sequential chunks of data from the same source. In other words, a virtual
  * file definition referencing a fragmented file.
  * @author Blythe Hospelhorn
- * @version 2.0.0
- * @since August 29, 2020
+ * @version 2.1.0
+ * @since November 8, 2023
  *
  */
 public class FragFileNode extends FileNode{
@@ -92,7 +95,7 @@ public class FragFileNode extends FileNode{
 	
 	/* --- Load --- */
 	
-	protected FileBuffer loadDirect(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
+	protected FileBuffer loadDirect(long stpos, long len, int options) throws IOException{
 
 		MultiFileBuffer file = new MultiFileBuffer(block_locs.size());
 		long cpos = 0;
@@ -122,10 +125,12 @@ public class FragFileNode extends FileNode{
 			long end = blocked + block[0];
 			FileBuffer blockdat = null;
 			if(hasVirtualSource()){
-				blockdat = this.getVirtualSource().loadData(start, end-start, forceCache, decrypt);
+				blockdat = getVirtualSource().loadData(start, end-start, options);
 			}
 			else{
-				if(forceCache) blockdat = CacheFileBuffer.getReadOnlyCacheBuffer(getSourcePath(), CACHEBUFF_PGSIZE, CACHEBUFF_PGNUM, start, end);
+				if((options & FileNode.LOADOP_FORCE_CACHE) != 0) {
+					blockdat = CacheFileBuffer.getReadOnlyCacheBuffer(getSourcePath(), CACHEBUFF_PGSIZE, CACHEBUFF_PGNUM, start, end);
+				}
 				else blockdat = FileBuffer.createBuffer(getSourcePath(), start, end);
 			}
 			file.addToFile(blockdat);
@@ -137,34 +142,18 @@ public class FragFileNode extends FileNode{
 		return file;
 	}
 	
-	public FileBuffer loadData(long stpos, long len, boolean decrypt) throws IOException{
-		boolean forceCache = false;
-		if(getLength() >= FileBuffer.DEFO_SIZE_THRESHOLD) forceCache = true;
-		return this.loadData(stpos, len, forceCache, decrypt);
-	}
-	
-	public FileBuffer loadData(long stpos, long len) throws IOException{
-		boolean forceCache = false;
-		if(getLength() >= FileBuffer.DEFO_SIZE_THRESHOLD) forceCache = true;
-		return this.loadData(stpos, len, forceCache, true);
-	}
-	
-	public FileBuffer loadData() throws IOException{
-		boolean forceCache = false;
-		if(getLength() >= FileBuffer.DEFO_SIZE_THRESHOLD) forceCache = true;
-		return this.loadData(0L, getLength(), forceCache, true);
-	}
-
 	/* --- Other --- */
 	
-	protected void copyDataTo(FragFileNode copy){
+	protected void copyDataTo(FileNode copy){
 		super.copyDataTo(copy);
 		
-		copy.block_locs = getBlocks();
+		if(copy instanceof FragFileNode){
+			FragFileNode fcopy = (FragFileNode)copy;
+			fcopy.block_locs = getBlocks();
+		}
 	}
 	
-	public FileNode copy(DirectoryNode parent_copy)
-	{
+	public FileNode copy(DirectoryNode parent_copy){
 		FileNode copy = new FragFileNode(parent_copy, this.getFileName());
 		copyDataTo(copy);
 		

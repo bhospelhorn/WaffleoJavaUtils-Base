@@ -25,6 +25,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 2020.09.07 | 2.1.1
  * 	Wrap pieces in structure that marks local address for faster lookup
  * 
+ * 2023.11.08 | 2.2.0
+ * 	Update for compatibility with FileNode 3.6.1
  */
 
 /**
@@ -32,15 +34,15 @@ import waffleoRai_Utils.MultiFileBuffer;
  * non-sequential chunks of data from different sources. This may be used
  * to represent patched virtual files.
  * @author Blythe Hospelhorn
- * @version 2.1.1
- * @since September 7, 2020
+ * @version 2.2.0
+ * @since November 8, 2023
  */
 public class PatchworkFileNode extends FileNode{
 	
 	public static final int CACHEBUFF_PGSIZE = 0x1000;
 	public static final int CACHEBUFF_PGNUM = 256;
 	
-	public static final String CLASSVER = "2.1.1";
+	public static final String CLASSVER = "2.2.0";
 	
 	/*----- Instance Variables -----*/
 	
@@ -221,9 +223,9 @@ public class PatchworkFileNode extends FileNode{
 	
 	/* --- Load --- */
 	
-	protected FileBuffer loadDirect(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
+	protected FileBuffer loadDirect(long stpos, long len, int options) throws IOException{
 		
-		if(len >= FileBuffer.DEFO_SIZE_THRESHOLD) forceCache = true;
+		if(len >= FileBuffer.DEFO_SIZE_THRESHOLD) options |= FileNode.LOADOP_FORCE_CACHE;
 		
 		MultiFileBuffer file = new MultiFileBuffer(pieces.size()+1); //Overkill but null pages shouldn't be that much of a mem sink.
 		//Get the index of the start piece using a binary search.
@@ -247,13 +249,15 @@ public class PatchworkFileNode extends FileNode{
 			//Load
 			FileBuffer pdat = null;
 			if(complex_mode){
-				pdat = p.node.loadData(st, l, forceCache, decrypt);
+				pdat = p.node.loadData(st, l, options);
 			}
 			else{
 				FileNode piece = p.node;
 				long start = st + piece.getOffset();
 				long end = ed + piece.getOffset();
-				if(forceCache) CacheFileBuffer.getReadOnlyCacheBuffer(piece.getSourcePath(), CACHEBUFF_PGSIZE, CACHEBUFF_PGNUM, start, end);
+				if((options & FileNode.LOADOP_FORCE_CACHE) != 0) {
+					CacheFileBuffer.getReadOnlyCacheBuffer(piece.getSourcePath(), CACHEBUFF_PGSIZE, CACHEBUFF_PGNUM, start, end);
+				}
 				else pdat = FileBuffer.createBuffer(piece.getSourcePath(), start, end);
 			}
 			
@@ -265,36 +269,20 @@ public class PatchworkFileNode extends FileNode{
 		return file;
 	}
 	
-	public FileBuffer loadData(long stpos, long len, boolean decrypt) throws IOException{
-		boolean forceCache = false;
-		if(getLength() >= FileBuffer.DEFO_SIZE_THRESHOLD) forceCache = true;
-		return this.loadData(stpos, len, forceCache, decrypt);
-	}
-	
-	public FileBuffer loadData(long stpos, long len) throws IOException{
-		boolean forceCache = false;
-		if(getLength() >= FileBuffer.DEFO_SIZE_THRESHOLD) forceCache = true;
-		return this.loadData(stpos, len, forceCache, true);
-	}
-	
-	public FileBuffer loadData() throws IOException{
-		boolean forceCache = false;
-		if(getLength() >= FileBuffer.DEFO_SIZE_THRESHOLD) forceCache = true;
-		return this.loadData(0L, getLength(), forceCache, true);
-	}
-
 	/* --- Other --- */
 	
-	protected void copyDataTo(PatchworkFileNode copy){
+	protected void copyDataTo(FileNode copy){
 		super.copyDataTo(copy);
 		
-		copy.pieces = new ArrayList<Piece>(pieces.size()+1);
-		copy.pieces.addAll(pieces);
-		copy.complex_mode = this.complex_mode;
+		if(copy instanceof PatchworkFileNode){
+			PatchworkFileNode pfn = (PatchworkFileNode)copy;
+			pfn.pieces = new ArrayList<Piece>(pieces.size()+1);
+			pfn.pieces.addAll(pieces);
+			pfn.complex_mode = this.complex_mode;
+		}
 	}
 	
-	public FileNode copy(DirectoryNode parent_copy)
-	{
+	public FileNode copy(DirectoryNode parent_copy){
 		FileNode copy = new PatchworkFileNode(parent_copy, this.getFileName());
 		copyDataTo(copy);
 		

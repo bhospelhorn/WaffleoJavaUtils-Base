@@ -37,6 +37,8 @@ import waffleoRai_Utils.FileBuffer;
  * 		Added hasChildNamed()
  * 2021.01.28 | 2.2.0 -> 2.2.1
  * 		Added debug str functions
+ * 2023.11.08 | 2.2.1 -> 2.3.0
+ * 		Added disposeTree()
  */
 
 /**
@@ -45,8 +47,8 @@ import waffleoRai_Utils.FileBuffer;
  * a virtual directory.
  * <br> This class replaces the deprecated <code>VirDirectory</code> class.
  * @author Blythe Hospelhorn
- * @version 2.2.1
- * @since January 28, 2021
+ * @version 2.3.0
+ * @since November 8, 2023
  */
 public class DirectoryNode extends FileNode{
 
@@ -726,6 +728,21 @@ public class DirectoryNode extends FileNode{
 		List<FileNode> nodes = new LinkedList<FileNode>();
 		getNodesThat(cond, nodes);
 		return nodes;
+	}
+	
+	/**
+	 * Clear all resources and temp files for this node and all downstream nodes.
+	 * @since 2.3.0
+	 */
+	public void disposeTree(){
+		dispose();
+		for(FileNode child : children.values()){
+			if(child instanceof DirectoryNode){
+				DirectoryNode dchild = (DirectoryNode)child;
+				dchild.disposeTree();
+			}
+			else child.dispose();
+		}
 	}
 	
 	/**

@@ -4,7 +4,6 @@ import org.w3c.dom.Element;
 
 import waffleoRai_AutoCode.Bingenner;
 import waffleoRai_AutoCode.BingennerTarget;
-import waffleoRai_Files.XMLReader;
 
 public class ArrayFieldDef extends BasicDataFieldDef{
 	

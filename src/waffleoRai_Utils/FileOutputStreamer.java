@@ -10,58 +10,48 @@ public class FileOutputStreamer implements StreamWrapper{
 	private OutputStream stream;
 	private int written;
 	
-	public FileOutputStreamer(String path) throws IOException
-	{
+	public FileOutputStreamer(String path) throws IOException{
 		stream = new BufferedOutputStream(new FileOutputStream(path));
 		written = 0;
 	}
 	
-	public FileOutputStreamer(OutputStream out)
-	{
+	public FileOutputStreamer(OutputStream out){
 		stream = out;
 		written = 0;
 	}
 	
 	public OutputStream getStream(){return stream;}
 	
-	public byte get()
-	{
+	public byte get(){
 		throw new UnsupportedOperationException();
 	}
 	
-	public int getFull()
-	{
+	public int getFull(){
 		throw new UnsupportedOperationException();
 	}
 
-	public void put(byte b)
-	{
-		try
-		{
+	public void put(byte b){
+		try{
 			stream.write(Byte.toUnsignedInt(b));
 			written++;
 		}
-		catch(IOException e)
-		{
+		catch(IOException e){
 			e.printStackTrace();
 		}
 	}
 	
 	public boolean isEmpty(){return (written == 0);}
 	
-	public void close()
-	{
+	public void close(){
 		try{stream.close();}
 		catch(IOException e){e.printStackTrace();}
 	}
 
-	public void push(byte b)
-	{
+	public void push(byte b){
 		throw new UnsupportedOperationException();
 	}
 	
-	public void rewind()
-	{
+	public void rewind(){
 		throw new UnsupportedOperationException();
 	}
 	

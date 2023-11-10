@@ -6,8 +6,7 @@ public class CompressionInfoNode {
 	private long stOff;
 	private long len;
 	
-	public CompressionInfoNode(AbstractCompDef definition, long start, long length)
-	{
+	public CompressionInfoNode(AbstractCompDef definition, long start, long length){
 		def = definition;
 		stOff = start;
 		len = length;

@@ -8,6 +8,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -87,7 +90,7 @@ public class FileTreeSaver {
 	 * 		 	5 - Has encryption (V2+)
 	 * 		FLAGS (V7+) --- d0m0nnnn ctevu000
 	 * 			15 - Is Directory
-	 * 			14 - (Reserved)
+	 * 			14 - Has timestamp? (V9+)
 	 * 			13 - Has metadata?
 	 * 			12 - Has block alignment? (V8+)
 	 * 			11-8 - FileNode type enum (4 bits)
@@ -97,6 +100,8 @@ public class FileTreeSaver {
 	 * 				3 - Fragmented Node
 	 * 				4 - Patchwork Node
 	 * 				5 - Complex Patchwork Node
+	 * 				6 - Versioned Node (V9+)
+	 * 					Works like a dir, but subnodes don't have their own names.
 	 * 			7 - Has container? (File)
 	 * 			6 - Has type chain [file]/file class[dir] (V2+)(V4+ for dir)
 	 * 			5 - Has encryption (V2+)
@@ -109,13 +114,14 @@ public class FileTreeSaver {
 	 * 	Name [VLS 2x2] 
 	 * 	Metadata [VLS 4x2] (V3+) (If applicable)
 	 * 
-	 * If file...
+	 * If file (not versioned root)...
 	 * 	Source Path Index [4]
 	 * 	Source Node UID [8] (If applicable) (V7+)
 	 * 	Offset [8]
 	 * 	Length [8]
 	 * 	Block Size In [4] (If applicable) (V8+)
 	 * 	Block Size Out [4] (If applicable) (V8+)
+	 * 	Timestamp[8] (If applicable) (V9+)
 	 * 
 	 * File subtype data....
 	 * (Frag/Simple Patchwork)
@@ -158,7 +164,7 @@ public class FileTreeSaver {
 	 *		Container Node Def... (If appl.) (V7+) 
 	 *			If flag 7 is set but 3 is not.
 	 * 
-	 * If directory...
+	 * If directory/versioned file...
 	 * 	Number of children [4] (Omitted in list mode)
 	 * 	File class [2] (If applicable) (V4+)
 	 * 
@@ -189,7 +195,7 @@ public class FileTreeSaver {
 	public static final String MAGIC_TREE = "eert";
 	public static final String MAGIC_LIST = "tsil";
 	
-	public static final int CURRENT_VERSION = 8;
+	public static final int CURRENT_VERSION = 9;
 	
 	public static final String ENCODING = "UTF8";
 	
@@ -201,9 +207,27 @@ public class FileTreeSaver {
 	public static final int NODETYPE_FRAG = 3;
 	public static final int NODETYPE_PATCHWORK = 4;
 	public static final int NODETYPE_PATCHWORK_C = 5;
+	public static final int NODETYPE_VERSIONED = 6;
 	
 	public static final String METAKEY_SRCNODE_UID = "SRCNODE_UID";
 	public static final String METAKEY_CNTRNODE_UID = "CNTRNODE_UID";
+	
+	private static final int SERFLAG_NONE = 0;
+	private static final int SERFLAG_INCLUDE_PARENT_ID = 1 << 0;
+	private static final int SERFLAG_REF_CONTAINERS = 1 << 1;
+	private static final int SERFLAG_IS_VER_CHILD = 1 << 2;
+	private static final int SERFLAG_LIST_MODE = 1 << 3;
+	
+	public static final int NODEFLAG_NONE = 0;
+	public static final int NODEFLAG_IS_DIR = 1 << 15;
+	public static final int NODEFLAG_HAS_TIMESTAMP = 1 << 14;
+	public static final int NODEFLAG_HAS_META = 1 << 13;
+	public static final int NODEFLAG_HAS_BLOCKS = 1 << 12;
+	public static final int NODEFLAG_HAS_CONTAINER = 1 << 7;
+	public static final int NODEFLAG_HAS_TYPES = 1 << 6;
+	public static final int NODEFLAG_HAS_ENCRYPTION = 1 << 5;
+	public static final int NODEFLAG_HAS_VIRSRC = 1 << 4;
+	public static final int NODEFLAG_HAS_CONT_UID_LINK = 1 << 3;
 	
 	/* ----- Structs ----- */
 	
@@ -254,8 +278,7 @@ public class FileTreeSaver {
 	
 	/* ----- Parse ----- */
 	
-	private static ParsedDir parseDirNode(FileBuffer in, DirectoryNode parent, long stpos, String[] paths, Map<Integer, FileNode> offmap, int version, boolean listmode)
-	{
+	private static ParsedDir parseDirNode(FileBuffer in, DirectoryNode parent, long stpos, String[] paths, Map<Integer, FileNode> offmap, int version, int options){
 		//System.err.println("FileTreeSaver.parseDirNode || Directory found -- stpos = 0x " + Long.toHexString(stpos));
 		DirectoryNode dir = new DirectoryNode(parent, "");
 		offmap.put((int)stpos, dir);
@@ -263,6 +286,7 @@ public class FileTreeSaver {
 		long cpos = stpos;
 		int flags = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos+=2;
 		boolean hasfc = false;
+		boolean listmode = (options & SERFLAG_LIST_MODE) != 0;
 		
 		//UIDs
 		if(version >= 7){
@@ -278,8 +302,7 @@ public class FileTreeSaver {
 		//System.err.println("FileTreeSaver.parseDirNode || Dir Name: " + dir.getFileName());
 		
 		//Metadata
-		if(version >= 3 && (flags & 0x2000) != 0)
-		{
+		if(version >= 3 && (flags & NODEFLAG_HAS_META) != 0){
 			ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.DWORD, 2);
 			cpos += ss.getSizeOnDisk();
 			String metastr = ss.getString();
@@ -292,7 +315,7 @@ public class FileTreeSaver {
 				dir.setMetadataValue(split[0], split[1]);
 			}
 		}
-		if(version >= 4 && (flags & 0x0040) != 0) hasfc = true;
+		if(version >= 4 && (flags & NODEFLAG_HAS_TYPES) != 0) hasfc = true;
 		
 		//Get children
 		int ccount = 0;
@@ -304,18 +327,61 @@ public class FileTreeSaver {
 		}
 		for(int i = 0; i < ccount; i++){
 			int flags2 = Short.toUnsignedInt(in.shortFromFile(cpos));
-			if((flags2 & 0x8000) != 0) cpos += parseDirNode(in, dir, cpos, paths, offmap, version, listmode).size;
-			else cpos += parseFileNode(in, dir, cpos, paths, offmap, version, listmode).size;
+			if((flags2 & NODEFLAG_IS_DIR) != 0) cpos += parseDirNode(in, dir, cpos, paths, offmap, version, options).size;
+			else cpos += parseFileNode(in, dir, cpos, paths, offmap, version, options).size;
 		}
 		
 		return new ParsedDir(dir, ((int)(cpos-stpos)));
 	}
+
+	private static ParsedNode parseVersionedFileNode(FileBuffer in, DirectoryNode parent, long stpos, String[] paths, Map<Integer, FileNode> offmap, int version, int options, int recflags){
+		long cpos = stpos + 2;
+		boolean listmode = (options & SERFLAG_LIST_MODE) != 0;
+		
+		VersionedFileNode fn = new VersionedFileNode(parent,"");
+		offmap.put((int)stpos, fn);
+		
+		//UIDs
+		fn.setGUID(in.longFromFile(cpos)); cpos += 8;
+		if(listmode) {fn.scratch_long = in.longFromFile(cpos); cpos += 8;}
+		
+		//Name
+		SerializedString ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.WORD, 2);
+		cpos += ss.getSizeOnDisk();
+		fn.setFileName(ss.getString());
+		if(fn.getFileName() == null) fn.setFileName("");
+		
+		if((recflags & NODEFLAG_HAS_META) != 0) {
+			//Has metadata
+			ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.DWORD, 2);
+			cpos += ss.getSizeOnDisk();
+			String metastr = ss.getString();
+			
+			String[] fields = metastr.split(";");
+			for(String pair : fields){
+				String[] split = pair.split("=");
+				if(split.length < 2) continue;
+				fn.setMetadataValue(split[0], split[1]);
+			}
+		}
+		
+		//Children
+		int ccount = in.intFromFile(cpos); cpos += 4;
+		fn.ensureChildNodeCapacity(ccount);
+		for(int i = 0; i < ccount; i++){
+			ParsedNode cnode = parseFileNode(in, parent, cpos, paths, offmap, version, options | SERFLAG_IS_VER_CHILD);
+			fn.addVersionNode(cnode.node);
+			cpos += cnode.size;
+		}
+		
+		return new ParsedNode(fn, (int)(cpos - stpos));
+	}
 	
-	private static ParsedNode parseFileNode(FileBuffer in, DirectoryNode parent, long stpos, String[] paths, Map<Integer, FileNode> offmap, int version, boolean listmode)
-	{
+	private static ParsedNode parseFileNode(FileBuffer in, DirectoryNode parent, long stpos, String[] paths, Map<Integer, FileNode> offmap, int version, int options){
 		//System.err.println("FileTreeSaver.parseFileNode || File found -- stpos = 0x " + Long.toHexString(stpos));
 		long cpos = stpos;
 		int flags = Short.toUnsignedInt(in.shortFromFile(cpos)); cpos+=2;
+		boolean listmode = (options & SERFLAG_LIST_MODE) != 0;
 		
 		int nodetype = NODETYPE_STANDARD;
 		FileNode fn = null;
@@ -332,6 +398,8 @@ public class FileTreeSaver {
 				pfn.setComplexMode(true);
 				fn = pfn;
 				break;
+			case NODETYPE_VERSIONED:
+				return parseVersionedFileNode(in, parent, stpos, paths, offmap, version, options, flags);
 			}
 		}
 		else{
@@ -362,7 +430,7 @@ public class FileTreeSaver {
 		if(fn.getFileName() == null) fn.setFileName("");
 		//System.err.println("FileTreeSaver.parseFileNode || File Name: " + fn.getFileName());
 		
-		if(version >= 3 && (flags & 0x2000) != 0) {
+		if(version >= 3 && (flags & NODEFLAG_HAS_META) != 0) {
 			//Has metadata
 			ss = in.readVariableLengthString(ENCODING, cpos, BinFieldSize.DWORD, 2);
 			cpos += ss.getSizeOnDisk();
@@ -379,7 +447,7 @@ public class FileTreeSaver {
 		
 		//Node location
 		int pathidx = in.intFromFile(cpos); cpos+=4;
-		if(version >= 7 && (flags & 0x10) != 0){
+		if(version >= 7 && (flags & NODEFLAG_HAS_VIRSRC) != 0){
 			//Virtual source
 			long srcuid = in.longFromFile(cpos); cpos+=8;
 			fn.setUseVirtualSource(true);
@@ -389,11 +457,18 @@ public class FileTreeSaver {
 		fn.setOffset(in.longFromFile(cpos)); cpos += 8;
 		fn.setLength(in.longFromFile(cpos)); cpos+=8;
 		
-		if(version >= 8 && ((flags & 0x1000) != 0)){
+		if(version >= 8 && ((flags & NODEFLAG_HAS_BLOCKS) != 0)){
 			//Block size
 			int bsz_in = in.intFromFile(cpos); cpos+=4;
 			int bsz_out = in.intFromFile(cpos); cpos+=4;
 			fn.setBlockSize(bsz_in, bsz_out);
+		}
+		
+		if(version >= 9 && ((flags & NODEFLAG_HAS_TIMESTAMP) != 0)){
+			//Timestamp
+			long time = in.longFromFile(cpos); cpos += 8;
+			ZonedDateTime ztime = ZonedDateTime.ofInstant(Instant.ofEpochSecond(time), ZoneId.systemDefault());
+			fn.setTimestamp(ztime);
 		}
 		
 		if(paths != null && pathidx >= 0 && pathidx < paths.length){
@@ -428,7 +503,7 @@ public class FileTreeSaver {
 			PatchworkFileNode pfn = (PatchworkFileNode)fn;
 			int block_count = in.intFromFile(cpos); cpos+=4;
 			for(int i = 0; i < block_count; i++){
-				ParsedNode pn = parseFileNode(in, null, cpos, paths, offmap, version, listmode);
+				ParsedNode pn = parseFileNode(in, null, cpos, paths, offmap, version, options);
 				cpos += pn.size;
 				pfn.addBlock(pn.node);
 			}
@@ -441,7 +516,7 @@ public class FileTreeSaver {
 		}
 		
 		//Encryption info
-		if((flags & 0x20) != 0){
+		if((flags & NODEFLAG_HAS_ENCRYPTION) != 0){
 			
 			int count = 1;
 			if(version >= 7){
@@ -465,7 +540,7 @@ public class FileTreeSaver {
 		}
 		
 		//Type Chain
-		if((flags & 0x40) != 0){
+		if((flags & NODEFLAG_HAS_TYPES) != 0){
 			int tcount = in.intFromFile(cpos); cpos += 4;
 			FileTypeNode head = null;
 			FileTypeNode node = null;
@@ -496,7 +571,7 @@ public class FileTreeSaver {
 		}
 		
 		//Container
-		if((flags & 0x80) != 0){
+		if((flags & NODEFLAG_HAS_CONTAINER) != 0){
 			FileNode cntr = null;
 			if(version < 2){
 				//Just a "compression start offset"
@@ -525,14 +600,14 @@ public class FileTreeSaver {
 			else if(version >= 7){
 				//Container
 				//Either UID or recursive
-				if((flags & 0x08) != 0){
+				if((flags & NODEFLAG_HAS_CONT_UID_LINK) != 0){
 					//Just a uid, link later
 					long cuid = in.longFromFile(cpos); cpos+=8;
 					fn.setMetadataValue(METAKEY_CNTRNODE_UID, Long.toHexString(cuid));
 				}
 				else{
 					//Full node def
-					ParsedNode pn = parseFileNode(in, null, cpos, paths, offmap, version, listmode);
+					ParsedNode pn = parseFileNode(in, null, cpos, paths, offmap, version, options);
 					cpos += pn.size;
 					fn.setContainerNode(pn.node);
 				}
@@ -544,7 +619,6 @@ public class FileTreeSaver {
 		if(nodetype == NODETYPE_LINK){
 			fn.scratch_field = in.intFromFile(cpos); cpos += 4;
 		}
-		
 		
 		return new ParsedNode(fn, ((int)(cpos - stpos)));
 	}
@@ -659,13 +733,13 @@ public class FileTreeSaver {
 			for(int i = 0; i < ncount; i++){
 				int flags = Short.toUnsignedInt(in.shortFromFile(cpos));
 				if((flags & 0x8000) != 0){
-					ParsedDir pd = parseDirNode(in, null, cpos, path_table, offmap, version, true);
+					ParsedDir pd = parseDirNode(in, null, cpos, path_table, offmap, version, SERFLAG_NONE);
 					cpos += pd.size;
 					nodelist.add(pd.node);
 					uidmap.put(pd.node.getGUID(), pd.node);
 				}
 				else{
-					ParsedNode pn = parseFileNode(in, null, cpos, path_table, offmap, version, true);
+					ParsedNode pn = parseFileNode(in, null, cpos, path_table, offmap, version, SERFLAG_NONE);
 					cpos += pn.size;
 					nodelist.add(pn.node);
 					uidmap.put(pn.node.getGUID(), pn.node);
@@ -688,7 +762,7 @@ public class FileTreeSaver {
 		offmap.clear();
 		if(version < 7 || (hflags & 0x8000) != 0){
 			cpos = toff + 4;
-			root = parseDirNode(in, null, cpos, path_table, offmap, version, false).node;	
+			root = parseDirNode(in, null, cpos, path_table, offmap, version, SERFLAG_NONE).node;	
 		}
 		mapNodesByGUID(root, uidmap);
 		
@@ -772,13 +846,13 @@ public class FileTreeSaver {
 		while(cpos < filesize){
 			int flags_preview = Short.toUnsignedInt(in.shortFromFile(cpos));
 			if((flags_preview & 0x8000) != 0){
-				ParsedDir d = parseDirNode(in, null, cpos, path_table, offmap, version, true);
+				ParsedDir d = parseDirNode(in, null, cpos, path_table, offmap, version, SERFLAG_LIST_MODE);
 				nodes.add(d.node);
 				cpos += d.size;
 				idmap.put(d.node.getGUID(), d.node);
 			}
 			else{
-				ParsedNode f = parseFileNode(in, null, cpos, path_table, offmap, version, true);
+				ParsedNode f = parseFileNode(in, null, cpos, path_table, offmap, version, SERFLAG_LIST_MODE);
 				nodes.add(f.node);
 				cpos += f.size;
 				idmap.put(f.node.getGUID(), f.node);
@@ -907,13 +981,26 @@ public class FileTreeSaver {
 		return sb.toString();
 	}
 	
-	private static DatNode serializeFileNode(FileNode node, Map<String, Integer> srcPathMap, boolean includeParentID, boolean refcontainers){
+	private static DatNode serializeFileNode(FileNode node, Map<String, Integer> srcPathMap, int options){
 
 		if(node.getGUID() == -1L) node.generateGUID();
+		if(node instanceof VersionedFileNode) return serializeVersionedFileNode((VersionedFileNode)node, srcPathMap, options);
+		
+		boolean refcontainers = (options & SERFLAG_REF_CONTAINERS) != 0;
+		boolean includeParentID = (options & SERFLAG_INCLUDE_PARENT_ID) != 0;
+		boolean versub = (options & SERFLAG_IS_VER_CHILD) != 0;
 		
 		//Serialize node name
-		FileBuffer cname = new FileBuffer(3 + (node.getFileName().length()<< 1), true);
-		cname.addVariableLengthString(ENCODING, node.getFileName(), BinFieldSize.WORD, 2);
+		FileBuffer cname = null;
+		String fname = node.getFileName();
+		if(!versub && (fname != null)){
+			cname = new FileBuffer(3 + (fname.length()<< 1), true);
+			cname.addVariableLengthString(ENCODING, fname, BinFieldSize.WORD, 2);
+		}
+		else{
+			cname = new FileBuffer(2, true);
+			cname.addToFile((short)0);
+		}
 		
 		//Serialize metadata
 		FileBuffer meta = null;
@@ -926,7 +1013,7 @@ public class FileTreeSaver {
 		//Serialize container, if applicable
 		FileBuffer cont_serial = null;
 		if(!refcontainers && node.sourceDataCompressed()){
-			cont_serial = serializeFileNode(node.getContainer(), srcPathMap, includeParentID, false).dat;
+			cont_serial = serializeFileNode(node.getContainer(), srcPathMap, options & ~SERFLAG_REF_CONTAINERS).dat;
 		}
 		
 		//Set flags and estimate size for allocation
@@ -936,21 +1023,27 @@ public class FileTreeSaver {
 		if(node.sourceDataCompressed()){
 			if(cont_serial != null) csz += cont_serial.getFileSize();
 			else csz+=8;
-			flag |= 0x80;
-			if(refcontainers) flag |= 0x08;
+			flag |= NODEFLAG_HAS_CONTAINER;
+			if(refcontainers) flag |= NODEFLAG_HAS_CONT_UID_LINK;
 		}
 		if(node.hasEncryption()){
 			int ecount = node.getEncryptionDefChain().size();
 			csz += 20 * ecount; 
-			flag |= 0x20;
+			flag |= NODEFLAG_HAS_ENCRYPTION;
 		}
 		if(!typechain.isEmpty()){csz += (4 + (typechain.size() << 2)); flag |= 0x40;}
-		if(node.hasMetadata()){csz += meta.getFileSize(); flag |= 0x2000;}
-		if(node.hasVirtualSource()) flag |= 0x10;
+		if(node.hasMetadata()){csz += meta.getFileSize(); flag |= NODEFLAG_HAS_META;}
+		if(node.hasVirtualSource()) flag |= NODEFLAG_HAS_VIRSRC;
+		
+		ZonedDateTime timestamp = node.getTimestamp();
+		if(versub || timestamp != null){
+			csz += 8;
+			flag |= NODEFLAG_HAS_TIMESTAMP;
+		}
 		
 		boolean blocked = false;
 		blocked = (node.getInputBlockSize() > 1 || node.getOutputBlockSize() > 1);
-		if(blocked) flag |= 0x1000;
+		if(blocked) flag |= NODEFLAG_HAS_BLOCKS;
 		
 		int nodetype = NODETYPE_STANDARD;
 		if(node instanceof LinkNode) nodetype = NODETYPE_LINK;
@@ -960,6 +1053,7 @@ public class FileTreeSaver {
 			if(((PatchworkFileNode)node).complexMode()) nodetype = NODETYPE_PATCHWORK_C;
 			else nodetype = NODETYPE_PATCHWORK;
 		}
+		else if(node instanceof VersionedFileNode) nodetype = NODETYPE_VERSIONED;
 		flag |= (nodetype & 0xF) << 8;
 		
 		//Allocate & Add initial fields
@@ -1008,6 +1102,14 @@ public class FileTreeSaver {
 			cdat.addToFile(node.getOutputBlockSize());
 		}
 		
+		if(versub || timestamp != null){
+			if(timestamp == null){
+				node.timestamp();
+				timestamp = node.getTimestamp();
+			}
+			cdat.addToFile(timestamp.toEpochSecond());
+		}
+		
 		//Node type specific location data
 		if(node instanceof FragFileNode){
 			FragFileNode ffn = (FragFileNode)node;
@@ -1025,7 +1127,7 @@ public class FileTreeSaver {
 			cdat.addToFile(blocks.size());
 			if(pfn.complexMode()){
 				for(FileNode block : blocks){
-					datnode.children.add(serializeFileNode(block, srcPathMap, includeParentID, refcontainers));
+					datnode.children.add(serializeFileNode(block, srcPathMap, options));
 				}
 			}
 			else{
@@ -1085,7 +1187,47 @@ public class FileTreeSaver {
 		return datnode;
 	}
 
-	private static DatNode serializeDir(DirectoryNode dir, Map<String, Integer> srcPathMap, Map<Integer, DatNode> offmap, int off, boolean refcontainers){
+	private static DatNode serializeVersionedFileNode(VersionedFileNode node, Map<String, Integer> srcPathMap, int options){
+		//Serialize just the name...
+		FileBuffer nodename = null;
+		nodename = new FileBuffer(3 + (node.getFileName().length()<< 1), true);
+		nodename.addVariableLengthString(ENCODING, node.getFileName(), BinFieldSize.WORD, 2);
+		
+		String metadata = null;
+		if(node.hasMetadata()) metadata = serializeMetadata(node);
+		
+		int nsz = 10 + (int)nodename.getFileSize() + 4;
+		if(metadata != null) nsz += 4 + 2 + metadata.length();
+		
+		FileBuffer data = new FileBuffer(nsz, true);
+		int flags = 0;
+		if(node.hasMetadata()) flags |= NODEFLAG_HAS_META;
+		flags |= (NODETYPE_VERSIONED & 0xff) << 8;
+		
+		List<FileNode> children = node.getVersionNodes();
+		data.addToFile((short)flags);
+		data.addToFile(node.getGUID());
+		data.addToFile(nodename);
+		if(metadata != null){
+			data.addVariableLengthString(ENCODING, metadata, BinFieldSize.DWORD, 2);
+		}
+		data.addToFile(children.size());
+		
+		DatNode datnode = new DatNode();
+		datnode.dat = data;
+		datnode.src = node;
+		
+		for(FileNode child : children){
+			DatNode cnode = serializeFileNode(child, srcPathMap, options | SERFLAG_IS_VER_CHILD);
+			datnode.children.add(cnode);
+		}
+		
+		return datnode;
+	}
+	
+	private static DatNode serializeDir(DirectoryNode dir, Map<String, Integer> srcPathMap, Map<Integer, DatNode> offmap, int off, int options){
+		//boolean refcontainers = (options & SERFLAG_INCLUDE_REF_CONTAINERS) != 0;
+		
 		//Note offset
 		dir.scratch_field = off;
 		
@@ -1137,13 +1279,13 @@ public class FileTreeSaver {
 		
 		for(FileNode child : children){
 			if(child instanceof DirectoryNode){
-				DatNode cdir = serializeDir((DirectoryNode)child, srcPathMap, offmap, off, refcontainers);
+				DatNode cdir = serializeDir((DirectoryNode)child, srcPathMap, offmap, off, options);
 				off += (int)cdir.getTotalSize();
 				dirnode.children.add(cdir);
 			}
 			else{
 				child.scratch_field = off;
-				DatNode cnode = serializeFileNode(child, srcPathMap, false, refcontainers);
+				DatNode cnode = serializeFileNode(child, srcPathMap, options & ~SERFLAG_INCLUDE_PARENT_ID);
 				
 				//DatNode cnode = new DatNode();
 				offmap.put(off, cnode);
@@ -1216,7 +1358,7 @@ public class FileTreeSaver {
 				cnode.dat = data;
 			}
 			else{
-				cnode = serializeFileNode(node, srcPathMap, true, true);
+				cnode = serializeFileNode(node, srcPathMap, SERFLAG_INCLUDE_PARENT_ID | SERFLAG_REF_CONTAINERS);
 			}
 			
 			out.add(cnode);
@@ -1317,7 +1459,7 @@ public class FileTreeSaver {
 		
 		//Now do tree...
 		Map<Integer, DatNode> offmap = new HashMap<Integer, DatNode>();
-		DatNode sroot = serializeDir(root, srcPathMap, offmap, 4, true);
+		DatNode sroot = serializeDir(root, srcPathMap, offmap, 4, SERFLAG_REF_CONTAINERS);
 	
 		//Add link offsets...
 		Collection<LinkNode> links = getAllLinks(root, null);

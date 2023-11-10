@@ -8,6 +8,7 @@ import java.io.OutputStream;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
@@ -23,6 +24,7 @@ import javax.swing.tree.TreePath;
 
 import waffleoRai_Compression.definitions.AbstractCompDef;
 import waffleoRai_Compression.definitions.CompDefNode;
+import waffleoRai_Compression.definitions.CompressionDefs;
 import waffleoRai_DataContainers.Treenumeration;
 import waffleoRai_Encryption.DecryptorMethod;
 import waffleoRai_Encryption.StaticDecryption;
@@ -33,10 +35,8 @@ import waffleoRai_Files.NodeMatchCallback;
 import waffleoRai_Utils.CacheFileBuffer;
 import waffleoRai_Utils.EncryptedFileBuffer;
 import waffleoRai_Utils.FileBuffer;
-import waffleoRai_Utils.FileBufferStreamer;
 import waffleoRai_Utils.FileUtils;
 import waffleoRai_Utils.MultiFileBuffer;
-
 
 /*
  * UPDATES
@@ -73,6 +73,16 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 
  * 2021.01.28 | 3.4.0 -> 3.5.0
  * 	Ref trace methods
+ * 
+ * 2023.11.06 | 3.5.0 -> 3.6.0
+ * 	Added timestamp field
+ *  Data load interface modifications. Switched to use of options flags.
+ *  	Allowed ability to control if containers/decompression/decryption buffers
+ *  	use disk or memory.
+ *  
+ *  2023.11.08 | 3.6.0 -> 3.6.1
+ * 	 Cleanup
+ * 
  */
 
 /**
@@ -85,8 +95,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * within files on disk (such as archives or device images).
  * <br> This class replaces the deprecated <code>VirFile</code> class.
  * @author Blythe Hospelhorn
- * @version 3.5.0
- * @since January 28, 2021
+ * @version 3.6.1
+ * @since November 8, 2023
  */
 public class FileNode implements TreeNode, Comparable<FileNode>{
 	
@@ -100,6 +110,45 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	public static final int LOADFAIL_FLAG_SRCFILE_DNE = 0x10;
 	public static final int LOADFAIL_FLAG_BADOFF = 0x20;
 	public static final int LOADFAIL_FLAG_ISDIR = 0x40;
+	public static final int LOADFAIL_FLAG_NO_DISKBUFF_PATH = 0x80;
+	public static final int LOADFAIL_FLAG_MEMBUFF_TOOBIG = 0x100;
+	
+	/**
+	 * Value to represent no load options (zero, all flags unset).
+	 * @since 3.6.0
+	 */
+	public static final int LOADOP_NONE = 0;
+	
+	/**
+	 * Load option flag. Whether or not to instantiate all <code>FileBuffer</code> containers
+	 * as <code>CacheFileBuffer</code> regardless of size. This can be useful in the case of
+	 * patchwork/fragmented nodes where loaded data can consist of many smaller pieces that
+	 * may add up to a very large total.
+	 * @since 3.6.0
+	 */
+	public static final int LOADOP_FORCE_CACHE = 1 << 0;
+	
+	/**
+	 * Load option flag. Whether or not to use disk (as opposed to memory)
+	 * to buffer loading intermediates such as decompressed or
+	 * decrypted containers.
+	 * @since 3.6.0
+	 */
+	public static final int LOADOP_DISK_BUFFER = 1 << 1;
+	
+	/**
+	 * Load option flag. Whether or not to attempt decompression of node data. If not, the
+	 * returned node will either be this node or reference the open container.
+	 * @since 3.6.0
+	 */
+	public static final int LOADOP_DECOMPRESS = 1 << 2;
+	
+	/**
+	 * Load option flag. Whether or not to attempt decryption of node data. If not, the
+	 * returned node will either be this node or reference the open container.
+	 * @since 3.6.0
+	 */
+	public static final int LOADOP_DECRYPT = 1 << 3;
 
 	/* --- Static Variables --- */
 	
@@ -129,6 +178,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	private long guid;
 	
 	//Optional fields
+	private ZonedDateTime timestamp;
 	private Map<String, String> metadata;
 	
 	//Compressed Container
@@ -161,7 +211,6 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @param name Initial node name. If null or empty, can be set later using <code>setFileName</code>. Note that there
 	 * may be issues with <code>String</code> based tree retrieval if the name is left null or empty.
 	 */
-
 	public FileNode(DirectoryNode parent, String name){
 		this.parent = parent;
 		fileName = name;
@@ -190,18 +239,14 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		LinkedList<String> names = new LinkedList<String>();
 		DirectoryNode p = parent;
 		names.add(getFileName());
-		while(p != null)
-		{
+		while(p != null){
 			String fn = p.getFileName();
 			if(fn != null && !fn.isEmpty()) names.push(fn);
 			p = p.getParent();
 		}
 		
 		StringBuilder sb = new StringBuilder(2048);
-		for(String s : names)
-		{
-			sb.append("/" + s);
-		}
+		for(String s : names) sb.append("/" + s);
 	
 		return sb.toString();
 	}
@@ -295,6 +340,13 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	public int getInputBlockSize(){
 		return blocksize_in;
 	}
+	
+	/**
+	 * Get timestamp for file node, if present.
+	 * @return Node timestamp, or <code>null</code> if none.
+	 * @since 3.6.0
+	 */
+	public ZonedDateTime getTimestamp(){return timestamp;}
 	
 	public DirectoryNode getParent(){return parent;}
 	
@@ -404,9 +456,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @return FileNode describing container data location, if present.
 	 * If this node has no container, <code>null</code> is returned.
 	 */
-	public FileNode getContainer(){
-		return container;
-	}
+	public FileNode getContainer(){return container;}
 	
 	/**
 	 * Get the head of the type chain linked list associated with this node. The type chain
@@ -431,7 +481,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	public FileTypeNode getTypeChainTail(){
 		if(type_chain == null) return null;
 		FileTypeNode child = type_chain;
-		while(child.getChild() != null)child = child.getChild();
+		while(child.getChild() != null) child = child.getChild();
 		
 		return child;
 	}
@@ -635,6 +685,23 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	protected void setGUID(long val){guid = val;}
 	
 	/**
+	 * Timestamp this node to reflect the current time.
+	 * @since 3.6.0
+	 */
+	public void timestamp(){
+		timestamp = ZonedDateTime.now();
+	}
+	
+	/**
+	 * Set the timestamp field for this node to the provided parameter.
+	 * @param time Time to set as timestamp for node.
+	 * @since 3.6.0
+	 */
+	public void setTimestamp(ZonedDateTime time){
+		timestamp = time;
+	}
+	
+	/**
 	 * Set an encryption definition describing the encryption type for this node's source data.
 	 * @param def <code>EncryptionDefinition</code> describing source data encryption.
 	 */
@@ -694,10 +761,8 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * is unlinked.
 	 * @param p <code>DirectoryNode</code> to set as new parent.
 	 */
-	public void setParent(DirectoryNode p)
-	{
+	public void setParent(DirectoryNode p) {
 		if(parent != null) parent.removeChild(this);
-		
 		parent = p; 
 		if(p != null) p.addChild(this);
 	}
@@ -797,26 +862,6 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	public void setScratchLong(long val){scratch_long = val;}
 	
 	/**
-	 * Clear any temp files this node has used as intermediates for loading
-	 * source data.
-	 * @return The number of files successfully deleted.
-	 */
-	public int clearTempFiles(){
-		if(temp_paths == null) return 0;
-		int count = 0;
-		for(String p : temp_paths){
-			try{
-				Files.deleteIfExists(Paths.get(p));
-				count++;
-			}
-			catch(IOException x){x.printStackTrace();}
-		}
-		temp_paths.clear();
-		temp_paths = null; //Throw to GC
-		return count;
-	}
-	
-	/**
 	 * Set the string path to the temp file containing this node's data in a decrypted,
 	 * decompressed state for use by nodes referencing wrapped data.
 	 * @param path Path to set as temp path.
@@ -831,8 +876,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * <br>By default, root relative paths are returned.
 	 * @param b True to use full paths, false to use only local names.
 	 */
-	public static void setUseFullPathInToString(boolean b)
-	{
+	public static void setUseFullPathInToString(boolean b){
 		FileNode.TOSTRING_FULLPATH = b;
 	}
 	
@@ -858,6 +902,54 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		TEMP_DIR = path;
 	}
 	
+	/* --- Cleanup --- */
+	
+	/**
+	 * Release all resources and memory used by this file node, any virtual sources,
+	 * and containers. This includes data buffers held in memory and on disk.
+	 * @since 3.6.0
+	 */
+	public void dispose(){
+		clearTempFiles(); //Automatically takes care of container.
+		if(sourceNode != null) sourceNode.clearTempFiles();
+	}
+	
+	/**
+	 * Clear any temp files this node has used as intermediates for loading
+	 * source data.
+	 * @return The number of files successfully deleted.
+	 */
+	public int clearTempFiles(){
+		if(temp_paths == null) return 0;
+		int count = 0;
+		for(String p : temp_paths){
+			try{
+				Files.deleteIfExists(Paths.get(p));
+				count++;
+			}
+			catch(IOException x){x.printStackTrace();}
+		}
+		temp_paths.clear();
+		temp_paths = null; //Throw to GC
+		
+		//Container temp
+		if(cont_temp != null){
+			if(FileBuffer.fileExists(cont_temp)){
+				try{
+					Files.delete(Paths.get(cont_temp));
+					count++;
+				}
+				catch(IOException x){x.printStackTrace();}
+			}
+		}
+		
+		if(container != null){
+			count += container.clearTempFiles();
+		}
+		
+		return count;
+	}
+	
 	/* --- Comparable --- */
 	
 	/**
@@ -868,13 +960,9 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * to type if only querying.
 	 * @return True if this node is a true directory. False if this node is a leaf.
 	 */
-	public boolean isDirectory()
-	{
-		return false;
-	}
+	public boolean isDirectory(){return false;}
 	
-	public boolean equals(Object o)
-	{
+	public boolean equals(Object o){
 		if(o == this) {return true;}
 		if(o == null) return false;
 		if(!(o instanceof FileNode)) return false;
@@ -887,8 +975,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		return fileName.hashCode() ^ (int)offset;
 	}
 	
-	public int compareTo(FileNode other)
-	{
+	public int compareTo(FileNode other){
 		if(other == this) return 0;
 		if(other == null) return 1;
 		
@@ -925,27 +1012,17 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	
 	/* --- TreeNode --- */
 	
-	@Override
 	public TreeNode getChildAt(int childIndex) {return null;}
 
-	@Override
 	public int getChildCount() {return 0;}
 
-	@Override
-	public int getIndex(TreeNode node) 
-	{
-		return -1;
-	}
+	public int getIndex(TreeNode node) {return -1;}
 
-	@Override
 	public boolean getAllowsChildren() {return false;}
 
-	@Override
 	public boolean isLeaf() {return true;}
 
-	@Override
-	public Enumeration<TreeNode> children() 
-	{
+	public Enumeration<TreeNode> children() {
 		TreeNode[] n = null;
 		return new Treenumeration(n);
 	}
@@ -959,8 +1036,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @return String representing the path in a <code>FileNode</code> tree pointing
 	 * to the same target node as input <code>TreePath</code>.
 	 */
-	public static String readTreePath(TreePath treepath)
-	{
+	public static String readTreePath(TreePath treepath){
 		if(treepath == null) return null;
 		Object lasty = treepath.getLastPathComponent();
 		if(lasty instanceof FileNode) return ((FileNode)lasty).getFullPath();
@@ -1011,13 +1087,6 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		copy.src_virtual = this.src_virtual;
 		copy.sourceNode = this.sourceNode;
 		
-		/*copy.encryption = encryption;
-		copy.enc_start = enc_start;
-		copy.enc_len = enc_len;
-		
-		copy.comp_chain = new LinkedList<CompressionInfoNode>();
-		if(this.comp_chain != null) copy.comp_chain.addAll(comp_chain);*/
-		
 		if(encryption_chain != null){
 			copy.encryption_chain = new LinkedList<EncryInfoNode>();
 			for(EncryInfoNode n : encryption_chain){
@@ -1025,10 +1094,6 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 			}
 		}
 		
-		/*if(container_chain != null){
-			copy.container_chain = new LinkedList<FileNode>();
-			copy.container_chain.addAll(container_chain);
-		}*/
 		copy.container = this.container;
 		
 		if(metadata != null){
@@ -1051,7 +1116,6 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	public FileNode copy(DirectoryNode parent_copy){
 		FileNode copy = new FileNode(parent_copy, this.fileName);
 		copyDataTo(copy);
-		
 		return copy;
 	}
 	
@@ -1073,7 +1137,6 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @param len Length of region.
 	 */
 	protected void subsetEncryptionRegions(long stpos, long len){
-
 		if(encryption_chain == null) return;
 		
 		List<EncryInfoNode> refchain = encryption_chain;
@@ -1106,8 +1169,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @return True if split was successful, false if not. If split is successful, new
 	 * nodes will be mounted to parent node in place of this node.
 	 */
-	public boolean splitNodeAt(long off)
-	{
+	public boolean splitNodeAt(long off){
 		if(off >= this.length) return false;
 		if(off < 0) return false;
 		
@@ -1252,104 +1314,121 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	
 	/* --- Load --- */
 	
-	//TODO does generate source and loadDirect handle virtual sources correctly?
-	
 	private void noteTempPath(String path){
 		if(temp_paths == null) temp_paths = new LinkedList<String>();
 		temp_paths.add(path);
+	}
+	
+	private String genTempPathForContainer(){
+		String temppath = container.getContainerTempPath();
+		if(temppath == null){
+			Random r = new Random(getGUID()); //For temp file names
+			temppath = getTemporaryFilesDirectoryPath() + File.separator + Long.toHexString(r.nextLong()) + ".tmp";
+		}
+		return temppath;
 	}
 	
 	/**
 	 * Process any wrapping containers to generate a new temporary
 	 * file node referencing the decompressed data for this node. If this node
 	 * has no wrapping, this method will simply return this node.
+	 * <br>This method always uses the provided path on the local file system (usually
+	 * referencing disk) as a data buffer, essentially creating a temp file.
+	 * @param path Path to use for disk buffer file.
+	 * @param options Load option flags. <code>LOADOP_FORCE_CACHE</code> and
+	 * <code>LOADOP_DISK_BUFFER</code> are overridden to true in this method.
+	 * @return <code>FileNode</code> for loading data source (eg. decompressed container) for this
+	 * file.
+	 * @throws IOException If there is an error reading any source files or creating
+	 * any temp files.
+	 * @since 3.6.1
+	 */
+	protected FileNode generateSourceUsingDiskBuffer(String path, int options) throws IOException{
+		if(container == null) return this;
+		if(path == null){
+			lfail_flags |= LOADFAIL_FLAG_NO_DISKBUFF_PATH;
+			return null;
+		}
+		
+		FileNode node = new FileNode(null, "");
+		node.setOffset(this.getOffset());
+		node.setLength(this.getLength());
+		node.setSourcePath(path);
+		
+		//If this file has not already been generated, try to load.
+		if(!FileBuffer.fileExists(path)){
+			FileBuffer buff = container.loadDecompressedData(path, options | LOADOP_FORCE_CACHE | LOADOP_DISK_BUFFER);
+			if(buff != null) buff.dispose();
+			if(FileBuffer.fileExists(path)){
+				container.setContainerTempPath(path);
+				noteTempPath(path);
+			}
+		}
+		
+		return node;
+	}
+	
+	/**
+	 * Process any wrapping containers to generate a new temporary
+	 * file node referencing the decompressed data for this node. If this node
+	 * has no wrapping, this method will simply return this node.
+	 * @param options Load option flags
 	 * @return Node referencing plaintext or decompressed data from which this node's
 	 * data can be accessed.
 	 * @throws IOException If there is an error reading any source files or creating
 	 * any temp files.
+	 * @see LOADOP_DISK_BUFFER
 	 */
-	protected FileNode generateSource() throws IOException{
+	protected FileNode generateSource(int options) throws IOException{
+		if((options & LOADOP_DISK_BUFFER) != 0){
+			return generateSource(genTempPathForContainer(), options);
+		}
+		return generateSource(null, options);
+	}
 
-		Random r = new Random(getGUID()); //For temp file names
-		
+	/**
+	 * Process any wrapping containers to generate a new temporary
+	 * file node referencing the decompressed data for this node. If this node
+	 * has no wrapping, this method will simply return this node.
+	 * @param bufferPath Path on local file system to use as buffer in case disk buffer is requested.
+	 * @param options Load option flags
+	 * @return Node referencing plaintext or decompressed data from which this node's
+	 * data can be accessed.
+	 * @throws IOException If there is an error reading any source files or creating
+	 * any temp files.
+	 * @see LOADOP_DISK_BUFFER
+	 */
+	protected FileNode generateSource(String bufferPath, int options) throws IOException{
 		FileNode node = this;
 		
 		//Handle containers
 		if(container != null){
-			String cpath = container.getContainerTempPath();
-			node = new FileNode(null, "");
-			node.setOffset(this.getOffset());
-			node.setLength(this.getLength());
-			if(cpath != null && FileBuffer.fileExists(cpath)) {
-				node.setSourcePath(cpath);
+			if((options & LOADOP_DISK_BUFFER) != 0){
+				//Buffer to disk
+				return generateSourceUsingDiskBuffer(bufferPath, options);
 			}
 			else{
-				//Open container to temp file...
-				String temppath = getTemporaryFilesDirectoryPath() + File.separator + Long.toHexString(r.nextLong()) + ".tmp";
-				FileBuffer cloaded = container.loadDecompressedData(true);
-				cloaded.writeFile(temppath);
-				container.setContainerTempPath(temppath);
-				noteTempPath(temppath);
-				node.setSourcePath(temppath);
-			}
-			
-			//Flags...
-			if((container.lfail_flags & FileNode.LOADFAIL_FLAG_DATA_DECRYPT) != 0){
-				lfail_flags |= FileNode.LOADFAIL_FLAG_CNTNR_DECRYPT;
-			}
-			if((container.lfail_flags & FileNode.LOADFAIL_FLAG_DATA_DECOMP) != 0){
-				lfail_flags |= FileNode.LOADFAIL_FLAG_CNTNR_DECOMP;
+				//Buffer to memory
+				FileBuffer buff = container.loadDecompressedData(null, options);
+				if(buff != null){
+					MemFileNode cont = new MemFileNode(null, getFileName() + "_container");
+					cont.setData(buff);
+					node = cont;
+				}
 			}
 		}
 		
-		//Handle encryption if present, and possible
-		/*if(decrypt && (encryption_chain != null)){
-			for(EncryInfoNode e : encryption_chain){
-				if(e.def == null){
-					lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
-					break;
-				}
-				
-				//Make a node referencing encrypted data...
-				FileNode enode = node.getSubFile(e.offset, e.length);
-				
-				//Attempt decryption
-				StaticDecryptor decryptor = StaticDecryption.getDecryptorState(e.def.getID());
-				if(decryptor == null){
-					lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
-					break;
-				}
-				
-				FileNode dnode = decryptor.decrypt(enode);
-				if(dnode == null){
-					lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
-					break;
-				}
-					
-				//Patch that decrypted region back in... (and continue)
-				if(dnode.getLength() == this.getLength()){
-					//Full node. Can just replace.
-					node = dnode;
-				}
-				else{
-					//Patch :/
-					PatchworkFileNode pfn = new PatchworkFileNode(null, "", 3);
-					if(e.offset > 0) pfn.addBlock(node.getSubFile(0, e.offset));
-					pfn.addBlock(dnode);
-					long eend = e.offset + e.length;
-					if(eend < node.getLength()){
-						long endlen = node.getLength() - eend;
-						pfn.addBlock(node.getSubFile(eend, endlen));
-					}
-					node = pfn;
-				}
-			}
-		}*/
-		
-		
+		//Flags
+		if((container.lfail_flags & FileNode.LOADFAIL_FLAG_DATA_DECRYPT) != 0){
+			lfail_flags |= FileNode.LOADFAIL_FLAG_CNTNR_DECRYPT;
+		}
+		if((container.lfail_flags & FileNode.LOADFAIL_FLAG_DATA_DECOMP) != 0){
+			lfail_flags |= FileNode.LOADFAIL_FLAG_CNTNR_DECOMP;
+		}
+
 		return node;
 	}
-
+	
 	/**
 	 * Load the data referenced by the node directly as-is with no fancy processing. This
 	 * method should only be called by <code>loadData</code>, and should be overridden by
@@ -1366,8 +1445,31 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @return <code>FileBuffer</code> wrapping the resulting loaded data.
 	 * @throws IOException If there is an error reading from/writing to disk during the load attempt
 	 * or temp file creation.
+	 * @deprecated As of 3.6.0 -- Use <code>loadDirect(long stpos, long len, int options)</code>
 	 */
 	protected FileBuffer loadDirect(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
+		int options = LOADOP_NONE;
+		if(forceCache) options |= LOADOP_FORCE_CACHE;
+		if(decrypt) options |= LOADOP_DECRYPT;
+		return loadDirect(stpos, len, options);
+	}
+	
+	/**
+	 * Load the data referenced by the node directly as-is with no fancy processing. This
+	 * method should only be called by <code>loadData</code>, and should be overridden by
+	 * all subclasses that reference source data differently.
+	 * This is the method that actually loads the target data into a <code>FileBuffer</code>.
+	 * @param stpos Position in bytes, relative to start of node, to start data load. 
+	 * @param len Number of bytes from node to load.
+	 * @param options Option flags
+	 * @return <code>FileBuffer</code> wrapping the resulting loaded data.
+	 * @throws IOException If there is an error reading from/writing to disk during the load attempt
+	 * or temp file creation.
+	 * @since 3.6.0
+	 * @see LOADOP_FORCE_CACHE
+	 * @see LOADOP_DECRYPT
+	 */
+	protected FileBuffer loadDirect(long stpos, long len, int options) throws IOException{
 		//This is the function that should be overridden by child classes.
 		long stoff = getOffset() + stpos;
 		long maxed = getOffset() + getLength();
@@ -1376,21 +1478,193 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 		//if(edoff > maxed) edoff = maxed;
 		
 		if(hasVirtualSource()){
-			//System.err.println("Virtual source detected!");
-			//System.err.println("Input Offsets: 0x" + Long.toHexString(stpos) + " - 0x" + Long.toHexString(stoff + len));
-			//System.err.println("Virtual Source: 0x" + Long.toHexString(stoff) + " - 0x" + Long.toHexString(edoff));
-			return sourceNode.loadData(stoff, edoff-stoff, forceCache, decrypt);
+			return sourceNode.loadData(stoff, edoff-stoff, options);
 		}
 		else{
 			String path = getSourcePath();
-			if(forceCache){
+			if((options & LOADOP_FORCE_CACHE) != 0){
 				return CacheFileBuffer.getReadOnlyCacheBuffer(path, 0x8000, 128, stoff, edoff);
 			}
 			else{
 				return FileBuffer.createBuffer(path, stoff, edoff);
 			}
 		}
+	}
+	
+	/**
+	 * Load the data referenced by the node (and specified positions) into a FileBuffer container for
+	 * easy random access.
+	 * <br>If this node has a container chain, this method will try to decompress/decrypt the surrounding
+	 * container to a temporary file in order to access the source data correctly (otherwise offset
+	 * may be incorrect).
+	 * <br>If this node's <code>EncryptionDefinition</code> is non-null, the <code>decrypt</code>
+	 * parameter is true, and there is an appropriate <code>StaticDecryptor</code>, this method
+	 * will attempt to run decryption on the incoming data as well.
+	 * <br>This method otherwise loads data from the source as-is; it does no type formatting, 
+	 * processing, or internal decompression.
+	 * @param stpos Position in bytes, relative to start of node, to start data load. 
+	 * @param len Number of bytes from node to load.
+	 * @param options Load option flags
+	 * @param bufferPath Path on local file system to use for data buffers (unwrapping, decryption, etc.),
+	 * if disk buffer option is set.
+	 * @return <code>FileBuffer</code> wrapping the resulting loaded data.
+	 * @throws IOException If there is an error reading from/writing to disk during the load attempt
+	 * or temp file creation.
+	 * @since 3.6.0
+	 * @see LOADOP_FORCE_CACHE
+	 * @see LOADOP_DECRYPT
+	 * @see LOADOP_DISK_BUFFER
+	 */
+	public FileBuffer loadData(long stpos, long len, int options, String bufferPath) throws IOException{
+		//Reset error flags
+		load_flag_decwrap_direct = false;
+		lfail_flags = 0;
+		if(this.isDirectory()){
+			lfail_flags |= FileNode.LOADFAIL_FLAG_ISDIR;
+			return null;
+		}
 		
+		//Block align offsets. 
+		// This is to ensure initial load doesn't try to start mid-block.
+		long o_stpos = stpos; //Output start position
+		long o_len = len; //Output len
+		int b_start = -1; //Index of start block
+		int b_end = -1; //Index of end block
+		if(blocksize_out > 1){
+			long ed = stpos + len;
+			b_start = (int)(stpos/blocksize_out);
+			b_end = (int)(ed/blocksize_out);
+			if(ed % blocksize_out != 0) b_end++;
+			
+			//Adjust stpos and len to be aligned to output blocks
+			stpos = (long)b_start * (long)blocksize_out;
+			long edpos = (long)b_end * (long)blocksize_out;
+			len = edpos - stpos;
+		}
+		
+		//Unwrap (this handles containers)
+		FileNode src = generateSource(bufferPath, options);
+		
+		//Load data from unwrapped source
+		long i_stpos = stpos;
+		long i_len = len;
+		if(b_start >= 0){
+			//Adjust source offsets to reflect input block size
+			i_stpos = (long)b_start * (long)blocksize_in;
+			long i_edpos = (long)b_end * (long)blocksize_in;
+			i_len = i_edpos - i_stpos;
+		}
+		
+		//Direct-load the source data as-is (don't apply decryption processing)
+		FileBuffer data = src.loadDirect(i_stpos, i_len, options);
+		
+		//Wrap buffer w/ decryption buffer if wanted/needed
+		if(((options & LOADOP_DECRYPT) != 0) && hasEncryption() && !load_flag_decwrap_direct){
+			boolean edone = false;
+			int ecount = encryption_chain.size();
+			if(ecount == 1){
+				//See if the one entry covers the whole file...
+				//If so, just wrap data as-is
+				EncryInfoNode ereg = encryption_chain.getFirst();
+				long eend = ereg.offset + ereg.length; long dend = stpos + len;
+				if(ereg.offset <= stpos && eend >= dend){
+					//The one encryption region covers the whole chunk we extracted.
+					StaticDecryptor sdec = StaticDecryption.getDecryptorState(ereg.def.getID());
+					if(sdec != null){
+						DecryptorMethod decm = sdec.generateDecryptor(this);
+						if(stpos != 0) decm.adjustOffsetBy(stpos);
+						EncryptedFileBuffer ebuff = new EncryptedFileBuffer(data, decm);
+						data = ebuff;
+						edone = true;
+					}
+					else{
+						lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
+						edone = true;
+					}
+				}
+			}
+			
+			if(!edone){
+				//Chain regions together...
+				MultiFileBuffer multi = new MultiFileBuffer((ecount << 1) + 1);
+				long dend = stpos + len;
+				long pos = stpos;
+				int eadded = 0;
+				for(EncryInfoNode ereg : encryption_chain){
+
+					long eend = ereg.offset + ereg.length;
+					if(eend <= stpos) continue; //This region is before the requested data
+					if(ereg.offset >= dend) break; //This region is after the end of requested data
+
+					//Get anything between the position and the region start...
+					if(ereg.offset > pos){
+						FileBuffer chunk = data.createCopy(pos-stpos, ereg.offset - stpos);
+						multi.addToFile(chunk);
+						pos = ereg.offset;
+					}
+					
+					//Do region
+					if(eend > dend) eend = dend;
+					FileBuffer chunk = data.createCopy(ereg.offset-stpos, eend - stpos);
+					StaticDecryptor sdec = StaticDecryption.getDecryptorState(ereg.def.getID());
+					if(sdec != null){
+						DecryptorMethod decm = sdec.generateDecryptor(this);
+						decm.adjustOffsetBy(stpos + ereg.offset);
+						EncryptedFileBuffer ebuff = new EncryptedFileBuffer(chunk, decm);
+						multi.addToFile(ebuff);
+					}
+					else{
+						lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
+						multi.addToFile(chunk);
+					}
+					eadded++;
+					pos = eend;
+				}
+				
+				if(eadded > 0) data = multi;
+			}
+		}
+		
+		if(b_start >= 0){
+			//Check if we need to make a RO sub buffer
+			stpos = (long)b_start * (long)blocksize_out;
+			
+			//Make an RO Sub Buffer
+			long o_ed = o_stpos + o_len;
+			
+			long l_st = o_stpos - stpos;
+			long l_ed = o_ed - stpos;
+			
+			data = data.createReadOnlyCopy(l_st, l_ed);
+		}
+
+		return data;
+	}
+	
+	/**
+	 * Load the data referenced by the node (and specified positions) into a FileBuffer container for
+	 * easy random access.
+	 * <br>If this node has a container chain, this method will try to decompress/decrypt the surrounding
+	 * container to a temporary file in order to access the source data correctly (otherwise offset
+	 * may be incorrect).
+	 * <br>If this node's <code>EncryptionDefinition</code> is non-null, the <code>decrypt</code>
+	 * parameter is true, and there is an appropriate <code>StaticDecryptor</code>, this method
+	 * will attempt to run decryption on the incoming data as well.
+	 * <br>This method otherwise loads data from the source as-is; it does no type formatting, 
+	 * processing, or internal decompression.
+	 * @param stpos Position in bytes, relative to start of node, to start data load. 
+	 * @param len Number of bytes from node to load.
+	 * @param options Option flags
+	 * @return <code>FileBuffer</code> wrapping the resulting loaded data.
+	 * @throws IOException If there is an error reading from/writing to disk during the load attempt
+	 * or temp file creation.
+	 * @since 3.6.0
+	 * @see LOADOP_FORCE_CACHE
+	 * @see LOADOP_DECRYPT
+	 * @see LOADOP_DISK_BUFFER
+	 */
+	protected FileBuffer loadData(long stpos, long len, int options) throws IOException{
+		return loadData(stpos, len, options, genTempPathForContainer());
 	}
 	
 	/**
@@ -1416,155 +1690,13 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @return <code>FileBuffer</code> wrapping the resulting loaded data.
 	 * @throws IOException If there is an error reading from/writing to disk during the load attempt
 	 * or temp file creation.
+	 * @deprecated As of 3.6.0 -- Use <code>loadData(long stpos, long len, int options)</code>
 	 */
 	protected FileBuffer loadData(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
-		//System.err.println("FileBuffer.loadData || Loading " + this.getFullPath());
-		load_flag_decwrap_direct = false;
-		lfail_flags = 0;
-		if(this.isDirectory()){
-			lfail_flags |= FileNode.LOADFAIL_FLAG_ISDIR;
-			return null;
-		}
-		//System.err.println("len = 0x" + Long.toHexString(len));
-		
-		//Block align
-		long o_stpos = stpos;
-		long o_len = len;
-		int b_start = -1;
-		int b_end = -1;
-		//long mylen = getLength();
-		if(blocksize_out > 1){
-			long ed = stpos + len;
-			b_start = (int)(stpos/blocksize_out);
-			b_end = (int)(ed/blocksize_out);
-			if(ed % blocksize_out != 0) b_end++;
-			
-			//stpos = (long)b_start * (long)blocksize_in;
-			//long edpos = (long)b_end * (long)blocksize_in;
-			stpos = (long)b_start * (long)blocksize_out;
-			long edpos = (long)b_end * (long)blocksize_out;
-			len = edpos - stpos;
-			
-			//System.err.println("Requested Range: 0x" + Long.toHexString(o_stpos) + " - 0x" + Long.toHexString(o_stpos + o_len));
-			//System.err.println("Block Aligned Input Range: 0x" + Long.toHexString(stpos) + " - 0x" + Long.toHexString(edpos));
-			/*if(edpos > mylen){
-				//Alter len temporarily
-				setLength(edpos);
-			}*/
-		}
-		
-		//Unwrap
-		FileNode src = generateSource();
-		
-		//Load
-		long i_stpos = stpos;
-		long i_len = len;
-		if(b_start >= 0){
-			i_stpos = (long)b_start * (long)blocksize_in;
-			long i_edpos = (long)b_end * (long)blocksize_in;
-			i_len = i_edpos - i_stpos;
-			//System.err.println("Direct Load Range: 0x" + Long.toHexString(i_stpos) + " - 0x" + Long.toHexString(i_edpos));
-		}
-		FileBuffer data = src.loadDirect(i_stpos, i_len, forceCache, decrypt);
-		//System.err.println("Direct Load Size: 0x" + Long.toHexString(data.getFileSize()));
-		
-		//Wrap buffer w/ decryption buffer if needed
-		if(decrypt && hasEncryption() && !load_flag_decwrap_direct){
-			boolean edone = false;
-			int ecount = encryption_chain.size();
-			if(ecount == 1){
-				//See if the one entry covers the whole file...
-				//If so, just wrap data as-is
-				EncryInfoNode ereg = encryption_chain.getFirst();
-				long eend = ereg.offset + ereg.length; long dend = stpos + len;
-				//System.err.println("erange: 0x" + Long.toHexString(ereg.offset) + " - 0x" + Long.toHexString(eend));
-				//System.err.println("drange: 0x" + Long.toHexString(stpos) + " - 0x" + Long.toHexString(dend));
-				if(ereg.offset <= stpos && eend >= dend){
-					//The one encryption region covers the whole chunk we extracted.
-					StaticDecryptor sdec = StaticDecryption.getDecryptorState(ereg.def.getID());
-					//System.err.println("e def: " + ereg.def.getDescription());
-					if(sdec != null){
-						DecryptorMethod decm = sdec.generateDecryptor(this);
-						if(stpos != 0) decm.adjustOffsetBy(stpos);
-						//return new EncryptedFileBuffer(data, decm);
-						EncryptedFileBuffer ebuff = new EncryptedFileBuffer(data, decm);
-						//ebuff.setLength(o_len);
-						//System.err.println("o_len = 0x" + Long.toHexString(o_len));
-						data = ebuff;
-						edone = true;
-					}
-					else{
-						lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
-						//return data;
-						edone = true;
-					}
-				}
-			}
-			
-			if(!edone){
-				//Chain regions together...
-				MultiFileBuffer multi = new MultiFileBuffer((ecount << 1) + 1);
-				long dend = stpos + len;
-				long pos = stpos;
-				int eadded = 0;
-				for(EncryInfoNode ereg : encryption_chain){
-					//System.err.println("e def: " + ereg.def.getDescription());
-					
-					long eend = ereg.offset + ereg.length;
-					if(eend <= stpos) continue; //This region is before the requested data
-					if(ereg.offset >= dend) break; //This region is after the end of requested data
-					//System.err.println("Location: 0x" + Long.toHexString(ereg.offset) + " - 0x" + Long.toHexString(eend));
-					
-					//Get anything between the position and the region start...
-					if(ereg.offset > pos){
-						FileBuffer chunk = data.createCopy(pos-stpos, ereg.offset - stpos);
-						multi.addToFile(chunk);
-						pos = ereg.offset;
-					}
-					
-					//Do region
-					if(eend > dend) eend = dend;
-					FileBuffer chunk = data.createCopy(ereg.offset-stpos, eend - stpos);
-					StaticDecryptor sdec = StaticDecryption.getDecryptorState(ereg.def.getID());
-					if(sdec != null){
-						DecryptorMethod decm = sdec.generateDecryptor(this);
-						decm.adjustOffsetBy(stpos + ereg.offset);
-						EncryptedFileBuffer ebuff = new EncryptedFileBuffer(chunk, decm);
-						//ebuff.setLength(ereg.length);
-						multi.addToFile(ebuff);
-					}
-					else{
-						lfail_flags |= FileNode.LOADFAIL_FLAG_DATA_DECRYPT;
-						multi.addToFile(chunk);
-					}
-					eadded++;
-					pos = eend;
-				}
-				
-				//if(eadded > 0) return multi;
-				if(eadded > 0) data = multi;
-			}
-		}
-		
-		if(b_start >= 0){
-			//TODO make sure pos are relative to the buffer we're returning, not the FULL file
-			//Check if we need to make a RO sub buffer
-			stpos = (long)b_start * (long)blocksize_out;
-			//long edpos = (long)b_end * (long)blocksize_out;
-			
-			//Make an RO Sub Buffer
-			long o_ed = o_stpos + o_len;
-			
-			long l_st = o_stpos - stpos;
-			long l_ed = o_ed - stpos;
-			
-			//System.err.println("Trimmed Range: 0x" + Long.toHexString(l_st) + " - 0x" + Long.toHexString(l_ed));
-			data = data.createReadOnlyCopy(l_st, l_ed);
-			//System.err.println("First 16 bytes: " + AES.bytes2str(data.getBytes(0, 0x10)));
-		}
-		//setLength(mylen);
-		
-		return data;
+		int options = LOADOP_NONE;
+		if(forceCache) options |= LOADOP_FORCE_CACHE;
+		if(decrypt) options |= LOADOP_DECRYPT;
+		return loadData(stpos, len, options);
 	}
 	
 	/**
@@ -1586,9 +1718,12 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @return <code>FileBuffer</code> wrapping the resulting loaded data.
 	 * @throws IOException If there is an error reading from/writing to disk during the load attempt
 	 * or temp file creation.
+	 * @deprecated As of 3.6.0 -- Use <code>loadData(long stpos, long len, int options)</code>
 	 */
 	public FileBuffer loadData(long stpos, long len, boolean decrypt) throws IOException{
-		return loadData(stpos, len, false, decrypt);
+		int options = LOADOP_NONE;
+		if(decrypt) options |= LOADOP_DECRYPT;
+		return loadData(stpos, len, options);
 	}
 	
 	/**
@@ -1609,7 +1744,32 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * or temp file creation.
 	 */
 	public FileBuffer loadData(long stpos, long len) throws IOException{
-		return loadData(stpos, len, true);
+		return loadData(stpos, len, LOADOP_NONE);
+	}
+	
+	/**
+	 * Load the data referenced by the node into a FileBuffer container for
+	 * easy random access, with specified options.
+	 * <br>If this node has a container chain, and flag is set, this method will try to decompress/decrypt the surrounding
+	 * container to a temporary file in order to access the source data correctly (otherwise offset
+	 * may be incorrect).
+	 * <br>If this node's <code>EncryptionDefinition</code> is non-null, the decrypt option flag is set, 
+	 * and there is an appropriate <code>StaticDecryptor</code>, this method
+	 * will attempt to run decryption on the incoming data as well.
+	 * <br>This method otherwise loads data from the source as-is; it does no type formatting, 
+	 * processing, or internal decompression.
+	 * @param options Load option flags
+	 * @return <code>FileBuffer</code> wrapping the resulting loaded data.
+	 * @throws IOException If there is an error reading from/writing to disk during the load attempt
+	 * or temp file creation.
+	 * @since 3.6.0
+	 * @see LOADOP_DECOMPRESS
+	 * @see LOADOP_DECRYPT
+	 * @see LOADOP_DISK_BUFFER
+	 * @see LOADOP_FORCE_CACHE
+	 */
+	public FileBuffer loadData(int options) throws IOException{
+		return loadData(0, getLength(), options);
 	}
 	
 	/**
@@ -1628,9 +1788,81 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * or temp file creation.
 	 */
  	public FileBuffer loadData() throws IOException{
-		return loadData(0, getLength(), true);
+		return loadData(0, getLength(), LOADOP_DECRYPT);
 	}
 	
+ 	/**
+ 	 * Load the data referenced by this node, apply any decompression specified by the
+ 	 * compression definitions in the format type chain, and return the resulting decompressed
+ 	 * data in a <code>FileBuffer</code> wrapper for easy random access.
+ 	 * @param bufferPath Path for temp file to write decompressed version of data to, if disk buffer is requested.
+ 	 * @param options Option flags
+ 	 * @return <code>FileBuffer</code> wrapping the resulting loaded data.
+ 	 * @throws IOException If there is an error reading from/writing to disk during the load attempt
+	 * or temp file creation.
+ 	 * @since 3.6.1
+ 	 * @see LOADOP_FORCE_CACHE
+	 * @see LOADOP_DECRYPT
+	 * @see LOADOP_DISK_BUFFER
+ 	 */
+ 	protected FileBuffer loadDecompressedData(String bufferPath, int options) throws IOException{
+ 		FileBuffer buffer = loadData(0L, getLength(), options | LOADOP_DECRYPT);
+		
+ 		//This looks for compression specified for THIS node - NOT containers
+ 		//	(ie. when node is a file in a compressed archive)
+		FileTypeNode typechain = getTypeChainHead();
+		while(typechain != null){
+			if(typechain.isCompression()){
+				if(typechain instanceof CompDefNode){
+					AbstractCompDef def = ((CompDefNode)typechain).getDefinition();
+					
+					if((options & LOADOP_DISK_BUFFER) != 0){
+						if(bufferPath == null) {
+							lfail_flags |= LOADFAIL_FLAG_NO_DISKBUFF_PATH;
+							return null;
+						}
+						boolean okay = def.decompressToDiskBuffer(buffer.getReferenceAt(0L), bufferPath, CompressionDefs.DECOMP_OP_NONE);
+						if(!okay) return null;
+						
+						if((options & LOADOP_FORCE_CACHE) != 0){
+							buffer = CacheFileBuffer.getReadOnlyCacheBuffer(bufferPath);
+						}
+						else buffer = FileBuffer.createBuffer(bufferPath);
+					}
+					else{
+						buffer = def.decompressToMemory(buffer.getReferenceAt(0L), -1, CompressionDefs.DECOMP_OP_NONE);
+						if(buffer == null){
+							lfail_flags |= LOADFAIL_FLAG_MEMBUFF_TOOBIG;
+						}
+					}
+				}
+				
+				typechain = typechain.getChild();
+			}
+			else break;
+		}
+		
+		//System.err.println("Returning buffer of size 0x" + Long.toHexString(buffer.getFileSize()));
+		return buffer;
+ 	}
+ 	
+ 	/**
+ 	 * Load the data referenced by this node, apply any decompression specified by the
+ 	 * compression definitions in the format type chain, and return the resulting decompressed
+ 	 * data in a <code>FileBuffer</code> wrapper for easy random access.
+ 	 * @param options Option flags
+ 	 * @return <code>FileBuffer</code> wrapping the resulting loaded data.
+	 * @throws IOException If there is an error reading from/writing to disk during the load attempt
+	 * or temp file creation.
+	 * @since 3.6.0
+	 * @see LOADOP_FORCE_CACHE
+	 * @see LOADOP_DECRYPT
+	 * @see LOADOP_DISK_BUFFER
+ 	 */
+ 	protected FileBuffer loadDecompressedData(int options) throws IOException{
+ 		return loadDecompressedData(genTempPathForContainer(), options);
+ 	}
+ 	
  	/**
  	 * Load the data referenced by this node, apply any decompression specified by the
  	 * compression definitions in the format type chain, and return the resulting decompressed
@@ -1642,29 +1874,12 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
  	 * @return <code>FileBuffer</code> wrapping the resulting loaded data.
 	 * @throws IOException If there is an error reading from/writing to disk during the load attempt
 	 * or temp file creation.
+	 * @deprecated As of 3.6.0 -- Use <code>loadDecompressedData(int options)</code>
  	 */
  	protected FileBuffer loadDecompressedData(boolean forceCache) throws IOException{
-		FileBuffer buffer = loadData(0L, this.getLength(), forceCache, true);
-		
-		FileTypeNode typechain = getTypeChainHead();
-		while(typechain != null){
-			//System.err.println("Type: " + typechain.toString());
-			if(typechain.isCompression()){
-				//System.err.println("Compression type!");
-				if(typechain instanceof CompDefNode){
-					AbstractCompDef def = ((CompDefNode)typechain).getDefinition();
-					
-					String tpath = def.decompressToDiskBuffer(new FileBufferStreamer(buffer));
-					buffer = FileBuffer.createBuffer(tpath);
-				}
-				
-				typechain = typechain.getChild();
-			}
-			else break;
-		}
-		
-		//System.err.println("Returning buffer of size 0x" + Long.toHexString(buffer.getFileSize()));
-		return buffer;
+ 		int options = LOADOP_NONE;
+		if(forceCache) options |= LOADOP_FORCE_CACHE;
+		return loadDecompressedData(null, options);
 	}
  	
  	/**
@@ -1676,7 +1891,29 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * or temp file creation.
  	 */
 	public FileBuffer loadDecompressedData() throws IOException{
-		return loadDecompressedData(false);
+		return loadDecompressedData(LOADOP_NONE);
+	}
+	
+	/**
+	 * Copy the data referenced in this node to a file on disk.
+	 * @param path Path of output file on local file system.
+	 * @param options Option flags
+	 * @return True if copy was successful, false otherwise.
+	 * @throws IOException If there is an error reading or writing from disk at any point.
+	 * @since 3.6.0
+	 * @see LOADOP_DECOMPRESS
+	 * @see LOADOP_DECRYPT
+	 * @see LOADOP_DISK_BUFFER
+	 * @see LOADOP_FORCE_CACHE
+	 */
+	public boolean copyDataTo(String path, int options) throws IOException{
+		if(path == null || path.isEmpty()) return false;
+		
+		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(path));
+		copyDataTo(bos, options);
+		bos.close();
+		
+		return true;
 	}
 	
 	/**
@@ -1685,13 +1922,33 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @param decompress Whether or not to attempt auto-decompression.
 	 * @return True if copy was successful, false otherwise.
 	 * @throws IOException If there is an error reading or writing from disk at any point.
+	 * @deprecated As of 3.6.0 -- Use <code>copyDataTo(String path, int options)</code>
 	 */
 	public boolean copyDataTo(String path, boolean decompress) throws IOException{
-		if(path == null || path.isEmpty()) return false;
+		int options = LOADOP_NONE;
+		if(decompress) options |= LOADOP_DECOMPRESS;
+		return copyDataTo(path, options);
+	}
+	
+	/**
+	 * Copy the data referenced by this node to the specified output stream.
+	 * @param out Output stream to write data to.
+	 * @param options Option flags
+	 * @return True if copy was successful, false otherwise.
+	 * @throws IOException If there is an error reading or writing from disk at any point.
+	 * @since 3.6.0
+	 * @see LOADOP_DECOMPRESS
+	 * @see LOADOP_DECRYPT
+	 * @see LOADOP_DISK_BUFFER
+	 * @see LOADOP_FORCE_CACHE
+	 */
+	public boolean copyDataTo(OutputStream out, int options) throws IOException{
+		if(out == null) return false;
 		
-		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(path));
-		copyDataTo(bos, decompress);
-		bos.close();
+		FileBuffer dat = null;
+		if((options & LOADOP_DECOMPRESS) != 0) dat = loadDecompressedData(options);
+		else dat = loadData();
+		dat.writeToStream(out);
 		
 		return true;
 	}
@@ -1702,16 +1959,12 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * @param decompress Whether or not to attempt auto-decompression.
 	 * @return True if copy was successful, false otherwise.
 	 * @throws IOException If there is an error reading or writing from disk at any point.
+	 * @deprecated As of 3.6.0 -- Use <code>copyDataTo(OutputStream out, int options)</code>
 	 */
 	public boolean copyDataTo(OutputStream out, boolean decompress) throws IOException{
-		if(out == null) return false;
-		
-		FileBuffer dat = null;
-		if(decompress) dat = loadDecompressedData();
-		else dat = loadData();
-		dat.writeToStream(out);
-		
-		return true;
+		int options = LOADOP_NONE;
+		if(decompress) options |= LOADOP_DECOMPRESS;
+		return copyDataTo(out, options);
 	}
 	
 	/* --- Debug --- */
@@ -1720,8 +1973,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	 * Debug print a line representing this <code>FileNode</code> to stderr.
 	 * @param indents Number of tab characters to insert at beginning of line.
 	 */
-	public void printMeToStdErr(int indents)
-	{
+	public void printMeToStdErr(int indents) {
 		StringBuilder sb = new StringBuilder(128);
 		for(int i = 0; i < indents; i++) sb.append("\t");
 		String tabs = sb.toString();

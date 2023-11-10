@@ -10,19 +10,20 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
-import waffleoRai_Files.tree.FileNode;
 import waffleoRai_Utils.FileBuffer;
-import waffleoRai_Utils.FileBufferStreamer;
 
 public class CompressionDefs {
+	
+	public static final int DECOMP_OP_NONE = 0;
+	public static final int DECOMP_OP_HEADERLESS = 1 << 0;
 	
 	private static String comp_temp_dir;
 	private static Map<Integer, AbstractCompDef> def_map;
 	
-	public static String getCompressionTempDir()
-	{
+	public static String getCompressionTempDir(){
 		if(comp_temp_dir == null)
 		{
 			try{
@@ -39,13 +40,11 @@ public class CompressionDefs {
 		return comp_temp_dir;
 	}
 	
-	public static void setCompressionTempDir(String path)
-	{
+	public static void setCompressionTempDir(String path){
 		comp_temp_dir = path;
 	}
 	
-	public static void clearTempDir() throws IOException
-	{
+	public static void clearTempDir() throws IOException{
 		DirectoryStream<Path> dstr = Files.newDirectoryStream(Paths.get(getCompressionTempDir()));
 		for(Path p : dstr)
 		{
@@ -54,31 +53,16 @@ public class CompressionDefs {
 		dstr.close();
 	}
 	
-	public static String decompressFileToDiskBuffer(FileNode node, AbstractCompDef compdef) throws IOException
-	{
-		return decompressFileToDiskBuffer(node.getSourcePath(), node.getOffset(), node.getLength(), compdef);
-	}
-	
-	public static String decompressFileToDiskBuffer(String path, long off, long size, AbstractCompDef compdef) throws IOException
-	{
-		FileBuffer buffer = FileBuffer.createBuffer(path, off, off+size);
-		FileBufferStreamer streamer = new FileBufferStreamer(buffer);
-		return compdef.decompressToDiskBuffer(streamer);
-	}
-	
-	private static void buildDefinitionMap()
-	{
+	private static void buildDefinitionMap(){
 		def_map = new ConcurrentHashMap<Integer, AbstractCompDef>();
 	}
 	
-	public static void registerDefinition(AbstractCompDef def)
-	{
+	public static void registerDefinition(AbstractCompDef def){
 		if(def_map == null) buildDefinitionMap();
 		def_map.put(def.getDefinitionID(), def);
 	}
 	
-	public static AbstractCompDef getCompressionDefinition(int comp_def_id)
-	{
+	public static AbstractCompDef getCompressionDefinition(int comp_def_id){
 		if(def_map == null) buildDefinitionMap();
 		return def_map.get(comp_def_id);
 	}
@@ -88,6 +72,12 @@ public class CompressionDefs {
 		List<AbstractCompDef> list = new LinkedList<AbstractCompDef>();
 		list.addAll(def_map.values());
 		return list;
+	}
+	
+	public static String genTempPath(){
+		Random r = new Random();
+		String temppath = CompressionDefs.getCompressionTempDir() + File.separator + Long.toHexString(r.nextLong()) + ".tmp";
+		return temppath;
 	}
 	
 }

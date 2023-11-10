@@ -40,6 +40,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 		Ref trace methods
  * 2021.01.31 | 2.3.3
  * 		Hopefully fixed bug recalculating length of raw node
+ * 2023.11.08 | 2.4.0
+ * 		Update to FileNode 3.6.1 compatibility
  */
 
 /**
@@ -47,8 +49,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * references offsets by sector (noting sector type) instead of byte offset.
  * This way, sector checksum data can be included or excluded as needed.
  * @author Blythe Hospelhorn
- * @version 2.3.3
- * @since January 31, 2021
+ * @version 2.4.0
+ * @since November 8, 2023
  */
 public class ISOFileNode extends FileNode{
 	
@@ -261,8 +263,8 @@ public class ISOFileNode extends FileNode{
 		return raw;
 	}
 	
-	protected FileBuffer loadDataFilterBuff(long stsec, long edsec, boolean forceCache) throws IOException{
-		FileBuffer raw = loadRawData(stsec, edsec - stsec, forceCache);
+	protected FileBuffer loadDataFilterBuff(long stsec, long edsec, int options) throws IOException{
+		FileBuffer raw = loadRawData(stsec, edsec - stsec, options);
 		return new EncryptedFileBuffer(raw, new DiskDataFilter(sector_head_size, sector_data_size, sector_foot_size));
 		
 		/*if(hasVirtualSource()){
@@ -279,7 +281,7 @@ public class ISOFileNode extends FileNode{
 		}*/
 	}
 	
-	protected FileBuffer loadDirect(long stpos, long len, boolean forceCache, boolean decrypt) throws IOException{
+	protected FileBuffer loadDirect(long stpos, long len, int options) throws IOException{
 		//System.err.println("ISOFileNode.loadDirect || Called: stpos = 0x" + Long.toHexString(stpos) + " | len = 0x" + Long.toHexString(len));
 		
 		//Convert position coordinates to sectors
@@ -303,7 +305,7 @@ public class ISOFileNode extends FileNode{
 		boolean dodec = false;
 		List<EncryptionDefinition> echain = null;
 		long[][] reg_bounds = null;
-		if(decrypt && super.hasEncryption()){
+		if(((options & FileNode.LOADOP_DECRYPT) != 0) && super.hasEncryption()){
 			echain = super.getEncryptionDefChain();
 			reg_bounds = super.getEncryptedRegions();
 			
@@ -332,12 +334,12 @@ public class ISOFileNode extends FileNode{
 				if(decer != null){
 					super.load_flag_decwrap_direct = true; //Don't want superclass redoing decryption
 					//Load raw into enc buffer
-					FileBuffer raw = loadRawData(stsec, edsec - stsec, forceCache);
+					FileBuffer raw = loadRawData(stsec, edsec - stsec, options);
 					return new EncryptedFileBuffer(raw, decer.generateDecryptor(this));
 				}
 				else{
 					//No decryption method defined. Just return a RawDiskBuffer
-					return loadDataFilterBuff(stsec, edsec, forceCache);
+					return loadDataFilterBuff(stsec, edsec, options);
 				}
 			}
 			else{
@@ -362,7 +364,7 @@ public class ISOFileNode extends FileNode{
 						long ssec = st/sector_data_size;
 						long esec = pos/sector_data_size;
 						if(pos % sector_data_size != 0) esec++;
-						FileBuffer reg = loadDataFilterBuff(ssec, esec, forceCache);
+						FileBuffer reg = loadDataFilterBuff(ssec, esec, options);
 						out.addToFile(reg);
 					}
 					
@@ -374,12 +376,12 @@ public class ISOFileNode extends FileNode{
 					long esec = pos/sector_data_size;
 					if(pos % sector_data_size != 0) esec++;
 					if(decer != null){
-						FileBuffer reg = loadRawData(ssec, esec - ssec, forceCache);
+						FileBuffer reg = loadRawData(ssec, esec - ssec, options);
 						reg = new EncryptedFileBuffer(reg, decer.generateDecryptor(this));
 						out.addToFile(reg);
 					}
 					else{
-						FileBuffer reg = loadDataFilterBuff(ssec, esec, forceCache);
+						FileBuffer reg = loadDataFilterBuff(ssec, esec, options);
 						out.addToFile(reg);
 					}
 					
@@ -392,7 +394,7 @@ public class ISOFileNode extends FileNode{
 		else{
 			//Just load into a RawDiskBuffer
 			//Superclass will handle anything else
-			return loadDataFilterBuff(stsec, edsec, forceCache);
+			return loadDataFilterBuff(stsec, edsec, options);
 		}
 
 	}
@@ -408,7 +410,7 @@ public class ISOFileNode extends FileNode{
 	 * @throws IOException If the data cannot be loaded from disk.
 	 * @since 2.0.0
 	 */
-	public FileBuffer loadRawData(long sec_off, long sec_len, boolean forceCache) throws IOException{
+	public FileBuffer loadRawData(long sec_off, long sec_len, int options) throws IOException{
 		if(sec_len <= 0) return null;
 		String path = getSourcePath();
 		
@@ -423,10 +425,12 @@ public class ISOFileNode extends FileNode{
 		if(this.hasVirtualSource()){
 			FileNode src = this.getVirtualSource();
 			src = src.getSubFile(stpos, edpos);
-			return src.loadDecompressedData(forceCache);
+			return src.loadDecompressedData(options);
 		}
 		else{
-			if(forceCache) return CacheFileBuffer.getReadOnlyCacheBuffer(path, sec_size, 512, stpos, edpos);
+			if((options & FileNode.LOADOP_FORCE_CACHE) != 0) {
+				return CacheFileBuffer.getReadOnlyCacheBuffer(path, sec_size, 512, stpos, edpos);
+			}
 			else return FileBuffer.createBuffer(path, stpos, edpos);
 		}
 	}
@@ -441,7 +445,7 @@ public class ISOFileNode extends FileNode{
 	 * @since 1.2.0
 	 */
 	public FileBuffer loadRawData(long sec_off, long sec_len) throws IOException{
-		return loadRawData(sec_off, sec_len, false);
+		return loadRawData(sec_off, sec_len, FileNode.LOADOP_NONE);
 	}
 	
 	/**
@@ -453,7 +457,7 @@ public class ISOFileNode extends FileNode{
 	 * @throws IOException If the data cannot be loaded from disk.
 	 * @since 2.0.0
 	 */
-	protected FileBuffer loadRawData(boolean forceCache) throws IOException{
+	protected FileBuffer loadRawData(int options) throws IOException{
 		String path = getSourcePath();
 		//FileBuffer imgdat = FileBuffer.createBuffer(path);
 		//ISO iso = new ISO(imgdat, true);
@@ -467,10 +471,11 @@ public class ISOFileNode extends FileNode{
 		
 		//System.err.println("Loading... 0x" + Long.toHexString(stpos) + " - 0x" + Long.toHexString(edpos));
 		
+		boolean forceCache = (options & FileNode.LOADOP_FORCE_CACHE) != 0;
 		if(this.hasVirtualSource()){
 			FileNode src = this.getVirtualSource();
 			src = src.getSubFile(stpos, edpos);
-			return src.loadDecompressedData(forceCache);
+			return src.loadDecompressedData(options);
 		}
 		else{
 			if(forceCache) return CacheFileBuffer.getReadOnlyCacheBuffer(path, sec_size, 512, stpos, edpos);
@@ -486,7 +491,7 @@ public class ISOFileNode extends FileNode{
 	 * @since 1.0.0
 	 */
 	public FileBuffer loadRawData() throws IOException{
-		return loadRawData(false);
+		return loadRawData(FileNode.LOADOP_NONE);
 	}
 	
 	/* --- View --- */
