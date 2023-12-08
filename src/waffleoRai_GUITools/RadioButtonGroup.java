@@ -25,11 +25,11 @@ public class RadioButtonGroup {
 		{
 			if (buttons[i] != null)
 			{
-				if (!buttons[i].isEnabled())
+				/*if (!buttons[i].isEnabled())
 				{
 					buttons[i].setSelected(false);
 					continue;
-				}
+				}*/
 				buttons[i].setSelected(i == index);	
 			}
 		}

@@ -122,6 +122,7 @@ public class WriterPanel extends JPanel{
 	}
 	
 	public void refreshPanel(){
+		textPane.setCaretPosition(0);
 		textPane.repaint();
 		scrollPane.repaint();
 	}

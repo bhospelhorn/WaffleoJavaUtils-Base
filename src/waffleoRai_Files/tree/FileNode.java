@@ -1325,6 +1325,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 			Random r = new Random(getGUID()); //For temp file names
 			temppath = getTemporaryFilesDirectoryPath() + File.separator + Long.toHexString(r.nextLong()) + ".tmp";
 		}
+		noteTempPath(temppath);
 		return temppath;
 	}
 	

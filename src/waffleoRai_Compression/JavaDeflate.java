@@ -18,8 +18,6 @@ import waffleoRai_Utils.StreamWrapper;
 
 public class JavaDeflate {
 	
-	//TODO Modify so can be 4 or 8 byte initial size ughhhhh
-
 	public static FileBuffer inflate(StreamWrapper input){
 		if(input == null) return null;
 		if(input instanceof FileInputStreamer){
@@ -35,10 +33,23 @@ public class JavaDeflate {
 	public static FileBuffer inflate(InputStream input){
 		if(input == null) return null;
 		try{
-			int decsize = 0;
-			for(int i = 0; i < 4; i++){
-				decsize <<= 8;
-				decsize |= input.read();
+			//Read first byte
+			int decsize = input.read();
+			if((decsize & 0x80) != 0){
+				decsize &= ~0x80;
+				long decsizel = Integer.toUnsignedLong(decsize);
+				for(int i = 1; i < 8; i++){
+					decsizel <<= 8;
+					decsizel |= input.read();
+				}
+				if(decsizel > 0x7fffffff) return null;
+				decsize = (int)decsizel;
+			}
+			else{
+				for(int i = 1; i < 4; i++){
+					decsize <<= 8;
+					decsize |= input.read();
+				}
 			}
 			
 			FileBuffer dec = new FileBuffer(decsize, true);
@@ -60,6 +71,12 @@ public class JavaDeflate {
 		if(input == null) return null;
 		input.setCurrentPosition(0L);
 		int decsize = input.nextInt();
+		if((decsize & 0x80000000) != 0){
+			input.setCurrentPosition(0L);
+			long decsizel = input.nextLong() & ~(1L<<63);
+			if(decsizel > 0x7fffffff) return null;
+			decsize = (int)decsizel;
+		}
 		
 		FileBuffer dec = new FileBuffer(decsize, true);
 		try{
@@ -91,16 +108,25 @@ public class JavaDeflate {
 	public static boolean inflateTo(InputStream input, String outpath){
 		if(input == null) return false;
 		try{
-			int decsize = 0;
-			for(int i = 0; i < 4; i++){
-				decsize <<= 8;
-				decsize |= input.read();
+			long decsize = input.read();
+			if((decsize & 0x80) != 0){
+				decsize &= ~0x80;
+				for(int i = 1; i < 8; i++){
+					decsize <<= 8;
+					decsize |= input.read();
+				}
+			}
+			else{
+				for(int i = 1; i < 4; i++){
+					decsize <<= 8;
+					decsize |= input.read();
+				}
 			}
 			
 			BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(outpath));
 			
 			InflaterInputStream iis = new InflaterInputStream(input);
-			for(int i = 0; i < decsize; i++){
+			for(long i = 0; i < decsize; i++){
 				bos.write(iis.read());
 			}
 			iis.close();
@@ -117,7 +143,11 @@ public class JavaDeflate {
 	public static boolean inflateTo(FileBuffer input, String outpath){
 		if(input == null) return false;
 		input.setCurrentPosition(0L);
-		int decsize = input.nextInt();
+		long decsize = input.nextInt();
+		if((decsize & 0x80000000) != 0){
+			input.setCurrentPosition(0L);
+			decsize = input.nextLong() & ~(1L<<63);
+		}
 		
 		try{
 			BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(outpath));
