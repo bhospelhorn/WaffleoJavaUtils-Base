@@ -3,6 +3,7 @@ package waffleoRai_soundbank;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -102,6 +103,16 @@ public class DLSFile {
 		return info.get(key);
 	}
 	
+	public int getBankCount(){
+		if(instruments == null) return 0;
+		int bankmax = -1;
+		for(DLSInstrument inst : instruments){
+			int b = inst.getBankIndex();
+			if(b > bankmax) bankmax = b;
+		}
+		return bankmax + 1;
+	}
+	
 	public int getInstrumentCount(){
 		if(instruments == null) return 0;
 		return instruments.size();
@@ -112,12 +123,43 @@ public class DLSFile {
 		return samples.size();
 	}
 	
+	public List<DLSSample> getAllSamples(){
+		int scount = getSampleCount();
+		if(scount < 1) return new LinkedList<DLSSample>();
+		ArrayList<DLSSample> copy = new ArrayList<DLSSample>(scount);
+		copy.addAll(samples);
+		return copy;
+	}
+	
+	public DLSSample[] getOrderedSamples(){
+		//ptbl order
+		int scount = getSampleCount();
+		if(scount < 1 || poolTable == null) return null;
+		
+		DLSSample[] tbl = new DLSSample[poolTable.length];
+		for(int i = 0; i < poolTable.length; i++){
+			if((poolTable[i] >= 0) && (poolTable[i] < scount)){
+				tbl[i] = samples.get(poolTable[i]);
+			}
+		}
+		
+		return tbl;
+	}
+	
+	public List<DLSInstrument> getAllInstruments(){
+		int icount = getInstrumentCount();
+		if(icount < 1) return new LinkedList<DLSInstrument>();
+		ArrayList<DLSInstrument> copy = new ArrayList<DLSInstrument>(icount);
+		copy.addAll(instruments);
+		return copy;
+	}
+	
 	/*----- Setters -----*/
 	
 	/*----- Reader -----*/
 	
 	public static DLSFile readDLS(String path) throws IOException, UnsupportedFileTypeException{
-		RIFFReader riff_rdr = RIFFReader.readFile(path, true);
+		RIFFReader riff_rdr = RIFFReader.readFile(path, 2, true);
 		
 		//colh - this pretty much only contains the intrument count
 		RIFFChunk chunk = riff_rdr.getFirstTopLevelChunk(MAGIC_COLH);
@@ -171,6 +213,7 @@ public class DLSFile {
 		grandchildren = childList.getAllItems();
 		int pos = 0;
 		int i = 0;
+		dls.samples = new ArrayList<DLSSample>(grandchildren.size());
 		for(RIFFChunk gc : grandchildren){
 			DLSSample smpl = DLSSample.read(gc);
 			dls.samples.add(smpl);

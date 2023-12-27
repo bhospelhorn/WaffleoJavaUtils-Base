@@ -20,7 +20,7 @@ public class DLSSampleLoop {
 		data.add(4);
 		loop.ulLoopType = data.nextInt();
 		loop.ulLoopStart = data.nextInt();
-		loop.ulLoopType = data.nextInt();
+		loop.ulLoopLength = data.nextInt();
 		return loop;
 	}
 	

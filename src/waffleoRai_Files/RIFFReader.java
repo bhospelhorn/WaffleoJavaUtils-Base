@@ -156,6 +156,7 @@ public class RIFFReader {
 	/*----- Instance Variables -----*/
 	
 	private String riff_type;
+	private int align = 1;
 	private MultiValMap<String, RIFFChunk> top_level;
 	
 	/*----- Init -----*/
@@ -166,7 +167,7 @@ public class RIFFReader {
 	
 	/*----- Readers -----*/
 	
-	private static void readListChunk(BufferReference data, RIFFChunk listChunk, String filepath, boolean cache){
+	private static void readListChunk(BufferReference data, RIFFChunk listChunk, String filepath, int align, boolean cache){
 		int listsz = data.nextInt();
 		listChunk.magic = data.nextASCIIString(4);
 		
@@ -185,7 +186,8 @@ public class RIFFReader {
 			RIFFChunk child_chunk = new RIFFChunk();
 			
 			if(cmagic.equals(MAGIC_LIST_STR)){
-				readListChunk(data, child_chunk, filepath, cache);
+				data.subtract(4L);
+				readListChunk(data, child_chunk, filepath, align, cache);
 			}
 			else{
 				child_chunk.magic = cmagic;
@@ -198,6 +200,13 @@ public class RIFFReader {
 				if(cache){
 					FileBuffer backbuff = data.getBuffer();
 					child_chunk.cachedChunk = backbuff.createReadOnlyCopy(chunk.getOffset(), chunk.getOffset() + chunk.getLength());
+				}
+				
+				data.add(csize);
+				if(align > 1){
+					while((data.getBufferPosition() % align) != 0){
+						data.add(1L);
+					}
 				}
 			}
 			
@@ -213,25 +222,26 @@ public class RIFFReader {
 		}
 	}
 	
- 	public static RIFFReader readFile(String path, boolean cache) throws IOException, UnsupportedFileTypeException{
+ 	public static RIFFReader readFile(String path, int align,  boolean cache) throws IOException, UnsupportedFileTypeException{
 		FileBuffer buffer = FileBuffer.createBuffer(path, false);
-		return readFile(buffer.getReferenceAt(0L), cache);
+		return readFile(buffer.getReferenceAt(0L), align, cache);
 	}
 	
-	public static RIFFReader readFile(Path path, boolean cache) throws IOException, UnsupportedFileTypeException{
+	public static RIFFReader readFile(Path path, int align,  boolean cache) throws IOException, UnsupportedFileTypeException{
 		String spath = path.toAbsolutePath().toString();
 		FileBuffer buffer = FileBuffer.createBuffer(spath, false);
-		return readFile(buffer.getReferenceAt(0L), cache);
+		return readFile(buffer.getReferenceAt(0L), align, cache);
 	}
 	
-	public static RIFFReader readFile(FileBuffer data, boolean cache) throws IOException, UnsupportedFileTypeException{
+	public static RIFFReader readFile(FileBuffer data, int align,  boolean cache) throws IOException, UnsupportedFileTypeException{
 		if(data == null) return null;
-		return readFile(data.getReferenceAt(0L), cache);
+		return readFile(data.getReferenceAt(0L), align, cache);
 	}
 	
-	public static RIFFReader readFile(BufferReference data, boolean cache) throws IOException, UnsupportedFileTypeException{
+	public static RIFFReader readFile(BufferReference data, int align, boolean cache) throws IOException, UnsupportedFileTypeException{
 		if(data == null) return null;
 		RIFFReader rdr = new RIFFReader();
+		rdr.align = align;
 		
 		//Check for RIFF magic
 		long startPos = data.getBufferPosition();
@@ -255,7 +265,8 @@ public class RIFFReader {
 			RIFFChunk riffch = new RIFFChunk();
 
 			if(cmagic.equals(MAGIC_LIST_STR)){
-				readListChunk(data, riffch, filepath, cache);
+				data.subtract(4L);
+				readListChunk(data, riffch, filepath, rdr.align, cache);
 			}
 			else{
 				riffch.magic = cmagic;
@@ -269,6 +280,13 @@ public class RIFFReader {
 					FileBuffer backbuff = data.getBuffer();
 					riffch.cachedChunk = backbuff.createReadOnlyCopy(chunk.getOffset(), 
 							chunk.getOffset() + chunk.getLength());
+				}
+				
+				data.add(csize);
+				if(rdr.align > 1){
+					while((data.getBufferPosition() % rdr.align) != 0){
+						data.add(1L);
+					}
 				}
 			}
 			

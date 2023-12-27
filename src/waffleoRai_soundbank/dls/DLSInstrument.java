@@ -2,6 +2,7 @@ package waffleoRai_soundbank.dls;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -72,13 +73,27 @@ public class DLSInstrument {
 		return ulInstrument;
 	}
 	
+	public List<DLSRegion> getAllRegions(){
+		if(regions == null || regions.isEmpty()) return new LinkedList<DLSRegion>();
+		ArrayList<DLSRegion> copy = new ArrayList<DLSRegion>(regions.size());
+		copy.addAll(regions);
+		return copy;
+	}
+	
+	public List<DLSArticulator> getAllGlobalArticulators(){
+		if(globalArt == null || globalArt.isEmpty()) return new LinkedList<DLSArticulator>();
+		ArrayList<DLSArticulator> copy = new ArrayList<DLSArticulator>(globalArt.size());
+		copy.addAll(globalArt);
+		return copy;
+	}
+	
 	/*----- Readers -----*/
 	
 	private void readHeader(BufferReference data){
 		if(data == null) return;
-		int rcount = data.getInt();
-		ulBank = data.getInt();
-		ulInstrument = data.getInt();
+		int rcount = data.nextInt();
+		ulBank = data.nextInt();
+		ulInstrument = data.nextInt();
 		
 		if(rcount > 0) regions = new ArrayList<DLSRegion>(rcount);
 	}

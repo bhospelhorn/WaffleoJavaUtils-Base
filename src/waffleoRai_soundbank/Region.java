@@ -10,7 +10,7 @@ import waffleoRai_soundbank.adsr.Release;
 import waffleoRai_soundbank.adsr.Sustain;
 
 
-public abstract class Region {
+public abstract class Region implements Comparable<Region>{
 	
 	private int iVolume; //In units of 1/(signed int max) of max volume
 	private short iPan; //Positive values to right - % of short max
@@ -284,6 +284,20 @@ public abstract class Region {
 					" | " + m.getSourceAmount() + 
 					" | " + m.getTransform());
 		}
+	}
+	
+	public int compareTo(Region other){
+		if(other == null) return 1;
+		
+		//Key range
+		if(this.iMinKey != other.iMinKey) return this.iMinKey - other.iMinKey;
+		if(this.iMaxKey != other.iMaxKey) return this.iMaxKey - other.iMaxKey;
+		
+		//Velocity range
+		if(this.iMinVelocity != other.iMinVelocity) return this.iMinVelocity - other.iMinVelocity;
+		if(this.iMaxVelocity != other.iMaxVelocity) return this.iMaxVelocity - other.iMaxVelocity;
+		
+		return 0;
 	}
 	
 }

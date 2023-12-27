@@ -244,7 +244,7 @@ public class BmpFile{
 		while(data.getBufferPosition() < pixdataPos) data.add(1L);
 		bmp.imageData = new int[bmp.height][bmp.width]; //YX or Row Column
 		
-		for(int r = 0; r < bmp.height; r++){
+		for(int r = bmp.height - 1; r >= 0; r--){
 			
 			switch(bmp.bitDepth){
 			case 1:
@@ -302,9 +302,9 @@ public class BmpFile{
 				break;
 			}
 			
-			//Skip row padding
-			long nowpos = data.getBufferPosition() - stpos;
-			long padding = Math.min(3, 4 - (nowpos & 0x3L));
+			//Skip row padding (Position is relative to image data start)
+			long nowpos = data.getBufferPosition() - pixdataPos;
+			long padding = (4 - (nowpos & 0x3L)) & 0x3L;
 			data.add(padding);
 		}
 		

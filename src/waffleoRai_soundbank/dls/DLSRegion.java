@@ -2,6 +2,7 @@ package waffleoRai_soundbank.dls;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import waffleoRai_DataContainers.MultiValMap;
@@ -29,6 +30,7 @@ public class DLSRegion extends Region{
 	private short usKeyGroup;
 	private int wsmpOptions;
 	
+	private int loopCount;
 	private DLSSampleLoop loop; //null if one shot
 	
 	private DLSWaveLink waveLink; //Optional
@@ -41,6 +43,24 @@ public class DLSRegion extends Region{
 	}
 	
 	/*----- Getters -----*/
+	
+	public short getOptions(){return fusOptions;}
+	public short getKeyGroup(){return usKeyGroup;}
+	public int getSampleOptions(){return wsmpOptions;}
+	public DLSSampleLoop getLoop(){return loop;}
+	public DLSWaveLink getWaveLink(){return waveLink;}
+	
+	public int getArticulatorCount(){
+		if(articulators == null) return 0;
+		return articulators.size();
+	}
+	
+	public List<DLSArticulator> getAllArticulators(){
+		if(articulators == null || articulators.isEmpty()) return new LinkedList<DLSArticulator>();
+		ArrayList<DLSArticulator> copy = new ArrayList<DLSArticulator>(articulators.size());
+		copy.addAll(articulators);
+		return copy;
+	}
 	
 	/*----- Readers -----*/
 	
@@ -61,9 +81,9 @@ public class DLSRegion extends Region{
 		super.setFineTune(data.nextShort());
 		super.setVolume(data.nextInt()); //lgain
 		wsmpOptions = data.nextInt(); //fulOptions
-		int loop_count = data.nextInt();
+		loopCount = data.nextInt();
 		
-		if(loop_count == 1){
+		if(loopCount == 1){
 			//Only 0 and 1 are definted fwr
 			loop = DLSSampleLoop.read(data);
 		}

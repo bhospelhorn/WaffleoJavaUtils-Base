@@ -55,6 +55,7 @@ public class DLSArticulator {
 	
 	public ArrayList<DLSConBlock> getBlocks(){
 		ArrayList<DLSConBlock> copy = new ArrayList<DLSConBlock>(blocks.size()+1);
+		copy.addAll(blocks);
 		return copy;
 	}
 
