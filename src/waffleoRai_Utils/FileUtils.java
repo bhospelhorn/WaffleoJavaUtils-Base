@@ -17,6 +17,8 @@ import waffleoRai_Files.tree.FileNode;
 
 public class FileUtils {
 	
+	public static final String SEP = File.separator;
+	
 	public static String getUserHomeDir(){
 		return System.getProperty("user.home");
 	}
@@ -205,6 +207,104 @@ public class FileUtils {
 		Files.delete(Paths.get(directory_path));
 		
 		return dcount;
+	}
+	
+	public static String unixRelPath2Local(String workingDir, String path){
+		if(path == null) return null;
+		
+		String[] pathParts = path.split("/");
+		int back = 0;
+		LinkedList<String> outq = new LinkedList<String>();
+
+		for(int i = 0; i < pathParts.length; i++){
+			if(pathParts[i] == null) continue;
+			if(pathParts[i].equals(".")) continue;
+			else if(pathParts[i].equals("..")){
+				if(outq.isEmpty()){back--;}
+				else{outq.pollFirst();}
+			}
+			else{
+				outq.addLast(pathParts[i]);
+			}
+		}
+		
+		if(workingDir != null){
+			//See if working dir is a file...
+			int lastslash = workingDir.lastIndexOf(SEP);
+			if(lastslash >= 0){
+				String filename = workingDir.substring(lastslash + 1);
+				if(filename.contains(".")){
+					if(FileBuffer.fileExists(filename)){
+						workingDir = workingDir.substring(0, lastslash);
+					}
+				}
+			}
+			
+			String[] dirparts = workingDir.split(SEP);
+			int last = dirparts.length - 1 - back;
+			for(int i = last; i >= 0; i--){
+				outq.push(dirparts[i]);
+			}
+		}
+		
+		int sz = 0;
+		for(String s : outq) sz += s.length() + 2;
+		StringBuilder sb = new StringBuilder(sz);
+		boolean first = true;
+		for(String s : outq){
+			if(!first) sb.append(SEP);
+			else first = false;
+			sb.append(s);
+		}
+		
+		return sb.toString();
+	}
+	
+	public static String localPath2UnixRel(String workingDir, String path){
+		if(path == null) return null;
+		if(workingDir == null){
+			if(path.contains("\\")){
+				path = path.replace('\\', '/');
+				path = path.replace(":", "");
+				path = "/" + path;
+				return path;
+			}
+			else return path;
+		}
+		
+		String[] wdParts = workingDir.split(SEP);
+		String[] trgParts = path.split(SEP);
+		int m = -1;
+		for(int i = 0; i < wdParts.length; i++){
+			if(i >= trgParts.length) break;
+			if(!wdParts[i].equals(trgParts[i])){
+				break;
+			}
+			m++;
+		}
+		
+		m++; //First mismatch
+		LinkedList<String> list = new LinkedList<String>();
+		if(m < wdParts.length){
+			//Need some ".." I suppose
+			for(int i = m; i < wdParts.length; i++) list.add("..");
+		}
+		else list.add(".");
+		for(int i = m; i < trgParts.length; i++){
+			list.add(trgParts[i]);
+		}
+		
+		int alloc = 0;
+		for(String s : list) alloc += s.length() + 2;
+		StringBuilder sb = new StringBuilder(alloc);
+		boolean first = true;
+		for(String s : list){
+			if(!first) sb.append("/");
+			else first = false;
+			sb.append(s);
+		}
+		
+		return sb.toString();
 	}
 	
 }
