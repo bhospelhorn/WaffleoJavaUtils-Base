@@ -83,6 +83,9 @@ import waffleoRai_Utils.MultiFileBuffer;
  *  2023.11.08 | 3.6.0 -> 3.6.1
  * 	 Cleanup
  * 
+ *  2024.02.21 | 3.6.1 -> 3.6.2
+ * 	 Fixed very stupid NPEs for container on load
+ * 
  */
 
 /**
@@ -95,8 +98,8 @@ import waffleoRai_Utils.MultiFileBuffer;
  * within files on disk (such as archives or device images).
  * <br> This class replaces the deprecated <code>VirFile</code> class.
  * @author Blythe Hospelhorn
- * @version 3.6.1
- * @since November 8, 2023
+ * @version 3.6.2
+ * @since February 21, 2024
  */
 public class FileNode implements TreeNode, Comparable<FileNode>{
 	
@@ -1320,6 +1323,7 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 	}
 	
 	private String genTempPathForContainer(){
+		if(container == null) return null;
 		String temppath = container.getContainerTempPath();
 		if(temppath == null){
 			Random r = new Random(getGUID()); //For temp file names
@@ -1417,16 +1421,16 @@ public class FileNode implements TreeNode, Comparable<FileNode>{
 					node = cont;
 				}
 			}
+			
+			//Flags
+			if((container.lfail_flags & FileNode.LOADFAIL_FLAG_DATA_DECRYPT) != 0){
+				lfail_flags |= FileNode.LOADFAIL_FLAG_CNTNR_DECRYPT;
+			}
+			if((container.lfail_flags & FileNode.LOADFAIL_FLAG_DATA_DECOMP) != 0){
+				lfail_flags |= FileNode.LOADFAIL_FLAG_CNTNR_DECOMP;
+			}
 		}
 		
-		//Flags
-		if((container.lfail_flags & FileNode.LOADFAIL_FLAG_DATA_DECRYPT) != 0){
-			lfail_flags |= FileNode.LOADFAIL_FLAG_CNTNR_DECRYPT;
-		}
-		if((container.lfail_flags & FileNode.LOADFAIL_FLAG_DATA_DECOMP) != 0){
-			lfail_flags |= FileNode.LOADFAIL_FLAG_CNTNR_DECOMP;
-		}
-
 		return node;
 	}
 	
