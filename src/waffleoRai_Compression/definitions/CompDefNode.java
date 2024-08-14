@@ -35,8 +35,11 @@ public class CompDefNode implements FileTypeNode{
 	public FileTypeNode copyChain(){
 
 		CompDefNode copy = new CompDefNode(def);
-		copy.child = child.copyChain();
-		
+		if(child != null) {
+			copy.child = child.copyChain();
+		}
+		else copy.child = null;
+
 		return copy;
 	}
 }

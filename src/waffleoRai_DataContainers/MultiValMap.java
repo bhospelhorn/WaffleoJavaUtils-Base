@@ -1,6 +1,7 @@
 package waffleoRai_DataContainers;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -60,5 +61,33 @@ public class MultiValMap<K extends Comparable<K>,V> {
 	public boolean containsKey(K key){return map.containsKey(key);}
 	
 	public boolean isEmpty(){return map.isEmpty();}
+	
+	public List<V> remove(K key){
+		return map.remove(key);
+	}
+	
+	public int keyCount() {
+		return map.size();
+	}
+	
+	public Collection<V> allValues(){
+		if(map.isEmpty()) return new LinkedList<V>();
+		List<V> list = new ArrayList<V>(valueCount());
+		
+		for(List<V> val : map.values()) {
+			list.addAll(val);
+		}
+		
+		return list;
+	}
+	
+	public int valueCount() {
+		//ALL values
+		int count = 0;
+		for(List<V> val : map.values()) {
+			count += val.size();
+		}
+		return count;
+	}
 	
 }

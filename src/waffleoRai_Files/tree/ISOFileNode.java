@@ -264,7 +264,7 @@ public class ISOFileNode extends FileNode{
 	}
 	
 	protected FileBuffer loadDataFilterBuff(long stsec, long edsec, int options) throws IOException{
-		FileBuffer raw = loadRawData(stsec, edsec - stsec, options);
+		FileBuffer raw = loadRawData(stsec, edsec - stsec + 1, options);
 		return new EncryptedFileBuffer(raw, new DiskDataFilter(sector_head_size, sector_data_size, sector_foot_size));
 		
 		/*if(hasVirtualSource()){

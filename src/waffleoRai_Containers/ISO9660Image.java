@@ -36,6 +36,10 @@ import waffleoRai_Utils.VirDirectory;
  * 	Internal dir structure overhaul to use DirectoryNode instead of VirDirectory
  * 2023.02.28 | 2.0.0 -> 2.1.0
  * 	Use CDDateTime instead of GregorianCalendar for timestamps
+ * 2024.07.22 | 2.1.0 -> 2.2.0
+ * 	Added load interface that takes a file path. Can use file path to facilitate re-loading data.
+ * 2024.07.23 | 2.2.0 -> 2.2.1
+ * 	Added raw mode option to constructor from string path
  * 
  */
 
@@ -45,8 +49,8 @@ import waffleoRai_Utils.VirDirectory;
  * <br>This class allows for quick access to contents of CD by referencing either the file path or
  * the sector index.
  * @author Blythe Hospelhorn
- * @version 2.1.0
- * @since February 28, 2023
+ * @version 2.2.1
+ * @since July 23, 2024
  *
  */
 @SuppressWarnings("deprecation")
@@ -55,6 +59,7 @@ public class ISO9660Image implements CDImage{
 	private ISO9660Table table;
 	//protected VirDirectory rootDir;
 	protected DirectoryNode root;
+	protected String sourceFile;
 	
 	private String stdIdent;
 	private String sysIdent;
@@ -94,6 +99,24 @@ public class ISO9660Image implements CDImage{
 	}
 	
 	/**
+	 * Construct a parsed ISO9660 image from a file on disk and store the file path for easier data
+	 * retrieval. 
+	 * @param imagePath Path to ISO image file.
+	 * @param rawMode Whether to parse sectors in rawMode or not (ie. without reading header/footer data)
+	 * @throws CDInvalidRecordException If a record in one of the directory tables is unreadable
+	 * or invalid. This can occur from bad formatting or from erroneous offset calculations.
+	 * @throws IOException If there is an error creating parsing buffers.
+	 * @throws UnsupportedFileTypeException If there is an error parsing volume information. 
+	 * @since 2.2.0
+	 */
+	public ISO9660Image(String imagePath, boolean rawMode) throws CDInvalidRecordException, IOException, UnsupportedFileTypeException {
+		FileBuffer buffer = FileBuffer.createBuffer(imagePath, rawMode);
+		ISO iso = new ISO(buffer, true);
+		sourceFile = imagePath;
+		constructorCore(iso);
+	}
+	
+	/**
 	 * Construct a parsed ISO9660 image from a raw ISO image object.
 	 * @param myISO Raw image to parse.
 	 * @throws CDInvalidRecordException If a record in one of the directory tables is unreadable
@@ -101,8 +124,7 @@ public class ISO9660Image implements CDImage{
 	 * @throws IOException If there is an error creating parsing buffers.
 	 * @throws UnsupportedFileTypeException If there is an error parsing volume information. 
 	 */
-	public ISO9660Image(ISO myISO) throws CDInvalidRecordException, IOException, UnsupportedFileTypeException
-	{
+	public ISO9660Image(ISO myISO) throws CDInvalidRecordException, IOException, UnsupportedFileTypeException {
 		this.constructorCore(myISO);
 	}
 	
@@ -157,19 +179,17 @@ public class ISO9660Image implements CDImage{
 	 * @throws IOException If an internal file is large enough to require disk-aided streaming and there
 	 * is an error creating the buffer necessary.
 	 */
-	protected void generateRootDirectory(ISO myISO, ISO9660Table t) throws IOException
-	{
+	protected void generateRootDirectory(ISO myISO, ISO9660Table t) throws IOException {
 		Collection<ISO9660Entry> c = t.getAllEntries();
 		//if (eventContainer != null) eventContainer.fireNewEvent(EventType.IMG9660_TBLLISTED, c.size());
-		for (ISO9660Entry e : c)
-		{
-			if (!e.isDirectory() && e.getStartBlock() < myISO.getNumberSectorsRelative()) 
-			{
+		for (ISO9660Entry e : c) {
+			if (!e.isDirectory() && e.getStartBlock() < myISO.getNumberSectorsRelative()) {
 				//Uses full paths in name
 				ISOFileNode node = new ISOFileNode(null, "");
 				node.setOffset(e.getStartBlock());
 				//node.setLength(e.getSizeInSectors());
 				node.setLength(e.getFileSize());
+				node.setSourcePath(sourceFile);
 				root.addChildAt(e.getName(), node);
 			}
 		}
@@ -270,13 +290,7 @@ public class ISO9660Image implements CDImage{
 		return this.getTable().getAllEntries();
 	}
 	
-	public FileBuffer getFile(String path)
-	{
-		/*FDBuffer f = this.rootDir.getItem(path);
-		if (f == null) return null;
-		if (!(f instanceof VirFile)) return null;
-		VirFile vf = (VirFile)f;	
-		return vf.getFile();*/
+	public FileBuffer getFile(String path) {
 		FileNode f = root.getNodeAt(path.replace("\\", "/"));
 		if(f == null) return null;
 		try {return f.loadDecompressedData();} 
@@ -286,8 +300,14 @@ public class ISO9660Image implements CDImage{
 		}
 	}
 	
-	public FileBuffer getSectorData(int sector) throws IOException
-	{
+	public FileBuffer getSectorData(int sector) throws IOException {
+		if(sourceFile != null && FileBuffer.fileExists(sourceFile)) {
+			long st = (long)sector * ISO.SECSIZE;
+			st += 0x10;
+			long ed = st + ISO.F1SIZE;
+			return FileBuffer.createBuffer(sourceFile, st, ed, true);
+		}
+
 		ISO9660Entry e = (ISO9660Entry)(this.getTable().getEntry(sector));
 		if (e == null) return null;
 		long sOff = this.getTable().calcFileOffsetOfSector(e.getName(), sector);
@@ -299,29 +319,36 @@ public class ISO9660Image implements CDImage{
 		return mySec;
 	}
 
-	public FileBuffer getRawSector(int relativeSector) throws IOException
-	{
-		//This version only deals with Mode 1.
-		int absSec = relativeSector + table.getFirstSectorIndex();
-		FileBuffer secHeader = new FileBuffer(0x10);
-		for (int i = 0; i < ISO.SYNC.length; i++) secHeader.addToFile(ISO.SYNC[i]);
-		byte minByte = ISO.getBCDminute(absSec);
-		secHeader.addToFile(minByte);
-		byte sndByte = ISO.getBCDsecond(absSec);
-		secHeader.addToFile(sndByte);
-		byte secByte = ISO.getBCDsector(absSec);
-		secHeader.addToFile(secByte);
-		byte modeByte = 0x01;
-		secHeader.addToFile(modeByte);
-		int tailSize = 0x04 + 0x08 + 0x114;
-		FileBuffer secTail = new FileBuffer(tailSize);
-		for (int i = 0; i < tailSize; i++) secTail.addToFile(ISO.ZERO);
-		//FileBuffer mySector = new CompositeBuffer(3);
-		FileBuffer mySector = new MultiFileBuffer(3);
-		mySector.addToFile(secHeader);
-		mySector.addToFile(getSectorData(relativeSector));
-		mySector.addToFile(secTail);
-		return mySector;
+	public FileBuffer getRawSector(int relativeSector) throws IOException {
+		if(sourceFile != null && FileBuffer.fileExists(sourceFile)) {
+			//Just load from source file
+			long st = (long)relativeSector * ISO.SECSIZE;
+			long ed = st + ISO.SECSIZE;
+			return FileBuffer.createBuffer(sourceFile, st, ed, true);
+		}
+		else {
+			//This version only deals with Mode 1.
+			int absSec = relativeSector + table.getFirstSectorIndex();
+			FileBuffer secHeader = new FileBuffer(0x10);
+			for (int i = 0; i < ISO.SYNC.length; i++) secHeader.addToFile(ISO.SYNC[i]);
+			byte minByte = ISO.getBCDminute(absSec);
+			secHeader.addToFile(minByte);
+			byte sndByte = ISO.getBCDsecond(absSec);
+			secHeader.addToFile(sndByte);
+			byte secByte = ISO.getBCDsector(absSec);
+			secHeader.addToFile(secByte);
+			byte modeByte = 0x01;
+			secHeader.addToFile(modeByte);
+			int tailSize = 0x04 + 0x08 + 0x114;
+			FileBuffer secTail = new FileBuffer(tailSize);
+			for (int i = 0; i < tailSize; i++) secTail.addToFile(ISO.ZERO);
+			//FileBuffer mySector = new CompositeBuffer(3);
+			FileBuffer mySector = new MultiFileBuffer(3);
+			mySector.addToFile(secHeader);
+			mySector.addToFile(getSectorData(relativeSector));
+			mySector.addToFile(secTail);
+			return mySector;
+		}
 	}
 	
 	public VirDirectory getRootDirectory(){

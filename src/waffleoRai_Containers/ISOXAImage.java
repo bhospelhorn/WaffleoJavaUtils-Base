@@ -23,14 +23,19 @@ import waffleoRai_Utils.MultiFileBuffer;
  * 	Added further accessibility, especially for child classes
  * 2020.06.16 | 1.3.0 -> 2.0.0
  * 	Updated to use DirectoryNode instead of VirDirectory
+ * 2024.07.22 | 2.0.0 -> 2.1.0
+ * 	Debug issues with file nodes
+ * 	Made loading raw sectors less clunky
+ * 2024.07.23 | 2.1.0 -> 2.1.1
+ * 	Switched raw mode off in string path constructor
  */
 
 /**
  * Child class of ISO9660 image extended to include information from the eXtended Architecture
  * specification. Includes specialized handling of Mode 2 sectors.
  * @author Blythe Hospelhorn
- * @version 2.0.0
- * @since June 16, 2020
+ * @version 2.1.1
+ * @since July 23, 2024
  */
 public class ISOXAImage extends ISO9660Image {
 	
@@ -41,14 +46,33 @@ public class ISOXAImage extends ISO9660Image {
 	/* --- Construction --- */
 	
 	/**
+	 * Construct a fully parsed ISO-XA image from a sector-parsed ISO image. Save path to input file for easier
+	 * data loading later.
+	 * @param path Path to ISO image file on local file system.
+	 * @throws CDInvalidRecordException If there is an error reading a record in a directory table.
+	 * @throws IOException If there is an error creating streaming buffers.
+	 * @throws UnsupportedFileTypeException If there is an error parsing primary volume descriptor.
+	 * @since 2.1.0
+	 */
+	public ISOXAImage(String path) throws CDInvalidRecordException, IOException, UnsupportedFileTypeException {
+		super();
+		super.sourceFile = path;
+		//Read ISO
+		FileBuffer buff = FileBuffer.createBuffer(path, true);
+		ISO iso = new ISO(buff, false);
+		this.table = new XATable(iso);
+		super.readInformation(iso);
+		generateRootDirectory(iso);
+	}
+	
+	/**
 	 * Construct a fully parsed ISO-XA image from a sector-parsed ISO image.
 	 * @param myISO Image to parse and extract files from.
 	 * @throws CDInvalidRecordException If there is an error reading a record in a directory table.
 	 * @throws IOException If there is an error creating streaming buffers.
 	 * @throws UnsupportedFileTypeException If there is an error parsing primary volume descriptor.
 	 */
-	public ISOXAImage(ISO myISO) throws CDInvalidRecordException, IOException, UnsupportedFileTypeException 
-	{
+	public ISOXAImage(ISO myISO) throws CDInvalidRecordException, IOException, UnsupportedFileTypeException {
 		super();
 		this.table = new XATable(myISO);
 		//table.printMe();
@@ -67,33 +91,31 @@ public class ISOXAImage extends ISO9660Image {
 		table = new XATable();
 	}
 	
-	protected void generateRootDirectory(ISO myISO) throws IOException
-	{
+	protected void generateRootDirectory(ISO myISO) throws IOException {
 		Collection<XAEntry> c = table.getXAEntries();
 		//if (eventContainer != null) eventContainer.fireNewEvent(EventType.IMG9660_TBLLISTED, c.size());
 		String vident = getVolumeIdent().replace(" ", "");
 		root.setMetadataValue(METAKEY_VOLUMEIDENT, vident);
 		String raw_dir = "cdraw";
-		for (XAEntry e : c)
-		{
+		for (XAEntry e : c) {
 			//if (!e.isDirectory() && e.getStartBlock() < myISO.getNumberSectorsRelative()) 
-			if (!e.isDirectory()) 
-			{
+			if (!e.isDirectory()) {
 				//Uses full paths in name
 				ISOFileNode node = new ISOFileNode(null, "");
 				node.setOffset(e.getStartBlock());
-				node.setLength(e.getFileSize());
 				//node.setLength(e.getSizeInSectors());
 				if(e.isMode2()){
 					if(e.isForm2()) node.setMode2Form2();
 					else node.setMode2Form1();
 				}
 				if(e.isCDDA()) node.setAudioMode();
+				node.setLength(e.getFileSize()); //Setting the mode snaps file size to sectors. We want the ACTUAL file size.
 				//System.err.println("Found entry: " + e.getName());
 				//System.err.println("Entry file size: 0x" + Long.toHexString(e.getFileSize()));
 				String addpath = null;
 				if(e.isRawFile()) addpath = raw_dir + "\\" + e.getName();
 				else addpath = vident + "\\" + e.getName();
+				node.setSourcePath(super.sourceFile);
 				root.addChildAt(addpath, node);
 			}
 		}
@@ -106,8 +128,33 @@ public class ISOXAImage extends ISO9660Image {
 		return this.table;
 	}
 	
-	public FileBuffer getSectorData(int sector) throws IOException
-	{
+	public FileBuffer getSectorData(int sector) throws IOException {
+		if((sourceFile != null) && FileBuffer.fileExists(sourceFile)) {
+			FileBuffer fullsec = getRawSector(sector);
+			if(fullsec != null) {
+				//Determine mode.
+				int mode = Byte.toUnsignedInt(fullsec.getByte(0xf));
+				if(mode == 1) {
+					return fullsec.createReadOnlyCopy(0x10, ISO.F1SIZE + 0x10);
+				}
+				else if(mode == 2) {
+					//Determine form
+					int sh3 = Byte.toUnsignedInt(fullsec.getByte(0x13));
+					if((sh3 & 0x20) != 0) {
+						//Form 2
+						return fullsec.createReadOnlyCopy(0x18, ISO.F2SIZE + 0x18);
+					}
+					else {
+						//Form 1
+						return fullsec.createReadOnlyCopy(0x18, ISO.F1SIZE + 0x18);
+					}
+				}
+				else if(mode == 0) {
+					return fullsec.createReadOnlyCopy(0x10, ISO.SECSIZE);
+				}
+			}
+		}
+		
 		XAEntry e = (XAEntry)(this.getTable().getEntry(sector));
 		if (e == null) return null;
 		long sOff = this.getTable().calcFileOffsetOfSector(e.getName(), sector);
@@ -119,8 +166,13 @@ public class ISOXAImage extends ISO9660Image {
 		return mySec;
 	}
 	
-	public FileBuffer getRawSector(int relativeSector) throws IOException
-	{
+	public FileBuffer getRawSector(int relativeSector) throws IOException {
+		if((sourceFile != null) && FileBuffer.fileExists(sourceFile)) {
+			long st = (long)relativeSector * ISO.SECSIZE;
+			long ed = st + ISO.SECSIZE;
+			return FileBuffer.createBuffer(sourceFile, st, ed, true);
+		}
+		
 		//Check if mode 1 first
 		if (!table.isSectorMode2(relativeSector)) return super.getRawSector(relativeSector);
 		//Handle mode 2 sectors

@@ -29,6 +29,12 @@ public class BufferReference{
 	public FileBuffer getBuffer(){return src;}
 	public long getBufferPosition(){return pos;}
 	
+	public boolean hasRemaining() {
+		if(src == null) return false;
+		long fsize = src.getFileSize();
+		return pos < fsize;
+	}
+	
 	/*----- Setters -----*/
 	
 	public void addWriteListener(BufferWriteListener l){

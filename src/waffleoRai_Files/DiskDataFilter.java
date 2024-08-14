@@ -18,6 +18,8 @@ public class DiskDataFilter implements DecryptorMethod{
 		return sz_head + sz_data + sz_foot;
 	}
 
+	//TODO WARNING: This makes the assumption that the input starts at the beginning of a sector.
+	//	Update to use offval
 	public byte[] decrypt(byte[] input, long offval) {
 		//Strips header and footer and returns data
 		if(input == null) return null;

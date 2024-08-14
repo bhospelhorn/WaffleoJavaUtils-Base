@@ -20,6 +20,7 @@ import javax.sound.midi.SysexMessage;
 import javax.sound.midi.Track;
 
 import waffleoRai_Utils.BitStreamer;
+import waffleoRai_Utils.BufferReference;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
 
@@ -65,8 +66,7 @@ public class MIDI {
 	
 	/*--- Constructors ---*/
 	
-	public MIDI(Sequence seq)
-	{
+	public MIDI(Sequence seq){
 		this.contents = seq;
 		this.internalName = "MIDI" + this.hashCode();
 		this.useName = false;
@@ -77,13 +77,15 @@ public class MIDI {
 		readDivisionInfo();
 	}
 	
-	public MIDI(FileBuffer mySeq) throws UnsupportedFileTypeException
-	{
-		this(mySeq, 0);
+	public MIDI(FileBuffer mySeq) throws UnsupportedFileTypeException{
+		this(mySeq.getReferenceAt(0L));
 	}
 	
-	public MIDI(FileBuffer mySeq, long stPos) throws UnsupportedFileTypeException
-	{
+	public MIDI(FileBuffer mySeq, long stPos) throws UnsupportedFileTypeException{
+		this(mySeq.getReferenceAt(stPos));
+	}
+	
+	public MIDI(BufferReference data) throws UnsupportedFileTypeException{
 		this.contents = null;
 		this.internalName = "MIDI" + this.hashCode();
 		this.useName = false;
@@ -91,41 +93,35 @@ public class MIDI {
 		this.MIDI_type = 1;
 		this.tempDir = null;
 		//this.tempNum = 0;
-		parseMIDI(mySeq, stPos);
+		parseMIDI(data);
 	}
 	
-	private void readDivisionInfo()
-	{
+	private void readDivisionInfo(){
 		float divisionType = contents.getDivisionType();
-		if (divisionType == Sequence.PPQ)
-		{
+		if (divisionType == Sequence.PPQ){
 			this.divMode = false;
 			this.TicksPerQNote = contents.getResolution();
 			return;
 		}
-		else if (divisionType == Sequence.SMPTE_24)
-		{
+		else if (divisionType == Sequence.SMPTE_24){
 			this.divMode = true;
 			this.FramesPerSec = -24;
 			this.TicksPerFrame = contents.getResolution();
 			return;
 		}
-		else if (divisionType == Sequence.SMPTE_25)
-		{
+		else if (divisionType == Sequence.SMPTE_25){
 			this.divMode = true;
 			this.FramesPerSec = -25;
 			this.TicksPerFrame = contents.getResolution();
 			return;
 		}
-		else if (divisionType == Sequence.SMPTE_30)
-		{
+		else if (divisionType == Sequence.SMPTE_30)	{
 			this.divMode = true;
 			this.FramesPerSec = -30;
 			this.TicksPerFrame = contents.getResolution();
 			return;
 		}
-		else if (divisionType == Sequence.SMPTE_30DROP)
-		{
+		else if (divisionType == Sequence.SMPTE_30DROP){
 			this.divMode = true;
 			this.FramesPerSec = -29;
 			this.TicksPerFrame = contents.getResolution();
@@ -135,18 +131,15 @@ public class MIDI {
 	
 	/*--- Getters ---*/
 	
-	public String getInternalName()
-	{
+	public String getInternalName(){
 		return this.internalName;
 	}
 	
-	public boolean nameEncoded()
-	{
+	public boolean nameEncoded(){
 		return this.useName;
 	}
 	
-	public Sequence getSequence()
-	{
+	public Sequence getSequence(){
 		return this.contents;
 	}
 	
@@ -154,28 +147,23 @@ public class MIDI {
 	
 	/*--- Setters ---*/
 	
-	public void setInternalName(String name)
-	{
+	public void setInternalName(String name){
 		this.internalName = name;
 		this.useName = true;
 	}
 	
-	public void setWriteBufferDir(String path)
-	{
+	public void setWriteBufferDir(String path){
 		this.tempDir = path;
 	}
 	
 	/*--- Parsing ---*/
 	
-	private MessageType getMessageType(byte stat)
-	{
+	private MessageType getMessageType(byte stat){
 		int istat = Byte.toUnsignedInt(stat);
 		if (istat == 0xFF) return MessageType.META;
 		else if(istat == 0xF0 || istat == 0xF7) return MessageType.SYSEX;
-		else
-		{
-			if (BitStreamer.readABit(stat, 7) && (((istat >> 4) & 0xF) != 0xF))
-			{
+		else{
+			if (BitStreamer.readABit(stat, 7) && (((istat >> 4) & 0xF) != 0xF)){
 				return MessageType.MIDI;
 			}
 			else if (!BitStreamer.readABit(stat, 7)) return MessageType.RUNNING;
@@ -184,8 +172,7 @@ public class MIDI {
 		return null;
 	}
 	
-	private int getFieldNumber(byte stat)
-	{
+	private int getFieldNumber(byte stat){
 		int sInd = Byte.toUnsignedInt(stat);
 		sInd = (sInd >> 4) & 0xF;
 		if (sInd == 0x8) return 2;
@@ -199,28 +186,22 @@ public class MIDI {
 		return -1;
 	}
 	
-	private void readDiv(short d)
-	{
+	private void readDiv(short d){
 		this.divMode = BitStreamer.readABit(d, 15);
-		if (this.divMode)
-		{
+		if (this.divMode){
 			int id = Short.toUnsignedInt(d);
 			this.FramesPerSec = ((id >> 8) & 0x7F); //Maintained negative.
 			this.TicksPerFrame = id & 0xFF;
 		}
-		else
-		{
+		else{
 			this.TicksPerQNote = (int)d;
 		}
 	}
 	
-	private float getDivType()
-	{
+	private float getDivType(){
 		if (!this.divMode) return Sequence.PPQ;
-		else
-		{
-			switch (this.FramesPerSec)
-			{
+		else{
+			switch (this.FramesPerSec){
 			case -24: return Sequence.SMPTE_24;
 			case -25: return Sequence.SMPTE_25;
 			case -29: return Sequence.SMPTE_30DROP;
@@ -232,40 +213,37 @@ public class MIDI {
 		return -1;
 	}
 	
-	private int getDivRes()
-	{
+	private int getDivRes(){
 		if (this.divMode) return this.TicksPerFrame;
 		else return this.TicksPerQNote;
 	}
 	
-	private int parseHeader(FileBuffer mySeq, long stPos)
-	{
-		if (stPos < 0 || stPos >= mySeq.getFileSize()) return -1;
-		if (!mySeq.isBigEndian()) mySeq.setEndian(true);
-		long magLoc = mySeq.findString(stPos, stPos + 0x10, MIDI.HEADER_MAG);
-		if (magLoc < 0) return -1;
-		long cPos = magLoc + 8;
-		short format = mySeq.shortFromFile(cPos);
-		if (format != 1) return -1;
-		this.MIDI_type = format;
-		cPos += 2;
-		short tracks = mySeq.shortFromFile(cPos);
-		cPos += 2;
-		short div = mySeq.shortFromFile(cPos);
+	private int parseHeader(BufferReference data) throws UnsupportedFileTypeException {
+		data.setByteOrder(true);
+		String mstr = data.nextASCIIString(4);
+		if(!HEADER_MAG.equals(mstr)) throw new UnsupportedFileTypeException("MIDI.parseHeader || MIDI magic number not found!");
+		data.add(4L);
+		short format = data.nextShort();
+		if(format != 1) {
+			throw new UnsupportedFileTypeException("MIDI.parseHeader || MIDI is not type 1 MIDI! Not supported.");
+		}
+		
+		MIDI_type = format;
+		short tracks = data.nextShort();
+		short div = data.nextShort();
 		readDiv(div);
+		
 		return (int)tracks;
 	}
 	
-	public static int[] getVLQ(FileBuffer mySeq, long pos)
-	{
+	public static int[] getVLQ(FileBuffer mySeq, long pos){
 		//0 index is the value
 		//1 is the number of bytes it took up
 		boolean zHit = false;
 		int[] VLQ = new int[2];
 		long cPos = pos;
 		int val = 0;
-		while (!zHit)
-		{
+		while (!zHit){
 			byte b = mySeq.getByte(cPos);
 			cPos++;
 			zHit = !(BitStreamer.readABit(b, 7));
@@ -276,120 +254,105 @@ public class MIDI {
 		VLQ[1] = (int)(cPos - pos);
 		return VLQ;
 	}
+	
+	public static int getVLQ(BufferReference ref){
+		boolean zHit = false;
+		int val = 0;
+		while (!zHit){
+			byte b = ref.nextByte();
+			zHit = !(BitStreamer.readABit(b, 7));
+			int ib = Byte.toUnsignedInt(b);
+			val = (val << 7) | (ib & 0x7F);
+		}
+		return val;
+	}
 
-	private boolean parseTrack(FileBuffer mySeq, long trPos, Track t)
-	{
-		if (trPos < 0 || trPos >= mySeq.getFileSize()) return false;
-		long magLoc = mySeq.findString(trPos, trPos + 0x10, MIDI.TRACK_MAG);
-		if (magLoc < 0) return false;
-		long cPos = magLoc + 4;
-		int tLen = mySeq.intFromFile(cPos);
-		cPos += 4;
-		long tEd = cPos + Integer.toUnsignedLong(tLen);
+	private int parseTrack(BufferReference data, Track t) throws UnsupportedFileTypeException {
+		long stpos = data.getBufferPosition();
+		String mstr = data.nextASCIIString(4);
+		if(!TRACK_MAG.equals(mstr)) throw new UnsupportedFileTypeException("MIDI.parseTrack || Track magic number not found!");
+		int datLen = data.nextInt();
+		long tEd = data.getBufferPosition() + Integer.toUnsignedLong(datLen);
 		
 		long tickPos = 0;
 		MidiMessage lastmsg = null;
 		
-		while (cPos < tEd)
-		{
+		while (data.getBufferPosition() < tEd){
 			//1. Get delta time
-			int[] delTime = getVLQ(mySeq, cPos);
-			int delta = delTime[0];
-			cPos += (long)delTime[1];
+			int delta = getVLQ(data);
 			
 			//2. Interpret delta time
 			tickPos += Integer.toUnsignedLong(delta);
 			
 			//3. Figure out message type
-			byte stat = mySeq.getByte(cPos);
-			cPos++;
+			byte stat = data.nextByte();
 			MessageType type = getMessageType(stat);
-			if (type == null) return false;
+			if (type == null) throw new UnsupportedFileTypeException("MIDI.parseTrack || Did not recognize command: " + String.format("%02x", stat));
 			
 			//4. Get message length
 			//5. Copy message
 			//6. Add to track
 			
-			switch(type)
-			{
+			switch(type){
 			case META:
-				byte metaType = mySeq.getByte(cPos);
-				cPos++;
-				
-				int[] varlen = getVLQ(mySeq, cPos);
-				int mLen = varlen[0];
-				cPos += (long)varlen[1];
+				byte metaType = data.nextByte();
+				int mLen = getVLQ(data);
 				
 				byte[] message = new byte[mLen];
-				for (int i = 0; i < mLen; i++)
-				{
-					message[i] = mySeq.getByte(cPos);
-					cPos++;
+				for (int i = 0; i < mLen; i++){
+					message[i] = data.nextByte();
 				}
 				
 				MidiMessage m;
-				try 
-				{
+				try {
 					m = new MetaMessage(metaType, message, mLen);
 					t.add(new MidiEvent(m, tickPos));
 					lastmsg = m;
 				} 
-				catch (InvalidMidiDataException e) 
-				{
+				catch (InvalidMidiDataException e){
 					e.printStackTrace();
-					return false;
+					throw new UnsupportedFileTypeException("MIDI.parseTrack || MIDI data was invalid for meta command " + String.format("%02x", metaType));
 				}
 				break;
 			case MIDI:
-				int bNum = this.getFieldNumber(stat);
-				if (!(bNum == 1 || bNum == 2)) return false;
+				int bNum = getFieldNumber(stat);
+				if (!(bNum == 1 || bNum == 2)) throw new UnsupportedFileTypeException("MIDI.parseTrack || Did not recognize as MIDI channel command: " + String.format("%02x", stat));
 				int istat = Byte.toUnsignedInt(stat);
 				
-				int dat1 = Byte.toUnsignedInt(mySeq.getByte(cPos));
-				cPos++;
+				int dat1 = Byte.toUnsignedInt(data.nextByte());
 				int dat2 = 0;
 				
-				if (bNum == 2)
-				{
-					dat2 = Byte.toUnsignedInt(mySeq.getByte(cPos));
-					cPos++;
+				if (bNum == 2){
+					dat2 = Byte.toUnsignedInt(data.nextByte());
 				}
 				
-				try 
-				{
+				try {
 					MidiMessage mMess = new ShortMessage(istat, dat1, dat2);
 					t.add(new MidiEvent(mMess, tickPos));
 					lastmsg = mMess;
 				} 
-				catch (InvalidMidiDataException e) 
-				{
+				catch (InvalidMidiDataException e){
 					e.printStackTrace();
-					return false;
+					throw new UnsupportedFileTypeException("MIDI.parseTrack || MIDI data was invalid for regular command " + String.format("%02x", stat));
 				}
 				
 				break;
 			case SYSEX:
-				int[] svlq = getVLQ(mySeq, cPos);
-				int smlen = svlq[0];
-				cPos += (long)svlq[1];
+				int smlen = getVLQ(data);
 				
 				byte[] sdata = new byte[smlen];
-				for (int i = 0; i < smlen; i++)
-				{
-					sdata[i] = mySeq.getByte(cPos);
-					cPos++;
+				for (int i = 0; i < smlen; i++){
+					sdata[i] = data.nextByte();
 				}
 				
-				try 
-				{
+				try {
 					MidiMessage sMess = new SysexMessage(Byte.toUnsignedInt(stat), sdata, smlen);
 					t.add(new MidiEvent(sMess, tickPos));
 					lastmsg = sMess;
 				} 
-				catch (InvalidMidiDataException e) 
-				{
+				catch (InvalidMidiDataException e){
 					e.printStackTrace();
-					return false;
+					throw new UnsupportedFileTypeException("MIDI.parseTrack || MIDI data was invalid for sysex command " + String.format("%02x", stat));
 				}
 				
 				break;
@@ -397,99 +360,81 @@ public class MIDI {
 				//In standard MIDI, running status can only apply to direct MIDI events
 				//(No status 0xFn events)
 				if(lastmsg == null){
-					return false;
+					throw new UnsupportedFileTypeException("MIDI.parseTrack || Assumed running status, but nothing to continue run off of.");
 				}
 				
 				int lstat = lastmsg.getStatus();
 				MessageType stype = getMessageType((byte)lstat);
-				if (stype != MIDI.MessageType.MIDI) return false;
+				if (stype != MIDI.MessageType.MIDI) {
+					throw new UnsupportedFileTypeException("MIDI.parseTrack || Assumed running status, but previous command is not compatible.");
+				}
 				
 				int cmd = (lstat >>> 4) & 0xF;
-				if (cmd == 0xC || cmd == 0xD)
-				{
+				if (cmd == 0xC || cmd == 0xD){
 					//Only 1 byte data
 					int d1 = Byte.toUnsignedInt(stat);
-					try 
-					{
+					try{
 						ShortMessage msg = new ShortMessage(lstat, d1, 0);
 						t.add(new MidiEvent(msg, tickPos));
 						lastmsg = msg;
 					} 
-					catch (InvalidMidiDataException e) 
-					{
+					catch (InvalidMidiDataException e) {
 						e.printStackTrace();
-						return false;
+						throw new UnsupportedFileTypeException("MIDI.parseTrack || MIDI data was invalid for command " + String.format("%02x", stat));
 					}
 				}
-				else
-				{
+				else{
 					int d1 = Byte.toUnsignedInt(stat);
-					int d2 = Byte.toUnsignedInt(mySeq.getByte(cPos)); cPos++;
-					//Extra block to interpret running note-on/vel 0 as note-off
-					/*if (cmd == 0x9)
-					{
-						if (d2 == 0)
-						{
-							lstat = 0x90 | (lstat & 0xF);
-							d2 = 0x40;
-						}
-					}*/
-					try 
-					{
+					int d2 = Byte.toUnsignedInt(data.nextByte());
+
+					try {
 						ShortMessage msg = new ShortMessage(lstat, d1, d2);
 						t.add(new MidiEvent(msg, tickPos));
 						lastmsg = msg;
 					} 
-					catch (InvalidMidiDataException e) 
-					{
+					catch (InvalidMidiDataException e) {
 						e.printStackTrace();
-						return false;
+						throw new UnsupportedFileTypeException("MIDI.parseTrack || MIDI data was invalid for command " + String.format("%02x", stat));
 					}
 				}
 				
 				break;
 			default:
-				return false;
+				throw new UnsupportedFileTypeException("MIDI.parseTrack || Could not read command: " + String.format("%02x", stat));
 			}
 			
 		}
-		return true;
+		
+		
+		return (int)(data.getBufferPosition() - stpos);
 	}
 	
-	private void parseMIDI(FileBuffer mySeq, long stPos) throws UnsupportedFileTypeException
-	{
-		int tNum = parseHeader(mySeq, stPos);
-		if (tNum <= 0) throw new UnsupportedFileTypeException();
-		long cPos = stPos + 14; //Hard wired for type 1 midi header size!
-		try 
-		{
+	private void parseMIDI(BufferReference data) throws UnsupportedFileTypeException {
+		int tNum = parseHeader(data);
+		if (tNum <= 0) throw new UnsupportedFileTypeException("MIDI.parseMIDI || At least 1 track required!");
+		
+		try {
 			this.contents = new Sequence(getDivType(), getDivRes());
 		} 
-		catch (InvalidMidiDataException e) 
-		{
+		catch (InvalidMidiDataException e) {
 			e.printStackTrace();
-			throw new UnsupportedFileTypeException();
+			throw new UnsupportedFileTypeException("MIDI.parseMIDI || Could not initialize sequence with provided header parameters.");
 		}
-		for (int i = 0; i < tNum; i++)
-		{
-			Track t = this.contents.createTrack();
-			if (!this.parseTrack(mySeq, cPos, t)) throw new UnsupportedFileTypeException();
-			cPos += this.calculateTrackSize(t);
+		
+		for (int i = 0; i < tNum; i++){
+			Track t = contents.createTrack();
+			this.parseTrack(data, t);
 		}
 	}
-
+	
 	/*--- Serialization ---*/
 	
-	private void clearClutter()
-	{
-		for (String p : this.diskClutter)
-		{
-			try 
-			{
+	private void clearClutter(){
+		for (String p : this.diskClutter){
+			try {
 				Files.delete(Paths.get(p));
 			} 
-			catch (IOException e) 
-			{
+			catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
@@ -497,8 +442,7 @@ public class MIDI {
 		this.diskClutter.clear();
 	}
 	
-	public long calculateTrackSize(Track t)
-	{
+	public long calculateTrackSize(Track t){
 		int events = t.size();
 		long tSize = 0;
 		tSize += 8;
@@ -514,8 +458,7 @@ public class MIDI {
 		return tSize;
 	}
 	
-	public long calculateSize()
-	{
+	public long calculateSize(){
 		long tot = 0;
 		if (this.MIDI_type == 1) tot += 14;
 		//System.out.println("calculateSize | Header added... tot = " + tot);
@@ -529,26 +472,22 @@ public class MIDI {
 		return tot;
 	}
 	
-	private short generateDivision()
-	{
+	private short generateDivision(){
 		short d = 0;
-		if (this.divMode)
-		{
+		if (this.divMode){
 			int id = 0;
 			id = BitStreamer.writeABit(id, true, 15);
 			id = id | ((this.FramesPerSec << 8) & 0x7F00);
 			id = id | (this.TicksPerFrame & 0xFF);
 			d = (short)id;
 		}
-		else
-		{
+		else{
 			d = (short)(this.TicksPerQNote & 0x7FFF);
 		}
 		return d;
 	}
 	
-	public static int VLQlength(int myNumber)
-	{
+	public static int VLQlength(int myNumber){
 		if (myNumber <= 0x7F) return 1;
 		if (myNumber <= 0x3FFF) return 2;
 		if (myNumber <= 0x1FFFFF) return 3;
@@ -556,10 +495,8 @@ public class MIDI {
 		return 0;
 	}
 	
-	public static byte[] makeVLQ(int myNumber)
-	{
-		if (myNumber == 0)
-		{
+	public static byte[] makeVLQ(int myNumber){
+		if (myNumber == 0){
 			byte[] vlq = new byte[1];
 			vlq[0] = 0;
 			return vlq;
@@ -569,8 +506,7 @@ public class MIDI {
 		
 		byte[] vlq = new byte[nBytes];
 
-		for (int i = 0; i < nBytes; i++)
-		{
+		for (int i = 0; i < nBytes; i++){
 			int proto = (myNumber >> (7 * (nBytes - (i + 1)))) & 0x7F;
 			if (i != nBytes - 1) proto = BitStreamer.writeABit(proto, true, 7);
 			vlq[i] = (byte)proto;
@@ -579,10 +515,8 @@ public class MIDI {
 		return vlq;
 	}
 
-	private FileBuffer serializeHeader()
-	{
-		if (this.MIDI_type == 1)
-		{
+	private FileBuffer serializeHeader(){
+		if (this.MIDI_type == 1){
 			//System.out.println("serializeHeader | Size predicted: " + 14);
 			FileBuffer header = new FileBuffer(14, true);
 			header.printASCIIToFile(HEADER_MAG);
@@ -597,79 +531,69 @@ public class MIDI {
 		return null;
 	}
 	
-	private String serializeRawTrack(Track t) throws IOException
-	{
-		String tmppath = FileBuffer.generateTemporaryPath("midi_track");
-		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(tmppath));
+	private FileBuffer serializeRawTrack(Track t) {
 		int ecount = t.size();
+
+		//Do a track scan to estimate size
+		int alloc = 0;
+		for(int i = 0; i < ecount; i++){
+			MidiEvent e = t.get(i);
+			alloc += 4;
+			
+			MidiMessage msg = e.getMessage();
+			alloc += msg.getLength();
+		}
+		
+		FileBuffer out = new FileBuffer(alloc, true);
 		long lasttime = 0;
 		int stat = -1;
-		for(int i = 0; i < ecount; i++)
-		{
+		for(int i = 0; i < ecount; i++){
 			MidiEvent e = t.get(i);
 			long delta = e.getTick() - lasttime;
 			lasttime = e.getTick();
 			byte[] d_vlq = makeVLQ((int)delta);
-			bos.write(d_vlq);
-			//out.write(d_vlq);
+			for(int j = 0; j < d_vlq.length; j++) out.addToFile(d_vlq[j]);
 			
 			//Message
 			MidiMessage msg = e.getMessage();
 			int mstat = msg.getStatus();
-			if(((mstat >>> 4) & 0xF) != 0xF)
-			{
+			byte[] msgbytes = msg.getMessage();
+			if(((mstat >>> 4) & 0xF) != 0xF){
 				//Can use for running status
-				if(mstat != stat)
-				{
+				if(mstat != stat){
 					stat = mstat;
 					//Write full message
-					bos.write(msg.getMessage(), 0, msg.getLength());
-					//out.write(msg.getMessage(), 0, msg.getLength());
+					for(int j = 0; j < msgbytes.length; j++) out.addToFile(msgbytes[j]);
 				}
-				else
-				{
+				else{
 					//Only write data
-					bos.write(msg.getMessage(), 1, msg.getLength()-1);
-					//out.write(msg.getMessage(), 1, msg.getLength()-1);
+					for(int j = 1; j < msgbytes.length; j++) out.addToFile(msgbytes[j]);
 				}
 
 			}
-			else
-			{
+			else{
 				stat = -1;
 				//Write full message
-				bos.write(msg.getMessage(), 0, msg.getLength());
-				//out.write(msg.getMessage(), 0, msg.getLength());
+				for(int j = 0; j < msgbytes.length; j++) out.addToFile(msgbytes[j]);
 			}
 		}
-		bos.close();
-		return tmppath;
-		//return true;
+		return out;
 	}
 	
-	private boolean serializeTrack(Track t, OutputStream out) throws IOException
-	{
-		String tmppath = serializeRawTrack(t);
-		int tsz = (int)FileBuffer.fileSize(tmppath);
-		//FileBuffer tmp = new FileBuffer(tmppath, true);
+	private boolean serializeTrack(Track t, OutputStream out) throws IOException{
+		FileBuffer tdat = serializeRawTrack(t);
+		int tsz = (int)tdat.getFileSize();
+
 		FileBuffer head = new FileBuffer(8, true);
 		head.printASCIIToFile(TRACK_MAG);
 		head.addToFile(tsz);
-		/*CompositeBuffer trck = new CompositeBuffer(2);
-		trck.addToFile(head);
-		trck.addToFile(tmp);
-		Files.deleteIfExists(Paths.get(tmppath));
-		return trck;*/
-		
+
 		head.writeToStream(out);
-		FileBuffer tmp = FileBuffer.createBuffer(tmppath);
-		tmp.writeToStream(out);
-		Files.deleteIfExists(Paths.get(tmppath));
+		tdat.writeToStream(out);
 		return true;
 	}
 	
-	public boolean serializeTo(OutputStream out) throws IOException
-	{
+	public boolean serializeTo(OutputStream out) throws IOException{
 		Track[] tList = contents.getTracks();
 		boolean good = true;
 		serializeHeader().writeToStream(out);
@@ -677,42 +601,35 @@ public class MIDI {
 		return good;
 	}
 
-	public void writeMIDI(String path) throws IOException
-	{
+	public void writeMIDI(String path) throws IOException{
 		//System.out.println("writeMIDI | called... path = " + path); 
-		if (this.tempDir == null || !FileBuffer.directoryExists(this.tempDir))
-		{
+		if (this.tempDir == null || !FileBuffer.directoryExists(this.tempDir)){
 			this.tempDir = FileBuffer.chopPathToDir(path);
 		}
 		//System.out.println("writeMIDI | tempDir = " + tempDir); 
-		try 
-		{
+		try {
 			BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(path));
 			serializeTo(bos);
 			bos.close();
 		} 
-		catch (IOException e) 
-		{
+		catch (IOException e) {
 			e.printStackTrace();
 		}
-		finally
-		{
+		finally{
 			this.clearClutter();
 		}
 	}
 	
 	/*--- Conversion ---*/
 	
-	public static int bpm2uspqn(int bpm, double beatsPerQuarterNote)
-	{
+	public static int bpm2uspqn(int bpm, double beatsPerQuarterNote){
 		double n = 60000000.0/(double)bpm; 
 		//n is now us per beat
 		//n /= beatsPerQuarterNote;
 		return (int)Math.round(n);
 	}
 	
-	public static int uspqn2bpm(int uspqn, double beatsPerQuarterNote)
-	{
+	public static int uspqn2bpm(int uspqn, double beatsPerQuarterNote){
 		//double n = uspqn * beatsPerQuarterNote;
 		//n = n/60000000.0;
 		//n = 1.0/n;
@@ -720,37 +637,30 @@ public class MIDI {
 		return (int)Math.round(n);
 	}
 	
-	public boolean writeInfo(BufferedWriter bw)
-	{
-		try
-		{
+	public boolean writeInfo(BufferedWriter bw){
+		try{
 			bw.write("MIDI File Structure ===============\n");
 			bw.write("Midi Type: " + this.MIDI_type + "\n");
 			bw.write("Division Type: ");
 			if (this.divMode) bw.write("SMPTE\n");
 			else bw.write("Ticks per Beat\n");
-			if (this.divMode)
-			{
+			if (this.divMode){
 				bw.write("\tFrames Per Second: " + (this.FramesPerSec * -1) + "\n"); 
 				bw.write("\tTicks Per Frame: " + (this.TicksPerFrame) + "\n"); 
 			}
-			else
-			{
+			else{
 				bw.write("\tTicks Per Quarter Note: " + (this.TicksPerQNote) + "\n"); 
 			}
 			bw.write("Internal Name: " + this.internalName + "\n");
-			if (this.contents != null)
-			{
+			if (this.contents != null){
 				int nTr = this.contents.getTracks().length;
 				bw.write("Number of Tracks: " + nTr + "\n");
 				bw.write("\n");
-				for (int i = 0; i < nTr; i++)
-				{
+				for (int i = 0; i < nTr; i++){
 					bw.write("\t ----- Track " + (i + 1) + "\n");
 					Track t = this.contents.getTracks()[i];
 					int nEv = t.size();
-					for (int j = 0; j < nEv; j++)
-					{
+					for (int j = 0; j < nEv; j++){
 						MidiEvent e = t.get(j);
 						bw.write("\t\t");
 						bw.write("[" + e.getTick() + "] ");
@@ -758,8 +668,7 @@ public class MIDI {
 						if (stat < 0x10) bw.write("0");
 						bw.write(Integer.toHexString(stat) + " | ");
 						int mlen = e.getMessage().getLength();
-						for (int k = 1; k < mlen; k++)
-						{
+						for (int k = 1; k < mlen; k++){
 							int d = Byte.toUnsignedInt(e.getMessage().getMessage()[k]);
 							if (d < 0x10) bw.write("0");
 							bw.write(Integer.toHexString(d) + " ");
@@ -769,49 +678,41 @@ public class MIDI {
 					bw.write("\n");
 				}
 			}
-			else
-			{
+			else{
 				bw.write("MIDI object contains no sequence.\n");
 			}
 		}
-		catch(Exception e)
-		{
+		catch(Exception e){
 			e.printStackTrace();
 			return false;
 		}
 		return true;
 	}
 	
-	public String toString()
-	{
+	public String toString(){
 		String s = "";
 		s += "MIDI File Structure ===============\n";
 		s += "Midi Type: " + this.MIDI_type + "\n";
 		s += "Division Type: ";
 		if (this.divMode) s += "SMPTE\n";
 		else s += "Ticks per Beat\n";
-		if (this.divMode)
-		{
+		if (this.divMode){
 			s += "\tFrames Per Second: " + (this.FramesPerSec * -1) + "\n"; 
 			s += "\tTicks Per Frame: " + (this.TicksPerFrame) + "\n"; 
 		}
-		else
-		{
+		else{
 			s += "\tTicks Per Quarter Note: " + (this.TicksPerQNote) + "\n"; 
 		}
 		s += "Internal Name: " + this.internalName + "\n";
-		if (this.contents != null)
-		{
+		if (this.contents != null){
 			int nTr = this.contents.getTracks().length;
 			s += "Number of Tracks: " + nTr + "\n";
 			s += "\n";
-			for (int i = 0; i < nTr; i++)
-			{
+			for (int i = 0; i < nTr; i++){
 				s += "\t ----- Track " + (i + 1) + "\n";
 				Track t = this.contents.getTracks()[i];
 				int nEv = t.size();
-				for (int j = 0; j < nEv; j++)
-				{
+				for (int j = 0; j < nEv; j++){
 					MidiEvent e = t.get(j);
 					s += "\t\t";
 					s += "[" + e.getTick() + "] ";
@@ -819,8 +720,7 @@ public class MIDI {
 					if (stat < 0x10) s += "0";
 					s += Integer.toHexString(stat) + " | ";
 					int mlen = e.getMessage().getLength();
-					for (int k = 1; k < mlen; k++)
-					{
+					for (int k = 1; k < mlen; k++){
 						int d = Byte.toUnsignedInt(e.getMessage().getMessage()[k]);
 						if (d < 0x10) s += "0";
 						s += Integer.toHexString(d) + " ";
@@ -830,15 +730,13 @@ public class MIDI {
 				s += "\n";
 			}
 		}
-		else
-		{
+		else{
 			s += "MIDI object contains no sequence.\n";
 		}
 		return s;
 	}
 	
-	public static String getNoteName(int midiNote)
-	{
+	public static String getNoteName(int midiNote){
 		String note = NOTES[Math.abs(midiNote%12)];
 		int octave = (midiNote/12) - 1;
 		return note + octave;
