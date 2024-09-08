@@ -16,14 +16,16 @@ import waffleoRai_Utils.FileBuffer;
  * 	Added requirement for data-only write to not have any M2F2 sectors.
  * 2017.11.18 | 2.0.1 -> 2.1.0
  * 	For Java 9 compatibility, removed all Observer/Observable pieces
+ * 2024.08.25 | 2.1.0 -> 2.1.1
+ * 	BCD bug fix
  * */
 
 /**
  * Class to hold basic ISO image information - split by sector.
  * This does not parse the directory tree or file information at all.
  * @author Blythe Hospelhorn
- * @version 2.1.0
- * @since November 18, 2017
+ * @version 2.1.1
+ * @since August 25, 2024
  */
 public class ISO {
 	
@@ -836,9 +838,10 @@ public class ISO {
 		int valR = val % 10;
 		int valL = val / 10;
 		
-		byte b = (byte)(valL + valR);
+		//byte b = (byte)(valL + valR);
+		int i = (valL << 4) | valR;
 		
-		return b;
+		return (byte)i;
 	}
 	
 	/**

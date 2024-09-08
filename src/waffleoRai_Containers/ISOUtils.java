@@ -129,7 +129,7 @@ public class ISOUtils {
 				x ^= gf8ProductTable[j][b0];
 				y ^= gf8ProductTable[j][b1];
 				cpos += step1;
-				if((step1 == (44 << 1)) && (cpos >= ISO.SECSIZE)) {
+				if((step1 == (44 << 1)) && (cpos >= ECCQ_OFFSET)) {
 					cpos -= (1118 << 1);
 				}
 			}
@@ -260,17 +260,25 @@ public class ISOUtils {
 		if(rawSector == null) return false;
 		if(rawSector.length < ISO.SECSIZE) return false;
 		
-		int edc = calculateEDC(rawSector, 0, EDC_OFFSET_M2F1);
+		int edc = calculateEDC(rawSector, 0x10, EDC_OFFSET_M2F1 - 0x10);
 		for(int i = 0; i < 4; i++) {
 			rawSector[EDC_OFFSET_M2F1 + i] = (byte)(edc & 0xff);
 			edc >>>= 8;
 		}
 		
 		//ECC1
+		byte[] temp = new byte[4];
+		for(int i = 0; i < 4; i++) {
+			temp[i] = rawSector[i+0xc];
+			rawSector[i+0xc] = 0;
+		}
 		calculateParityP(rawSector);
 		
 		//ECC2
 		calculateParityQ(rawSector);
+		for(int i = 0; i < 4; i++) {
+			rawSector[i+0xc] = temp[i];
+		}
 		
 		return true;
 	}
@@ -324,7 +332,7 @@ public class ISOUtils {
 		if(rawSector == null) return false;
 		if(rawSector.length < ISO.SECSIZE) return false;
 		
-		int edc = calculateEDC(rawSector, 0, EDC_OFFSET_M2F2);
+		int edc = calculateEDC(rawSector, 0x10, EDC_OFFSET_M2F2 - 0x10);
 		for(int i = 0; i < 4; i++) {
 			rawSector[EDC_OFFSET_M2F2 + i] = (byte)(edc & 0xff);
 			edc >>>= 8;

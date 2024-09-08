@@ -66,6 +66,8 @@ public class AiffFile {
 	private float[][] add_block;
 	private int block_pos = 0;
 	
+	private byte[] comprData; //Compressed raw data
+	
 	/*----- Init -----*/
 	
 	protected AiffFile(){
@@ -140,10 +142,17 @@ public class AiffFile {
 		return samps;
 	}
 	
+	public byte[] getAifcRawSndData() {
+		return comprData;
+	}
+	
 	/*----- Setters -----*/
 	
 	public void setBitDepth(short val){bitDepth = val;}
 	public void setSampleRate(double val){sampleRate = val;}
+	public void setCompressionId(int val) {compressionId = val;}
+	public void setCompressionName(String val) {compressionName = val;}
+	public void setAifcRawSndData(byte[] val) {comprData = val;}
 	
 	public void setSustainLoop(int mode, int start, int end){
 		includeInst = true;
@@ -233,32 +242,37 @@ public class AiffFile {
 		}
 	}
 	
-	protected void readSSND(BufferReference data){
-		//Only auto read if not compressed.
-		if(compressionId == 0) return;
-		
-		float max = (float)(1 << (bitDepth - 1)) - 1;
-		float[][] sample_dat = new float[channelCount][frameCount];
-		int rawsmpl = 0;
-		for(int f = 0; f < frameCount; f++){
-			for(int c = 0; c < channelCount; c++){
-				switch(bitDepth){
-				case 8:
-					rawsmpl = (int)data.nextByte();
-					break;
-				case 16:
-					rawsmpl = (int)data.nextShort();
-					break;
-				case 24:
-					rawsmpl = data.next24Bits();
-					break;
-				case 32:
-					rawsmpl = data.nextInt();
-					break;
-				}
-				sample_dat[c][f] = ((float)rawsmpl)/max;
-			}
+	protected void readSSND(BufferReference data, int cSize){
+		if(compressionId != 0) {
+			//Read raw
+			comprData = new byte[cSize];
+			int i = 0;
+			while(data.hasRemaining()) comprData[i++] = data.nextByte();
 		}
+		else {
+			float max = (float)(1 << (bitDepth - 1)) - 1;
+			float[][] sample_dat = new float[channelCount][frameCount];
+			int rawsmpl = 0;
+			for(int f = 0; f < frameCount; f++){
+				for(int c = 0; c < channelCount; c++){
+					switch(bitDepth){
+					case 8:
+						rawsmpl = (int)data.nextByte();
+						break;
+					case 16:
+						rawsmpl = (int)data.nextShort();
+						break;
+					case 24:
+						rawsmpl = data.next24Bits();
+						break;
+					case 32:
+						rawsmpl = data.nextInt();
+						break;
+					}
+					sample_dat[c][f] = ((float)rawsmpl)/max;
+				}
+			}
+		}	
 	}
 	
 	protected void readINST(BufferReference data){
@@ -301,7 +315,7 @@ public class AiffFile {
 		//Look for SSND (throw if not found)
 		chunk = aiff.reader.getFirstTopLevelChunk(MAGIC_SSND);
 		if(chunk == null) throw new FileBuffer.UnsupportedFileTypeException("AiffFile.readAiff || SSND chunk not found!");
-		aiff.readSSND(chunk.open());
+		aiff.readSSND(chunk.open(), chunk.getDataSize());
 		chunk.clearCache();
 		
 		//Look for INST
@@ -379,6 +393,29 @@ public class AiffFile {
 		return out;
 	}
 	
+	public FileBuffer serializeSSNDCompr(){
+		if(comprData == null) {
+			FileBuffer out = new FileBuffer(16, true);
+			out.printASCIIToFile(MAGIC_SSND);
+			out.addToFile(8);
+			out.addToFile(0);
+			out.addToFile(0);
+			return out;
+		}
+		
+		int sdat_size = comprData.length;
+		FileBuffer out = new FileBuffer(sdat_size + 16, true);
+		
+		out.printASCIIToFile(MAGIC_SSND);
+		out.addToFile(sdat_size+8);
+		out.addToFile(0); //Offset (usually 0 anyway)
+		out.addToFile(0); //Block size (usually 0 anyway)
+		
+		for(int i = 0; i < comprData.length; i++) out.addToFile(comprData[i]);
+		
+		return out;
+	}
+	
 	public FileBuffer serializeSSND(){
 		int sdat_size = frameCount * channelCount * (bitDepth >>> 3);
 		FileBuffer out = new FileBuffer(sdat_size + 16, true);
@@ -443,7 +480,11 @@ public class AiffFile {
 		FileBuffer header = new FileBuffer(12, true);
 		
 		FileBuffer comm = serializeCOMM();
-		FileBuffer ssnd = serializeSSND();
+		
+		FileBuffer ssnd = null;
+		if(this.isCompressed()) ssnd = serializeSSNDCompr();
+		else ssnd = serializeSSND();
+		
 		FileBuffer inst = null;
 		if(includeInst) inst = serializeINST();
 		
@@ -454,7 +495,8 @@ public class AiffFile {
 		}
 		header.printASCIIToFile(MAGIC_FORM);
 		header.addToFile(size+4);
-		header.printASCIIToFile(MAGIC_AIFF);
+		if(this.isCompressed()) header.printASCIIToFile(MAGIC_AIFC);
+		else header.printASCIIToFile(MAGIC_AIFF);
 		
 		out.addToFile(header);
 		out.addToFile(comm);
