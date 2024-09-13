@@ -1063,26 +1063,29 @@ public class WAV implements RandomAccessSound{
 			for (int i = 0; i < frames; i++) 
 			{
 				int samp = c.getSample(i);
-				samp = Sound.scaleSampleUp8Bits(samp, BitDepth.EIGHT_BIT_UNSIGNED);
-				samp = Sound.scaleSampleToSigned(samp, BitDepth.SIXTEEN_BIT_UNSIGNED);
-				scaled[i] = samp;
+				//samp = Sound.scaleSampleUp8Bits(samp, BitDepth.EIGHT_BIT_UNSIGNED);
+				//samp = Sound.scaleSampleToSigned(samp, BitDepth.SIXTEEN_BIT_UNSIGNED);
+				samp -= 0x80;
+				double r = (double)samp / 255.0;
+				int u16 = (int)Math.round(r * (double)0x7fff);
+				scaled[i] = u16;
 			}
 			break;
 		case THIRTYTWO_BIT_SIGNED:
 			for (int i = 0; i < frames; i++) 
 			{
 				int samp = c.getSample(i);
-				samp = Sound.scaleSampleDown8Bits(samp, BitDepth.THIRTYTWO_BIT_SIGNED);
-				samp = Sound.scaleSampleDown8Bits(samp, BitDepth.TWENTYFOUR_BIT_SIGNED);
-				scaled[i] = samp;
+				//samp = Sound.scaleSampleDown8Bits(samp, BitDepth.THIRTYTWO_BIT_SIGNED);
+				//samp = Sound.scaleSampleDown8Bits(samp, BitDepth.TWENTYFOUR_BIT_SIGNED);
+				scaled[i] = samp >> 16;
 			}
 			break;
 		case TWENTYFOUR_BIT_SIGNED:
 			for (int i = 0; i < frames; i++) 
 			{
 				int samp = c.getSample(i);
-				samp = Sound.scaleSampleDown8Bits(samp, BitDepth.TWENTYFOUR_BIT_SIGNED);
-				scaled[i] = samp;
+				//samp = Sound.scaleSampleDown8Bits(samp, BitDepth.TWENTYFOUR_BIT_SIGNED);
+				scaled[i] = samp >> 8;
 			}
 			break;
 		default:

@@ -152,7 +152,9 @@ public class AiffFile {
 	public void setSampleRate(double val){sampleRate = val;}
 	public void setCompressionId(int val) {compressionId = val;}
 	public void setCompressionName(String val) {compressionName = val;}
+	
 	public void setAifcRawSndData(byte[] val) {comprData = val;}
+	public void setFrameCountDirect(int val) {frameCount = val;}
 	
 	public void setSustainLoop(int mode, int start, int end){
 		includeInst = true;
