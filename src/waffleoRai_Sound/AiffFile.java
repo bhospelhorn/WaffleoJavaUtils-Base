@@ -4,14 +4,19 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+
 import waffleoRai_Files.AIFFReader;
 import waffleoRai_Files.AIFFReader.AIFFChunk;
+import waffleoRai_SoundSynth.AudioSampleStream;
+import waffleoRai_SoundSynth.soundformats.PCMSampleStream;
 import waffleoRai_Utils.BufferReference;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
 import waffleoRai_Utils.MultiFileBuffer;
 
-public class AiffFile {
+public class AiffFile implements RandomAccessSound {
 	
 	/*----- Constants -----*/
 	
@@ -29,6 +34,7 @@ public class AiffFile {
 	public static final short LOOPMODE_PINGPONG = 2;
 	
 	private static final float MAX_16 = 0x7fff;
+	private static final float MAX_24 = 0x7fffff;
 
 	/*----- Instance Variables -----*/
 	
@@ -66,6 +72,9 @@ public class AiffFile {
 	private float[][] add_block;
 	private int block_pos = 0;
 	
+	private float[][] bookmark_block; //Random access
+	private int bookmark_start = 0;
+	
 	private byte[] comprData; //Compressed raw data
 	
 	/*----- Init -----*/
@@ -87,8 +96,8 @@ public class AiffFile {
 	public boolean isCompressed(){return compressionId != 0;}
 	public short getChannelCount(){return channelCount;}
 	public int getFrameCount(){return frameCount;}
-	public short getBitDepth(){return bitDepth;}
-	public double getSampleRate(){return sampleRate;}
+	public short getRawBitDepth(){return bitDepth;}
+	public double getRawSampleRate(){return sampleRate;}
 	public int getCompressionId(){return compressionId;}
 	public String getCompressionName(){return compressionName;}
 	public boolean hasSustainLoop(){return loops_playMode != LOOPMODE_NONE;}
@@ -115,27 +124,6 @@ public class AiffFile {
 		if(add_block != null){
 			for(int j = 0; j < block_pos; j++){
 				samps[i++] = add_block[channel][j];
-			}
-		}
-		
-		return samps;
-	}
-	
-	public int[] getSamples16(int channel){
-		if(frameCount < 1) return null;
-		int[] samps = new int[frameCount];
-
-		int i = 0;
-		for(float[][] block : samples){
-			int bsize = block[channel].length;
-			for(int j = 0; j < bsize; j++){
-				samps[i++] = Math.round(block[channel][j] * MAX_16);
-			}
-		}
-		
-		if(add_block != null){
-			for(int j = 0; j < block_pos; j++){
-				samps[i++] = Math.round(add_block[channel][j] * MAX_16);
 			}
 		}
 		
@@ -555,6 +543,209 @@ public class AiffFile {
 		data.addToFile((short)exp);
 		data.addToFile(mbits);
 		return true;
+	}
+	
+	/*----- Sound Interface -----*/
+	
+	public AudioFormat getFormat() {
+		AudioFormat fmt = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, (float)sampleRate, 
+				bitDepth, 
+				channelCount, (bitDepth/8) * channelCount,
+				(float)sampleRate, true);
+		return fmt;
+	}
+	
+	public AudioInputStream getStream(){
+		//TODO cbf
+		return null;
+	}
+	
+	public AudioSampleStream createSampleStream(){
+		return new PCMSampleStream(this);
+	}
+	
+	public AudioSampleStream createSampleStream(boolean loop){
+		return new PCMSampleStream(this, loop);
+	}
+
+	public void setActiveTrack(int tidx) {}
+	public int countTracks() {return 1;}
+	
+	public int totalFrames() {return frameCount;}
+	public int totalChannels() {return channelCount;}
+	
+	public Sound getSingleChannel(int channel){
+		AiffFile copy = new AiffFile();
+		copy.channelCount = 1;
+		copy.bitDepth = this.bitDepth;
+		copy.sampleRate = this.sampleRate;
+		copy.compressionId = this.compressionId;
+		copy.compressionName = this.compressionName;
+		copy.includeInst = this.includeInst;
+		copy.baseNote = this.baseNote;
+		copy.detune = this.detune;
+		copy.lowNote = this.lowNote;
+		copy.highNote = this.highNote;
+		copy.lowVel = this.lowVel;
+		copy.highVel = this.highVel;
+		copy.gain = this.gain;
+		copy.loops_playMode = this.loops_playMode;
+		copy.loops_start = this.loops_start;
+		copy.loops_end = this.loops_end;
+		copy.loopr_playMode = this.loopr_playMode;
+		copy.loopr_start = this.loopr_start;
+		copy.loopr_end = this.loopr_end;
+		
+		copy.allocateFrames(this.frameCount);
+		for(float[][] block : samples){
+			int bsize = block[channel].length;
+			for(int j = 0; j < bsize; j++){
+				copy.addFrame(new int[] {(int)block[channel][j]});
+			}
+		}
+		
+		if(add_block != null){
+			for(int j = 0; j < block_pos; j++){
+				copy.addFrame(new int[] {(int)add_block[channel][j]});
+			}
+		}
+		return copy;
+	}
+	
+	public int[] getRawSamples(int channel){
+		if(frameCount < 1) return null;
+		int[] samps = new int[frameCount];
+
+		int i = 0;
+		for(float[][] block : samples){
+			int bsize = block[channel].length;
+			for(int j = 0; j < bsize; j++){
+				samps[i++] = Math.round(block[channel][j]);
+			}
+		}
+		
+		if(add_block != null){
+			for(int j = 0; j < block_pos; j++){
+				samps[i++] = Math.round(add_block[channel][j]);
+			}
+		}
+		
+		return samps;
+	}
+	
+	public int[] getSamples_16Signed(int channel){
+		if(frameCount < 1) return null;
+		int[] samps = new int[frameCount];
+
+		int i = 0;
+		for(float[][] block : samples){
+			int bsize = block[channel].length;
+			for(int j = 0; j < bsize; j++){
+				samps[i++] = Math.round(block[channel][j] * MAX_16);
+			}
+		}
+		
+		if(add_block != null){
+			for(int j = 0; j < block_pos; j++){
+				samps[i++] = Math.round(add_block[channel][j] * MAX_16);
+			}
+		}
+		
+		return samps;
+	}
+	
+	public int[] getSamples_24Signed(int channel){
+		if(frameCount < 1) return null;
+		int[] samps = new int[frameCount];
+
+		int i = 0;
+		for(float[][] block : samples){
+			int bsize = block[channel].length;
+			for(int j = 0; j < bsize; j++){
+				samps[i++] = Math.round(block[channel][j] * MAX_24);
+			}
+		}
+		
+		if(add_block != null){
+			for(int j = 0; j < block_pos; j++){
+				samps[i++] = Math.round(add_block[channel][j] * MAX_24);
+			}
+		}
+		
+		return samps;
+	}
+	
+	public BitDepth getBitDepth(){
+		switch(bitDepth){
+		case 8: return BitDepth.EIGHT_BIT_UNSIGNED;
+		case 16: return BitDepth.SIXTEEN_BIT_SIGNED;
+		case 24: return BitDepth.TWENTYFOUR_BIT_SIGNED;
+		case 32: return BitDepth.THIRTYTWO_BIT_SIGNED;
+		}
+		return null;
+	}
+	
+	public int getSampleRate(){return (int)sampleRate;}
+	
+	public boolean loops(){return loops_playMode != LOOPMODE_NONE;}
+	public int getLoopFrame(){return loops_start;}
+	public int getLoopEndFrame(){return loops_end;}
+	
+	public int getUnityNote(){return baseNote;}
+	public int getFineTune(){return detune;}
+	
+	public int getSample(int channel, int frame){
+		if(channel < 0) return 0;
+		if(frame < 0) return 0;
+		if(channel >= this.channelCount) return 0;
+		if(frame >= this.frameCount) return 0;
+		
+		if(bookmark_block != null) {
+			//In range?
+			if((frame >= bookmark_start) && (frame < (bookmark_start + bookmark_block[0].length))) {
+				return Math.round(bookmark_block[channel][frame - bookmark_start]);
+			}
+		}
+		
+		//Cache miss.
+		int f = 0;
+		for(float[][] block : samples){
+			int bsize = block[channel].length;
+			if(frame >= f) {
+				if(frame < (f + bsize)) {
+					bookmark_block = block;
+					bookmark_start = f;
+					return Math.round(bookmark_block[channel][frame - bookmark_start]);
+				}
+			}
+			f += bsize;
+		}
+		
+		return 0;
+	}
+	
+	public byte[] frame2Bytes(int frame){
+		int fSize = channelCount * (bitDepth >>> 3);
+		FileBuffer buff = new FileBuffer(fSize, true);
+		for(int c = 0; c < channelCount; c++) {
+			int samp = getSample(c, frame);
+			switch(bitDepth) {
+			case 8:
+				buff.addToFile((byte)samp);
+				break;
+			case 16:
+				buff.addToFile((short)samp);
+				break;
+			case 24:
+				buff.add24ToFile(samp);
+				break;
+			case 32:
+				buff.addToFile(samp);
+				break;
+			}
+		}
+
+		return buff.getBytes();
 	}
 	
 }
