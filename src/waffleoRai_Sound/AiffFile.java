@@ -235,7 +235,8 @@ public class AiffFile implements RandomAccessSound {
 	protected void readSSND(BufferReference data, int cSize){
 		if(compressionId != 0) {
 			//Read raw
-			comprData = new byte[cSize];
+			data.add(8);
+			comprData = new byte[cSize-8];
 			int i = 0;
 			while(data.hasRemaining()) comprData[i++] = data.nextByte();
 		}
@@ -510,8 +511,10 @@ public class AiffFile implements RandomAccessSound {
 			return Double.NaN;
 		}
 		
-		double mantissa_f = (double)mantissa / (double)(1L << 63);
-		return sign * mantissa_f * Math.pow(2.0, (double)(exp - 0x3fff));
+		mantissa &= ~(1L << 63);
+		//double mantissa_f = (double) mantissa;
+		double mantissa_f = (double)mantissa / (double)~(1L << 63);
+		return sign * (mantissa_f + 1.0) * Math.pow(2.0, (double)(exp - 0x3fff));
 	}
 	
 	public static boolean writeFloat80(double value, FileBuffer data){

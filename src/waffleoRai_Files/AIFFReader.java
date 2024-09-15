@@ -138,6 +138,7 @@ public class AIFFReader {
 			}
 			
 			rdr.top_level.addValue(aiffch.magic, aiffch);
+			data.add(csize);
 		}
 		
 		return rdr;
