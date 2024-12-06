@@ -375,7 +375,7 @@ public class MidiMessageGenerator {
 		if(text == null || text.isEmpty()) return null;
 		byte[] bytes = text.getBytes();
 		int len = text.length();
-		return new MetaMessage(0x01, bytes, len);
+		return new MetaMessage(MIDIMetaCommands.TEXT, bytes, len);
 	}
 	
 	public MidiMessage genMarker(String text) throws InvalidMidiDataException
@@ -383,7 +383,7 @@ public class MidiMessageGenerator {
 		if(text == null || text.isEmpty()) text = "MARKER";
 		byte[] bytes = text.getBytes();
 		int len = text.length();
-		return new MetaMessage(0x06, bytes, len);
+		return new MetaMessage(MIDIMetaCommands.MARKER, bytes, len);
 	}
 	
 	public MidiMessage genTrackName(String text) throws InvalidMidiDataException
@@ -391,12 +391,58 @@ public class MidiMessageGenerator {
 		if(text == null || text.isEmpty()) return null;
 		byte[] bytes = text.getBytes();
 		int len = text.length();
-		return new MetaMessage(0x03, bytes, len);
+		return new MetaMessage(MIDIMetaCommands.NAME, bytes, len);
 	}
 	
 	public MidiMessage genTrackEnd() throws InvalidMidiDataException
 	{
-		return new MetaMessage(0x2F, null, 0);
+		return new MetaMessage(MIDIMetaCommands.END, null, 0);
+	}
+	
+	public MidiMessage genTimeSignatureSet(int beats, int div, int tpqn) throws InvalidMidiDataException {
+		byte[] bytes = new byte[4];
+		bytes[0] = (byte)beats;
+		bytes[3] = (byte)8; //32nd notes per quarter note. I guess this is variable, but default to 8?
+		
+		int divPwr = 0;
+		while(div != 0) {
+			div >>= 1;
+			divPwr++;
+		}
+		divPwr--;
+		bytes[1] = (byte)divPwr;
+		
+		//Ticks per metronome click
+		switch(divPwr) {
+		case 1:
+			//Denom is 2
+			bytes[2] = (byte)(tpqn << 1);
+			break;
+		case 3:
+			//Denom is 8
+			if((beats & 0x1) != 0) {
+				//Put on the 8th note
+				bytes[2] = (byte)(tpqn >>> 1);
+			}
+			else {
+				if((beats & 0x2) != 0) {
+					//Dotted quarter
+					bytes[2] = (byte)(tpqn + (tpqn >>> 1));
+				}
+				else {
+					//Quarter
+					bytes[2] = (byte)tpqn;
+				}
+			}
+			break;
+		case 2:
+		default:
+			//Denom is 4 or other.
+			bytes[2] = (byte)tpqn;
+			break;
+		}
+		
+		return new MetaMessage(MIDIMetaCommands.TIMESIG, bytes, 4);
 	}
 	
 	public MidiMessage genTempoSet(int bpm, double beatsPerQuarterNote) throws InvalidMidiDataException
@@ -417,7 +463,7 @@ public class MidiMessageGenerator {
 		tempo[0] = (byte)((microseconds_per_qn >>> 16) & 0xFF);
 		tempo[1] = (byte)((microseconds_per_qn >>> 8) & 0xFF);
 		tempo[2] = (byte)(microseconds_per_qn & 0xFF);
-		return new MetaMessage(0x51, tempo, 3);
+		return new MetaMessage(MIDIMetaCommands.TEMPO, tempo, 3);
 	}
 	
 	/*--- System Commands ---*/

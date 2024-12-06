@@ -69,6 +69,10 @@ public class SeqEventLister implements SequenceController{
 		writeln("mnote \"" + note + "\"", master_writer);
 	}
 
+	public void setTimeSignature(int beats, int div) {
+		writeln("timesig " + beats + "|" + div, master_writer);
+	}
+	
 	public void setChannelVolume(int ch, byte value) {
 		writeln("cvol " + value, channel_writers[ch]);
 	}
@@ -104,6 +108,14 @@ public class SeqEventLister implements SequenceController{
 	public void setReverbSend(int ch, byte value) {
 		writeln("rvb " + value, channel_writers[ch]);
 	}
+	
+	public void setTremoloSend(int ch, byte value) {
+		writeln("trml " + value, channel_writers[ch]);
+	}
+	
+	public void setChorusSend(int ch, byte value) {
+		writeln("chrs " + value, channel_writers[ch]);
+	}
 
 	public void setVibratoSpeed(int ch, double value) {
 		writeln("vibspeed " + value, channel_writers[ch]);
@@ -126,6 +138,11 @@ public class SeqEventLister implements SequenceController{
 		else writeln("portoff", channel_writers[ch]);
 	}
 
+	public void setLegato(int ch, boolean on) {
+		if(on) writeln("legon", channel_writers[ch]);
+		else writeln("legoff", channel_writers[ch]);
+	}
+	
 	public void setProgram(int ch, int bank, int program) {
 		writeln("chbp " + bank + " " + program, channel_writers[ch]);
 	}

@@ -50,6 +50,10 @@ public class MIDIInterpreter {
 		public int eff1;
 		public int eff2;
 		
+		public int rvb_send;
+		public int chrs_send;
+		public int trml_send;
+		
 		public int master_vol;
 		
 		public ChannelStatus(int idx){
@@ -78,7 +82,13 @@ public class MIDIInterpreter {
 			eff1 &= mask2;
 			if((eff2 & mask1) != 0) target.setEffect2(ch_idx, (byte)(eff2 >>> 8));
 			eff2 &= mask2;
-			if((port_time & mask1) != 0) target.setControllerValue(ch_idx, 0x05, port_time & mask2, false);
+			if((rvb_send & mask1) != 0) target.setReverbSend(ch_idx, (byte)(rvb_send));
+			rvb_send &= mask2;
+			if((chrs_send & mask1) != 0) target.setChorusSend(ch_idx, (byte)(chrs_send));
+			chrs_send &= mask2;
+			if((trml_send & mask1) != 0) target.setTremoloSend(ch_idx, (byte)(trml_send));
+			trml_send &= mask2;
+			if((port_time & mask1) != 0) target.setControllerValue(ch_idx, MIDIControllers.PORTAMENTO_TIME, port_time & mask2, false);
 			port_time &= mask2;
 			
 			while(!nrpn_deque.isEmpty()){
@@ -163,68 +173,77 @@ public class MIDIInterpreter {
 		ChannelStatus cs = channel_values[channel];
 		byte[] mbytes = msg.getMessage();
 		switch(mbytes[1]){
-		case 0x00: //Bank select (hi)
+		case MIDIControllers.BANK_SELECT: //Bank select (hi)
 			cs.bank = ChannelStatus.writeValueTo(cs.bank, mbytes[2], true);
 			break;
-		case 0x01: //mod wheel (hi)
+		case MIDIControllers.MOD_WHEEL: //mod wheel (hi)
 			cs.mod = ChannelStatus.writeValueTo(cs.mod, mbytes[2], true);
 			break;
-		case 0x05: //Portamento time (hi)
+		case MIDIControllers.PORTAMENTO_TIME: //Portamento time (hi)
 			cs.port_time = ChannelStatus.writeValueTo(cs.port_time, mbytes[2], true);
 			break;
-		case 0x06: //Data (hi)
+		case MIDIControllers.DATA_ENTRY: //Data (hi)
 			cs.addData(mbytes[2], true);
 			break;
-		case 0x07: //Channel volume (hi)
+		case MIDIControllers.VOLUME: //Channel volume (hi)
 			if(!track.is_master) cs.ch_vol = ChannelStatus.writeValueTo(cs.ch_vol, mbytes[2], true);
 			else cs.master_vol = ChannelStatus.writeValueTo(cs.master_vol, mbytes[2], true);
 			break;
-		case 0x0a: //Pan (hi)
+		case MIDIControllers.PAN: //Pan (hi)
 			cs.pan = ChannelStatus.writeValueTo(cs.pan, mbytes[2], true);
 			break;
-		case 0x0b: //Expression (hi)
+		case MIDIControllers.EXPRESSION: //Expression (hi)
 			if(!track.is_master) cs.expression = ChannelStatus.writeValueTo(cs.expression, mbytes[2], true);
 			else cs.master_vol = ChannelStatus.writeValueTo(cs.master_vol, mbytes[2], true);
 			break;
-		case 0x0c: //Effect 1 (hi)
+		case MIDIControllers.EFFECTS_1: //Effect 1 (hi)
 			cs.eff1 = ChannelStatus.writeValueTo(cs.eff1, mbytes[2], true);
 			break;
-		case 0x0d: //Effect 2 (hi)
+		case MIDIControllers.EFFECTS_2: //Effect 2 (hi)
 			cs.eff2 = ChannelStatus.writeValueTo(cs.eff2, mbytes[2], true);
 			break;
-		case 0x20: //Bank select (lo)
+		case MIDIControllers.TREMOLO_SEND:
+			cs.trml_send = ChannelStatus.writeValueTo(cs.trml_send, mbytes[2], true);
+			break;
+		case MIDIControllers.REVERB_SEND:
+			cs.rvb_send = ChannelStatus.writeValueTo(cs.rvb_send, mbytes[2], true);
+			break;
+		case MIDIControllers.CHORUS_SEND:
+			cs.chrs_send = ChannelStatus.writeValueTo(cs.chrs_send, mbytes[2], true);
+			break;
+		case MIDIControllers.BANK_SELECT_LSB: //Bank select (lo)
 			cs.bank = ChannelStatus.writeValueTo(cs.bank, mbytes[2], false);
 			break;
-		case 0x21: //mod wheel (lo)
+		case MIDIControllers.MOD_WHEEL_LSB: //mod wheel (lo)
 			cs.mod = ChannelStatus.writeValueTo(cs.mod, mbytes[2], false);
 			break;
-		case 0x25: //Portamento time (lo)
+		case MIDIControllers.PORTAMENTO_TIME_LSB: //Portamento time (lo)
 			cs.port_time = ChannelStatus.writeValueTo(cs.port_time, mbytes[2], false);
 			break;
-		case 0x26: //Data (lo)
+		case MIDIControllers.DATA_ENTRY_LSB: //Data (lo)
 			cs.addData(mbytes[2], false);
 			break;
-		case 0x27: //Channel volume (lo)
+		case MIDIControllers.VOLUME_LSB: //Channel volume (lo)
 			if(!track.is_master) cs.ch_vol = ChannelStatus.writeValueTo(cs.ch_vol, mbytes[2], false);
 			else cs.master_vol = ChannelStatus.writeValueTo(cs.master_vol, mbytes[2], false);
 			break;
-		case 0x2a: //Pan (lo)
+		case MIDIControllers.PAN_LSB: //Pan (lo)
 			cs.pan = ChannelStatus.writeValueTo(cs.pan, mbytes[2], false);
 			break;
-		case 0x2b: //Expression (lo)
+		case MIDIControllers.EXPRESSION_LSB: //Expression (lo)
 			if(!track.is_master) cs.expression = ChannelStatus.writeValueTo(cs.expression, mbytes[2], false);
 			else cs.master_vol = ChannelStatus.writeValueTo(cs.master_vol, mbytes[2], false);
 			break;
-		case 0x2c: //Effect 1 (lo)
+		case MIDIControllers.EFFECTS_1_LSB: //Effect 1 (lo)
 			cs.eff1 = ChannelStatus.writeValueTo(cs.eff1, mbytes[2], false);
 			break;
-		case 0x2d: //Effect 2 (lo)
+		case MIDIControllers.EFFECTS_2_LSB: //Effect 2 (lo)
 			cs.eff2 = ChannelStatus.writeValueTo(cs.eff2, mbytes[2], false);
 			break;
-		case 0x62: //NRPN ID (lo)
+		case MIDIControllers.NRPN_LSB: //NRPN ID (lo)
 			cs.addNRPN(mbytes[2], false);
 			break;
-		case 0x63: //NRPN ID (hi)
+		case MIDIControllers.NRPN_MSB: //NRPN ID (hi)
 			cs.addNRPN(mbytes[2], true);
 			break;
 		}
@@ -238,25 +257,32 @@ public class MIDIInterpreter {
 		 * 01, 06, 07 as text cues
 		 * 2f - end of track
 		 * 51 - set tempo
+		 * 58 - set time signature
 		 */
 		if(msg.getStatus() == 0xFF){
 			byte[] mbytes = msg.getMessage();
 			switch(mbytes[1]){
-			case 0x1:
-			case 0x6:
-			case 0x7:
+			case MIDIMetaCommands.TEXT:
+			case MIDIMetaCommands.MARKER:
+			case MIDIMetaCommands.CUE:
 				String txt = readTextMessage(msg);
 				dest.addMarkerNote(txt);
 				break;
-			case 0x2f:
+			case MIDIMetaCommands.END:
 				track.end_flag = true;
 				break;
-			case 0x51:
+			case MIDIMetaCommands.TEMPO:
 				int tempo = 0;
 				tempo |= Byte.toUnsignedInt(mbytes[3]) << 16;
 				tempo |= Byte.toUnsignedInt(mbytes[4]) << 8;
 				tempo |= Byte.toUnsignedInt(mbytes[5]);
 				dest.setTempo(tempo);
+				break;
+			case MIDIMetaCommands.TIMESIG:
+				int nn = Byte.toUnsignedInt(mbytes[0]);
+				int dd = Byte.toUnsignedInt(mbytes[1]);
+				dd = 1 << dd;
+				dest.setTimeSignature(nn, dd);
 				break;
 			}
 		}

@@ -11,6 +11,7 @@ public interface SequenceController {
 	public void setMasterPan(byte value);
 	public void setTempo(int tempo_uspqn);
 	public void addMarkerNote(String note);
+	public void setTimeSignature(int beats, int div);
 	//public void setTimebase(int ppqn);
 	
 	//Channel settings
@@ -23,11 +24,14 @@ public interface SequenceController {
 	public void setPitchBend(int ch, int cents);
 	public void setPitchBendRange(int ch, int cents);
 	public void setReverbSend(int ch, byte value);
+	public void setTremoloSend(int ch, byte value);
+	public void setChorusSend(int ch, byte value);
 	public void setVibratoSpeed(int ch, double value);
 	public void setVibratoAmount(int ch, byte value);
 	public void setPortamentoTime(int ch, short value);
 	public void setPortamentoAmount(int ch, byte value);
 	public void setPortamentoOn(int ch, boolean on);
+	public void setLegato(int ch, boolean on);
 	public void setProgram(int ch, int bank, int program);
 	public void setProgram(int ch, int program);
 	public void setControllerValue(int ch, int controller, byte value);

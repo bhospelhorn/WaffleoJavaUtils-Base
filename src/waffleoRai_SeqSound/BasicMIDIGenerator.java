@@ -97,6 +97,16 @@ public class BasicMIDIGenerator implements SequenceController{
 		}
 	}
 
+	public void setTimeSignature(int beats, int div) {
+		try {
+			MidiMessage msg = gen.genTimeSignatureSet(beats, div, seq.getResolution());
+			tracks[0].add(new MidiEvent(msg, tick));
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
 	public void setChannelVolume(int ch, byte value) {
 		try {
 			List<MidiMessage> msgs = gen.genVolumeChange(ch, value);
@@ -284,7 +294,31 @@ public class BasicMIDIGenerator implements SequenceController{
 	public void setReverbSend(int ch, byte value){
 		//Controller 91 is apparently often used as reverb send
 		try {
-			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, 0x5b, value);
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, MIDIControllers.REVERB_SEND, value);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setTremoloSend(int ch, byte value) {
+		try {
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, MIDIControllers.TREMOLO_SEND, value);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setChorusSend(int ch, byte value) {
+		try {
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, MIDIControllers.CHORUS_SEND, value);
 			for(MidiMessage msg : msgs){
 				tracks[ch+1].add(new MidiEvent(msg, tick));
 			}
@@ -345,7 +379,20 @@ public class BasicMIDIGenerator implements SequenceController{
 	public void setPortamentoOn(int ch, boolean on){
 		try {
 			byte value = on?(byte)127:(byte)0;
-			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, 65, value);
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, MIDIControllers.PORTAMENTO_ON, value);
+			for(MidiMessage msg : msgs){
+				tracks[ch+1].add(new MidiEvent(msg, tick));
+			}
+		} 
+		catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void setLegato(int ch, boolean on) {
+		try {
+			byte value = on?(byte)127:(byte)0;
+			List<MidiMessage> msgs = gen.genControllerLevelChange(ch, MIDIControllers.LEGATO_ON, value);
 			for(MidiMessage msg : msgs){
 				tracks[ch+1].add(new MidiEvent(msg, tick));
 			}
