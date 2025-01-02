@@ -3,6 +3,8 @@ package waffleoRai_Files;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import javax.xml.XMLConstants;
@@ -11,8 +13,10 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 public class XMLReader {
@@ -61,6 +65,145 @@ public class XMLReader {
 			}
 		}
 		return map;
+	}
+	
+	public static Element getFirstChildElementWithTag(Element node, String tag) {
+		if(node == null || tag == null) return null;
+		NodeList nl = node.getElementsByTagName(tag);
+		if(nl == null) return null;
+		
+		int childCount = nl.getLength();
+		if(childCount == 0) return null;
+		for(int i = 0; i < childCount; i++) {
+			Node child = nl.item(i);
+			if(child.getNodeType() == Node.ELEMENT_NODE) {
+				return (Element)child;
+			}
+		}
+		
+		return null;
+	}
+	
+	public static Element getFirstChildElementWithAttribute(Element node, String attrKey, String attrVal) {
+		if(node == null || attrKey == null) return null;
+		NodeList nl = node.getChildNodes();
+		if(nl == null) return null;
+		
+		int childCount = nl.getLength();
+		if(childCount == 0) return null;
+		for(int i = 0; i < childCount; i++) {
+			Node child = nl.item(i);
+			if(child.getNodeType() == Node.ELEMENT_NODE) {
+				Element childElement = (Element)child;
+				String aval = childElement.getAttribute(attrKey);
+				if(aval != null && aval.equals(attrVal)) {
+					return childElement;
+				}
+			}
+		}
+		
+		return null;
+	}
+	
+	public static Element getFirstChildElementWithTagAndAttribute(Element node, String tag, String attrKey, String attrVal) {
+		if(node == null || tag == null || attrKey == null) return null;
+		NodeList nl = node.getElementsByTagName(tag);
+		if(nl == null) return null;
+		
+		int childCount = nl.getLength();
+		if(childCount == 0) return null;
+		for(int i = 0; i < childCount; i++) {
+			Node child = nl.item(i);
+			if(child.getNodeType() == Node.ELEMENT_NODE) {
+				Element childElement = (Element)child;
+				String aval = childElement.getAttribute(attrKey);
+				if(aval != null && aval.equals(attrVal)) {
+					return childElement;
+				}
+			}
+		}
+		
+		return null;
+	}
+	
+	public static List<Element> getChildElementsWithTag(Element node, String tag) {
+		List<Element> list = new LinkedList<Element>();
+		if(node == null || tag == null) return list;
+		NodeList nl = node.getElementsByTagName(tag);
+		if(nl == null) return list;
+		
+		int childCount = nl.getLength();
+		if(childCount == 0) return list;
+		for(int i = 0; i < childCount; i++) {
+			Node child = nl.item(i);
+			if(child.getNodeType() == Node.ELEMENT_NODE) {
+				list.add((Element)child);
+			}
+		}
+		
+		return list;
+	}
+	
+	public static List<Element> getChildElementsWithAttribute(Element node, String attrKey, String attrVal) {
+		List<Element> list = new LinkedList<Element>();
+		if(node == null || attrKey == null) return list;
+		NodeList nl = node.getChildNodes();
+		if(nl == null) return list;
+		
+		int childCount = nl.getLength();
+		if(childCount == 0) return list;
+		for(int i = 0; i < childCount; i++) {
+			Node child = nl.item(i);
+			if(child.getNodeType() == Node.ELEMENT_NODE) {
+				Element childElement = (Element)child;
+				String aval = childElement.getAttribute(attrKey);
+				if(aval != null && aval.equals(attrVal)) {
+					list.add(childElement);
+				}
+			}
+		}
+		
+		return list;
+	}
+	
+	public static List<Element> getChildElementsWithTagAndAttribute(Element node, String tag, String attrKey, String attrVal) {
+		List<Element> list = new LinkedList<Element>();
+		if(node == null || tag == null || attrKey == null) return list;
+		NodeList nl = node.getElementsByTagName(tag);
+		if(nl == null) return list;
+		
+		int childCount = nl.getLength();
+		if(childCount == 0) return list;
+		for(int i = 0; i < childCount; i++) {
+			Node child = nl.item(i);
+			if(child.getNodeType() == Node.ELEMENT_NODE) {
+				Element childElement = (Element)child;
+				String aval = childElement.getAttribute(attrKey);
+				if(aval != null && aval.equals(attrVal)) {
+					list.add(childElement);
+				}
+			}
+		}
+		
+		return list;
+	}
+	
+	public static List<Element> getChildElements(Element node){
+		List<Element> list = new LinkedList<Element>();
+		if(node == null) return list;
+		NodeList nl = node.getChildNodes();
+		if(nl == null) return list;
+		
+		int childCount = nl.getLength();
+		if(childCount == 0) return list;
+		for(int i = 0; i < childCount; i++) {
+			Node child = nl.item(i);
+			if(child.getNodeType() == Node.ELEMENT_NODE) {
+				list.add((Element)child);
+			}
+		}
+		
+		return list;
 	}
 	
 }
