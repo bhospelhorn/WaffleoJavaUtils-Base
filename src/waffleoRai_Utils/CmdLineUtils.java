@@ -5,7 +5,7 @@ import java.util.Map;
 
 public class CmdLineUtils {
 	
-	public Map<String, String> parseArguments(String[] args, String keyPrefix){
+	public Map<String, String> parseArguments(String[] args, String keyPrefix, int start){
 		//Also remove quotes
 		if(keyPrefix == null) keyPrefix = "";
 		
@@ -13,7 +13,7 @@ public class CmdLineUtils {
 		Map<String, String> map = new HashMap<String, String>();
 		if(args != null) {
 			String lastkey = null;
-			for(int i = 0; i < args.length; i++) {
+			for(int i = start; i < args.length; i++) {
 				String arg = args[i].trim();
 				if(arg.startsWith("\"")) arg = arg.substring(1);
 				if(arg.endsWith("\"")) arg = arg.substring(0, arg.length()-1);
