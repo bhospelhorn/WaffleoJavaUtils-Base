@@ -30,7 +30,7 @@ public class DLSInstrument {
 	private DLSID id; //Optional
 	private Map<String, String> info;
 	
-	private int ulBank; //Program index
+	private int ulBank; //Program index. Highest bit is set if drum.
 	private int ulInstrument; //Program index
 	private ArrayList<DLSRegion> regions;
 	private ArrayList<DLSArticulator> globalArt;
@@ -65,8 +65,16 @@ public class DLSInstrument {
 		return globalArt.size();
 	}
 	
-	public int getBankIndex(){
+	public boolean bankHasDrumFlag() {
+		return (ulBank & 0x80000000) != 0;
+	}
+	
+	public int getRawBankId(){
 		return ulBank;
+	}
+	
+	public int getBankId(){
+		return ulBank & 0xffff;
 	}
 	
 	public int getInstrumentIndex(){

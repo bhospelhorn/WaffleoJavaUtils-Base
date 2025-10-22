@@ -69,7 +69,7 @@ public class XMLReader {
 	
 	public static Element getFirstChildElementWithTag(Element node, String tag) {
 		if(node == null || tag == null) return null;
-		NodeList nl = node.getElementsByTagName(tag);
+		NodeList nl = node.getChildNodes();
 		if(nl == null) return null;
 		
 		int childCount = nl.getLength();
@@ -77,7 +77,11 @@ public class XMLReader {
 		for(int i = 0; i < childCount; i++) {
 			Node child = nl.item(i);
 			if(child.getNodeType() == Node.ELEMENT_NODE) {
-				return (Element)child;
+				Element childElement = (Element)child;
+				String childTag = childElement.getTagName();
+				if(childTag == null) continue;
+				if(!childTag.equals(tag)) continue;
+				return childElement;
 			}
 		}
 		
@@ -107,7 +111,7 @@ public class XMLReader {
 	
 	public static Element getFirstChildElementWithTagAndAttribute(Element node, String tag, String attrKey, String attrVal) {
 		if(node == null || tag == null || attrKey == null) return null;
-		NodeList nl = node.getElementsByTagName(tag);
+		NodeList nl = node.getChildNodes();
 		if(nl == null) return null;
 		
 		int childCount = nl.getLength();
@@ -116,6 +120,9 @@ public class XMLReader {
 			Node child = nl.item(i);
 			if(child.getNodeType() == Node.ELEMENT_NODE) {
 				Element childElement = (Element)child;
+				String childTag = childElement.getTagName();
+				if(childTag == null) continue;
+				if(!childTag.equals(tag)) continue;
 				String aval = childElement.getAttribute(attrKey);
 				if(aval != null && aval.equals(attrVal)) {
 					return childElement;
@@ -129,7 +136,7 @@ public class XMLReader {
 	public static List<Element> getChildElementsWithTag(Element node, String tag) {
 		List<Element> list = new LinkedList<Element>();
 		if(node == null || tag == null) return list;
-		NodeList nl = node.getElementsByTagName(tag);
+		NodeList nl = node.getChildNodes();
 		if(nl == null) return list;
 		
 		int childCount = nl.getLength();
@@ -137,7 +144,11 @@ public class XMLReader {
 		for(int i = 0; i < childCount; i++) {
 			Node child = nl.item(i);
 			if(child.getNodeType() == Node.ELEMENT_NODE) {
-				list.add((Element)child);
+				Element e = (Element)child;
+				String childTag = e.getTagName();
+				if(childTag == null) continue;
+				if(!childTag.equals(tag)) continue;
+				list.add(e);
 			}
 		}
 		
@@ -169,7 +180,7 @@ public class XMLReader {
 	public static List<Element> getChildElementsWithTagAndAttribute(Element node, String tag, String attrKey, String attrVal) {
 		List<Element> list = new LinkedList<Element>();
 		if(node == null || tag == null || attrKey == null) return list;
-		NodeList nl = node.getElementsByTagName(tag);
+		NodeList nl = node.getChildNodes();
 		if(nl == null) return list;
 		
 		int childCount = nl.getLength();
@@ -178,6 +189,9 @@ public class XMLReader {
 			Node child = nl.item(i);
 			if(child.getNodeType() == Node.ELEMENT_NODE) {
 				Element childElement = (Element)child;
+				String childTag = childElement.getTagName();
+				if(childTag == null) continue;
+				if(!childTag.equals(tag)) continue;
 				String aval = childElement.getAttribute(attrKey);
 				if(aval != null && aval.equals(attrVal)) {
 					list.add(childElement);

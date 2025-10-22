@@ -9,8 +9,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -20,6 +22,26 @@ public class ReflectionUtils {
 	
 	private static List<ExtURLClassLoader> my_loaders;
 	private static List<ClassLoader> other_loaders;
+	private static Set<String> app_class_names;
+	
+	public static String classNameFromURL(URL url, String base) {
+		if(url == null) return null;
+		String f = url.getFile();
+		
+		int jarRoot = f.toLowerCase().indexOf(".jar!/");
+		if(jarRoot >= 0) {
+			f = f.substring(jarRoot + 6);
+		}
+		else {
+			if(base != null) f = f.replace(base, "");
+		}
+		
+		if(f.startsWith("/")) f= f.substring(1);
+		f = f.replace(".class", "");
+		f = f.replace("/", ".");
+		
+		return f;
+	}
 	
 	public static Path getLoadedClassFileSource(Class<?> myclass) throws URISyntaxException{
 		//https://stackoverflow.com/questions/320542/how-to-get-the-path-of-a-running-jar-file
@@ -125,9 +147,62 @@ public class ReflectionUtils {
 		return loadClassesFrom(urls, parent);
 	}
 
+	public static void scanForAppClasses(Class<?> referenceClass, int packagesUp){
+		if(referenceClass == null) return;
+		
+		try {
+			Path refpath = getLoadedClassFileSource(referenceClass);
+			String fname = refpath.getFileName().toString();
+			if(!Files.isDirectory(refpath)) {
+				refpath = refpath.getParent();
+			}
+			if(!fname.endsWith(".jar")) {
+				for(int i = 0; i < packagesUp; i++) {
+					refpath = refpath.getParent();
+				}
+			}
+			Collection<URL> urls = scanDir(refpath);
+			if(urls.isEmpty()) return;
+			
+			String refbase = refpath.toAbsolutePath().toString();
+			refbase = refbase.replace('\\', '/');
+			if(!refbase.startsWith("/")) refbase = "/" + refbase;
+			if(app_class_names == null) app_class_names = new HashSet<String>();
+			for(URL url : urls) {
+				String cname = classNameFromURL(url, refbase);
+				if(cname != null) app_class_names.add(cname);
+			}
+		}
+		catch(Exception ex) {
+			ex.printStackTrace();
+		}
+	}
+	
 	public static Collection<Class<?>> findSubclassesOf(Class<?> superclass, boolean allowAbstract){
-		//But can only scan class loaders that have been registered to ReflectionUtils
 		List<Class<?>> clist = new LinkedList<Class<?>>();
+		
+		//Scans system loader first. Then additional loaders.
+		if(app_class_names != null) {
+			ClassLoader sysLoader = ClassLoader.getSystemClassLoader();
+			for(String className : app_class_names) {
+				try {
+					Class<?> c = Class.forName(className, false, sysLoader);
+					if(c != null) {
+						if(!allowAbstract){
+							if(c.isInterface()) continue;
+						}
+						if (superclass.isAssignableFrom(c)){
+							//System.err.println("Subclass of " + superclass.getName() + " found: " + c.getName());
+							clist.add(c);
+						}	
+					}
+				}
+				catch(ClassNotFoundException ex) {
+					System.err.println("Class \"" + className + "\" expected to be found by app loader, but was not.");
+				}
+			}	
+		}
+		
 		if(my_loaders != null){
 			for(ExtURLClassLoader cl : my_loaders){
 				Collection<Class<?>> lclasses = cl.getAll();
@@ -145,6 +220,7 @@ public class ReflectionUtils {
 		
 		if(other_loaders != null){
 			//TODO eh I'll do this later
+			//Can I get a system loader?
 		}
 		
 		return clist;

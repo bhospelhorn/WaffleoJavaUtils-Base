@@ -1,5 +1,7 @@
 package waffleoRai_DataContainers;
 
+import waffleoRai_Utils.StringUtils;
+
 public class EnumStringMapper16 extends EnumStringMapper<Short>{
 	
 	public EnumStringMapper16(short[] values, String[] strings) {
@@ -8,6 +10,20 @@ public class EnumStringMapper16 extends EnumStringMapper<Short>{
 		Short[] objArr = new Short[vcount];
 		for(int i = 0; i < vcount; i++) objArr[i] = values[i];
 		super.allValues = objArr;
+	}
+	
+	protected String rawStringFromValue(Short value) {
+		if(value == null) return null;
+		return String.format("0x%04x", value);
+	}
+	
+	protected Short valueFromRawString(String str) {
+		if(str == null) return null;
+		try {
+			return (short)StringUtils.parseUnsignedInt(str);
+		}
+		catch(NumberFormatException ex) {ex.printStackTrace();}
+		return null;
 	}
 	
 	public String stringFromValueFlags(Short value){
@@ -34,7 +50,7 @@ public class EnumStringMapper16 extends EnumStringMapper<Short>{
 			mask <<= 1;
 		}
 		
-		if(out.isEmpty()) out = null;
+		if(out.isEmpty()) out = rawStringFromValue(value);
 		return out;
 	}
 
@@ -46,13 +62,18 @@ public class EnumStringMapper16 extends EnumStringMapper<Short>{
 		if(intObj != null) return intObj;
 		
 		int output = 0;
-		String[] strFlags = str.split("|");
-		for(String substr : strFlags) {
-			substr = substr.trim();
-			intObj = stringMap.get(substr);
-			if(intObj != null) {
-				output |= Short.toUnsignedInt(intObj);
-			}
+		if(str.startsWith("0x")) {
+			output = valueFromRawString(str);
+		}
+		else {
+			String[] strFlags = str.split("\\|");
+			for(String substr : strFlags) {
+				substr = substr.trim();
+				intObj = stringMap.get(substr);
+				if(intObj != null) {
+					output |= Short.toUnsignedInt(intObj);
+				}
+			}	
 		}
 		
 		return (short)output;

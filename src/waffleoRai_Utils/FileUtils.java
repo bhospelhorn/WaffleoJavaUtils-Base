@@ -209,100 +209,106 @@ public class FileUtils {
 		return dcount;
 	}
 	
-	public static String unixRelPath2Local(String workingDir, String path){
-		if(path == null) return null;
-		
-		String[] pathParts = path.split("/");
-		int back = 0;
-		LinkedList<String> outq = new LinkedList<String>();
-
-		for(int i = 0; i < pathParts.length; i++){
-			if(pathParts[i] == null) continue;
-			if(pathParts[i].equals(".")) continue;
-			else if(pathParts[i].equals("..")){
-				if(outq.isEmpty()){back--;}
-				else{outq.pollFirst();}
-			}
-			else{
-				outq.addLast(pathParts[i]);
-			}
+	public static String localPath2UnixRel(String ref_path, String trg_path) {
+		//Unix style relative path for trg_path relative to ref_path
+		//if ref_path is a file, strip to parent directory
+		if(!FileBuffer.directoryExists(ref_path)) {
+			int cidx = ref_path.lastIndexOf(File.separatorChar);
+			if(cidx >= 0) ref_path = ref_path.substring(0, cidx);
 		}
 		
-		if(workingDir != null){
-			//See if working dir is a file...
-			int lastslash = workingDir.lastIndexOf(SEP);
-			if(lastslash >= 0){
-				String filename = workingDir.substring(lastslash + 1);
-				if(filename.contains(".")){
-					if(FileBuffer.fileExists(filename)){
-						workingDir = workingDir.substring(0, lastslash);
-					}
-				}
-			}
-			
-			String[] dirparts = workingDir.split(SEP);
-			int last = dirparts.length - 1 - back;
-			for(int i = last; i >= 0; i--){
-				outq.push(dirparts[i]);
-			}
+		if(!ref_path.contains(File.separator)) ref_path = "." + File.separator + ref_path;
+		if(!trg_path.contains(File.separator)) trg_path = "." + File.separator + trg_path;
+		
+		String SEP = File.separator;
+		if(File.separatorChar == '\\') {
+			SEP = "\\\\";
 		}
 		
-		int sz = 0;
-		for(String s : outq) sz += s.length() + 2;
-		StringBuilder sb = new StringBuilder(sz);
-		boolean first = true;
-		for(String s : outq){
-			if(!first) sb.append(SEP);
-			else first = false;
-			sb.append(s);
+		String[] ref_parts = ref_path.split(SEP);
+		String[] trg_parts = trg_path.split(SEP);
+		int matched = 0;
+		int scanlen = (ref_parts.length>trg_parts.length)?trg_parts.length:ref_parts.length;
+		for(int i = 0; i < scanlen; i++) {
+			if(ref_parts[i].equalsIgnoreCase(trg_parts[i])) {
+				matched++;
+			}
+			else break;
 		}
 		
-		return sb.toString();
+		//Is the target in the same dir or a subdir of the ref?
+		if(matched == ref_parts.length) {
+			String relpath = ".";
+			for(int i = matched; i < trg_parts.length; i++) {
+				relpath += "/" + trg_parts[i];
+			}
+			return relpath;
+		}
+		else {
+			//Add a .. dir for every dir back from ref to last match
+			int backcount = ref_parts.length - matched;
+			String relpath = "";
+			for(int i = 0; i < backcount; i++) {
+				if(i > 0) relpath += "/..";
+				else relpath += "..";
+			}
+			for(int i = matched; i < trg_parts.length; i++) {
+				relpath += "/" + trg_parts[i];
+			}
+			return relpath;
+		}
 	}
 	
-	public static String localPath2UnixRel(String workingDir, String path){
-		if(path == null) return null;
-		if(workingDir == null){
-			if(path.contains("\\")){
-				path = path.replace('\\', '/');
-				path = path.replace(":", "");
-				path = "/" + path;
-				return path;
-			}
-			else return path;
+	public static String unixRelPath2Local(String wd, String trg) {
+		String SEP = File.separator;
+		if(File.separatorChar == '\\') {
+			SEP = "\\\\";
 		}
 		
-		String[] wdParts = workingDir.split(SEP);
-		String[] trgParts = path.split(SEP);
-		int m = -1;
-		for(int i = 0; i < wdParts.length; i++){
-			if(i >= trgParts.length) break;
-			if(!wdParts[i].equals(trgParts[i])){
-				break;
+		if(trg == null) return wd;
+		
+		String[] wdparts = wd.split(SEP);
+		String[] trgparts = trg.split("/");
+		
+		int wdpos = wdparts.length-1;
+		int trgpos = 0;
+		for(int i = 0; i < trgparts.length; i++) {
+			if(trgparts[i].equals(".")) {
+				trgpos++;
 			}
-			m++;
+			else if(trgparts[i].equals("..")) {
+				trgpos++;
+				wdpos--;
+			}
+			else break;
 		}
 		
-		m++; //First mismatch
 		LinkedList<String> list = new LinkedList<String>();
-		if(m < wdParts.length){
-			//Need some ".." I suppose
-			for(int i = m; i < wdParts.length; i++) list.add("..");
-		}
-		else list.add(".");
-		for(int i = m; i < trgParts.length; i++){
-			list.add(trgParts[i]);
-		}
+		for(int i = 0; i <= wdpos; i++) list.add(wdparts[i]);
+		for(int i = trgpos; i < trgparts.length; i++) list.add(trgparts[i]);
 		
 		int alloc = 0;
-		for(String s : list) alloc += s.length() + 2;
-		StringBuilder sb = new StringBuilder(alloc);
+		LinkedList<String> list2 = new LinkedList<String>();
+		for(String s : list) {
+			if(s.equals(".")) continue;
+			else if(s.equals("..")) {
+				if(!list2.isEmpty()) list2.removeLast();
+			}
+			else {
+				list2.add(s);
+				alloc += s.length();
+			}
+		}
+		list.clear();
+		
+		StringBuilder sb = new StringBuilder(alloc + 1);
 		boolean first = true;
-		for(String s : list){
-			if(!first) sb.append("/");
+		for(String s : list2) {
+			if(!first) sb.append(File.separatorChar);
 			else first = false;
 			sb.append(s);
 		}
+		list2.clear();
 		
 		return sb.toString();
 	}

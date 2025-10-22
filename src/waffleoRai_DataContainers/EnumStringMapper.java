@@ -30,7 +30,9 @@ public abstract class EnumStringMapper<T> {
 		if(valueMap == null){
 			populateValueMap();
 		}
-		return valueMap.get(value);
+		String str = valueMap.get(value);
+		if(str != null) return str;
+		return rawStringFromValue(value);
 	}
 	
 	protected void populateStringMap() {
@@ -44,8 +46,13 @@ public abstract class EnumStringMapper<T> {
 		if(stringMap == null){
 			populateStringMap();
 		}
-		return stringMap.get(str);
+		T val = stringMap.get(str);
+		if(val != null) return val;
+		return valueFromRawString(str);
 	}
+	
+	protected abstract String rawStringFromValue(T value);
+	protected abstract T valueFromRawString(String str);
 	
 	public abstract String stringFromValueFlags(T value);
 	public abstract T valueFromStringFlags(String str);

@@ -2,10 +2,13 @@ package waffleoRai_soundbank;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import waffleoRai_Files.RIFFReader;
 import waffleoRai_Files.RIFFReader.RIFFChunk;
@@ -103,14 +106,26 @@ public class DLSFile {
 		return info.get(key);
 	}
 	
+	public List<Integer> getAllBankIDs() {
+		if(instruments == null) return new LinkedList<Integer>();
+		Set<Integer> idset = new HashSet<Integer>();
+		for(DLSInstrument inst : instruments){
+			int b = inst.getRawBankId();
+			idset.add(b);
+		}
+		
+		List<Integer> idlist = new ArrayList<Integer>(idset.size() + 1);
+		idlist.addAll(idset);
+		Collections.sort(idlist);
+		
+		return idlist;
+	}
+	
 	public int getBankCount(){
 		if(instruments == null) return 0;
-		int bankmax = -1;
-		for(DLSInstrument inst : instruments){
-			int b = inst.getBankIndex();
-			if(b > bankmax) bankmax = b;
-		}
-		return bankmax + 1;
+		List<Integer> idlist = getAllBankIDs();
+		if(idlist == null) return 0;
+		return idlist.size();
 	}
 	
 	public int getInstrumentCount(){
