@@ -5,7 +5,7 @@ import java.util.Map;
 
 public class CmdLineUtils {
 	
-	public Map<String, String> parseArguments(String[] args, String keyPrefix, int start){
+	public static Map<String, String> parseArguments(String[] args, String keyPrefix, int start){
 		//Also remove quotes
 		if(keyPrefix == null) keyPrefix = "";
 		
@@ -33,6 +33,8 @@ public class CmdLineUtils {
 					}
 				}
 			}
+			
+			if(lastkey != null) map.put(lastkey, "True");
 		}
 		
 		return map;
