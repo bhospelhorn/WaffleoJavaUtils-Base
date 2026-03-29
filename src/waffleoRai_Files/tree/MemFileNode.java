@@ -4,7 +4,7 @@ import java.io.IOException;
 
 import waffleoRai_Utils.FileBuffer;
 
-class MemFileNode extends FileNode{
+public class MemFileNode extends FileNode{
 
 	/* --- Instance Variables --- */
 	

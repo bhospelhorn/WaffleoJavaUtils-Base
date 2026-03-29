@@ -1,5 +1,9 @@
 package waffleoRai_Image;
 
+import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.image.BufferedImage;
+
 public class ImageUtils {
 	
 	public static int[] getDefaultPalette2() {
@@ -72,6 +76,195 @@ public class ImageUtils {
 		double factor = 255.0/32.0;
 		double temp = factor * l2;
 		return (int)Math.round(temp);
+	}
+	
+	public static int scale8Bit_to_5Bit(int eight){
+		//I have no idea if this is updated...
+		if (eight == 0) return 0;
+		if (eight < 37) return 1;
+		if (eight == 255) return 31;
+		double PC = ((double)eight * 32.0) / 255.0;
+		PC /= 8.0;
+		PC = Math.pow(2.0, PC);
+		PC *= 2;
+		return (int)Math.round(PC);
+	}
+	
+	public static int calculateRGBDistanceSquared(int rgb1, int rgb2) {
+		//Alpha is ignored
+		int r1 = (rgb1 >>> 16) & 0xff;
+		int r2 = (rgb2 >>> 16) & 0xff;
+		int rdist = r1 - r2;
+		rdist *= rdist;
+		
+		int g1 = (rgb1 >>> 8) & 0xff;
+		int g2 = (rgb2 >>> 8) & 0xff;
+		int gdist = g1 - g2;
+		gdist *= gdist;
+		
+		int b1 = rgb1 & 0xff;
+		int b2 = rgb2 & 0xff;
+		int bdist = b1 - b2;
+		bdist *= bdist;
+		
+		return rdist + gdist + bdist;
+	}
+	
+	public static double calculateRGBDistance(int rgb1, int rgb2) {
+		int sq = calculateRGBDistanceSquared(rgb1, rgb2);
+		return Math.sqrt((double)sq);
+	}
+	
+	public static int calculateRGBADistanceSquared(int argb1, int argb2) {
+		int a1 = (argb1 >>> 24) & 0xff;
+		int a2 = (argb2 >>> 24) & 0xff;
+		int adist = a1 - a2;
+		adist *= adist;
+		
+		int r1 = (argb1 >>> 16) & 0xff;
+		int r2 = (argb2 >>> 16) & 0xff;
+		int rdist = r1 - r2;
+		rdist *= rdist;
+		
+		int g1 = (argb1 >>> 8) & 0xff;
+		int g2 = (argb2 >>> 8) & 0xff;
+		int gdist = g1 - g2;
+		gdist *= gdist;
+		
+		int b1 = argb1 & 0xff;
+		int b2 = argb2 & 0xff;
+		int bdist = b1 - b2;
+		bdist *= bdist;
+		
+		return rdist + gdist + bdist;
+	}
+	
+	public static double calculateRGBADistance(int argb1, int argb2) {
+		int sq = calculateRGBADistanceSquared(argb1, argb2);
+		return Math.sqrt((double)sq);
+	}
+	
+	public static int getNearestPaletteColor(int color, int[] palette, boolean includeAlpha) {
+		if(palette == null) return -1;
+		
+		//Returns palette index of nearest color
+		int minVal = Integer.MAX_VALUE;
+		int minIdx = -1;
+		
+		if(includeAlpha) {
+			for(int i = 0; i < palette.length; i++) {
+				int dist = calculateRGBADistanceSquared(color, palette[i]);
+				if(dist < minVal) {
+					minVal = dist;
+					minIdx = i;
+				}
+			}
+		}
+		else {
+			for(int i = 0; i < palette.length; i++) {
+				int dist = calculateRGBDistanceSquared(color, palette[i]);
+				if(dist < minVal) {
+					minVal = dist;
+					minIdx = i;
+				}
+			}
+		}
+		
+		return minIdx;
+	}
+	
+	public static int[] getColorDistanceVector(int argb1, int argb2) {
+		int[] argb_vec = new int[4];
+		
+		int a1 = (argb1 >>> 24) & 0xff;
+		int a2 = (argb2 >>> 24) & 0xff;
+		argb_vec[0] = a2 - a1;
+		
+		int r1 = (argb1 >>> 16) & 0xff;
+		int r2 = (argb2 >>> 16) & 0xff;
+		argb_vec[1] = r2 - r1;
+		
+		int g1 = (argb1 >>> 8) & 0xff;
+		int g2 = (argb2 >>> 8) & 0xff;
+		argb_vec[2] = g2 - g1;
+		
+		int b1 = argb1 & 0xff;
+		int b2 = argb2 & 0xff;
+		argb_vec[3] = b2 - b1;
+		return argb_vec;
+	}
+	
+	public static int[] argb2Vector(int argb) {
+		int[] argb_vec = new int[4];
+		argb_vec[0] = (argb >>> 24) & 0xff;
+		argb_vec[1] = (argb >>> 16) & 0xff;
+		argb_vec[2] = (argb >>> 8) & 0xff;
+		argb_vec[3] = argb & 0xff;
+		return argb_vec;
+	}
+	
+	public static int vector2ARGB(int[] argb_vec) {
+		if(argb_vec == null) return 0;
+		if(argb_vec.length < 4) return 0;
+		
+		int argb = 0;
+		for(int i = 0; i < 4; i++) {
+			argb <<= 8;
+			if(argb_vec[i] < 0) argb_vec[i] = 0;
+			if(argb_vec[i] > 255) argb_vec[i] = 255;
+			argb |= argb_vec[i];
+		}
+		
+		return argb;
+	}
+	
+	public static int[] generatePalette4(BufferedImage input, boolean includeAlpha) {
+		PaletteGen pg = new PaletteGen(4, includeAlpha);
+		pg.processImage(input);
+		return pg.generatePalette();
+	}
+	
+	public static int[] generatePalette8(BufferedImage input, boolean includeAlpha) {
+		PaletteGen pg = new PaletteGen(8, includeAlpha);
+		pg.processImage(input);
+		return pg.generatePalette();
+	}
+	
+	public static void setUniformTransparency(BufferedImage input, int defoTransColor, int alphaThreshold) {
+		int w = input.getWidth();
+		int h = input.getHeight();
+		for(int y = 0; y < h; y++) {
+			for(int x = 0; x < w; x++) {
+				int p = input.getRGB(x, y);
+				int a = (p >>> 24) & 0xff;
+				if(a <= alphaThreshold) {
+					input.setRGB(x, y, defoTransColor);
+				}
+			}
+		}
+	}
+	
+	public static void setUniformTransparency(BufferedImage input, int defoTransColor) {
+		int w = input.getWidth();
+		int h = input.getHeight();
+		for(int y = 0; y < h; y++) {
+			for(int x = 0; x < w; x++) {
+				int p = input.getRGB(x, y);
+				int a = (p >>> 24) & 0xff;
+				if(a == 0x00) {
+					input.setRGB(x, y, defoTransColor);
+				}
+			}
+		}
+	}
+	
+	public static BufferedImage rescaleImage(BufferedImage input, int w, int h, int algo) {
+		Image simg = input.getScaledInstance(w, h, algo);
+		BufferedImage output = new BufferedImage(simg.getWidth(null), simg.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g2 = output.createGraphics();
+		g2.drawImage(simg, 0, 0, null);
+		g2.dispose();
+		return output;
 	}
 	
 }

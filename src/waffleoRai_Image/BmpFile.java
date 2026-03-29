@@ -1,5 +1,7 @@
 package waffleoRai_Image;
 
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 
@@ -312,5 +314,173 @@ public class BmpFile{
 	}
 	
 	/*----- Write -----*/
+	
+	private static FileBuffer writeBMPPixelData_4(int[][] src){
+		int w = src[0].length;
+		int h = src.length;
+		int bw = w/2;
+		
+		if((w % 2) != 0) bw++;
+		
+		int bw_ceil = (bw + 3) & ~0x3;
+		int rowpad = bw_ceil - bw;
+		int bmalloc = bw_ceil * h;
+		FileBuffer idata = new FileBuffer(bmalloc, false);
+		
+		for(int y = h-1; y >= 0; y--){
+			//BMPs are stored bottom-up.
+			for(int x = 0; x < w; x+=2){
+				//Left pixel is more significant nibble
+				int b = 0;
+				b = src[y][x] << 4;
+				if(x+1 < w){
+					b |= src[y][x+1];
+				}
+				idata.addToFile((byte)b);
+			}
+			//Pad to 4 bytes
+			for(int j = 0; j < rowpad; j++) idata.addToFile(FileBuffer.ZERO_BYTE);
+		}
+		
+		return idata;
+	}
+	
+	private static FileBuffer writeBMPPixelData_8(int[][] src){
+		int w = src[0].length;
+		int h = src.length;
+
+		int w_ceil = (w + 3) & ~0x3;
+		int rowpad = w_ceil - w;
+		int bmalloc = w_ceil * h;
+		FileBuffer idata = new FileBuffer(bmalloc, false);
+		
+		for(int y = h-1; y >= 0; y--){
+			//BMPs are stored bottom-up.
+			for(int x = 0; x < w; x++){
+				int b = src[y][x];
+				idata.addToFile((byte)b);
+			}
+			//Pad to 4 bytes
+			for(int j = 0; j < rowpad; j++) idata.addToFile(FileBuffer.ZERO_BYTE);
+		}
+		
+		return idata;
+	}
+	
+	private static FileBuffer writeBMPPixelData_32(int[][] src){
+		//TODO
+		return null;
+	}
+	
+	/**
+	 * 
+	 * @param bitmap Must be indexed [y][x]
+	 * @param palette
+	 * @param path
+	 * @throws IOException 
+	 */
+	public static void writeRawToBMP(int[][] bitmap, int[] palette, String path) throws IOException {
+		final int DIB_SIZE = 108;
+		FileBuffer bmp_header = new FileBuffer(14, false);
+		FileBuffer dib_header = new FileBuffer(DIB_SIZE, false); //v4
+		FileBuffer color_table = null;
+		
+		int bitdepth = 32;
+		if(palette != null) {
+			if(palette.length == 16) bitdepth = 4;
+			else bitdepth = 8;
+		}
+		
+		if(bitdepth == 4){
+			color_table = new FileBuffer(16 << 2, false);
+			if(palette != null){
+				for(int i = 0; i < 16; i++){
+					color_table.addToFile(palette[i]);
+				}
+			}
+			else{
+				for(int i = 0; i < 16; i++){
+					int ii = i << 4;
+					int pix = 0xFF << 24;
+					pix |= ii << 16;
+					pix |= ii << 8;
+					pix |= ii;
+					color_table.addToFile(pix);
+				}
+			}
+		}
+		else if(bitdepth == 8){
+			color_table = new FileBuffer(256 << 2, false);
+			if(palette != null){
+				for(int i = 0; i < 256; i++){
+					color_table.addToFile(palette[i]);
+				}
+			}
+			else{
+				for(int i = 0; i < 256; i++){
+					int pix = 0xFF << 24;
+					pix |= i << 16;
+					pix |= i << 8;
+					pix |= i;
+					color_table.addToFile(pix);
+				}
+			}
+		}
+		
+		int w = bitmap[0].length;
+		int h = bitmap.length;
+
+		FileBuffer idata = null;
+		if(bitdepth == 4) idata = writeBMPPixelData_4(bitmap);
+		else if(bitdepth == 8) idata = writeBMPPixelData_8(bitmap);
+		else if(bitdepth == 32) idata = writeBMPPixelData_32(bitmap);
+		
+		//DIB header
+		dib_header.addToFile(DIB_SIZE);
+		dib_header.addToFile(w);
+		dib_header.addToFile(h);
+		dib_header.addToFile((short)1);
+		dib_header.addToFile((short)bitdepth);
+		dib_header.addToFile(0);
+		dib_header.addToFile((int)idata.getFileSize());
+		dib_header.addToFile(2048);
+		dib_header.addToFile(2048);
+		if(bitdepth == 4) dib_header.addToFile(16);
+		else if(bitdepth == 8) dib_header.addToFile(256);
+		else dib_header.addToFile(0);
+		for(int i = 0; i < 5; i++) dib_header.addToFile(0);
+		dib_header.printASCIIToFile("BGRs");
+		while(dib_header.getFileSize() < DIB_SIZE) dib_header.addToFile(FileBuffer.ZERO_BYTE);
+		
+		//Main header
+		int size = 0;
+		bmp_header.printASCIIToFile("BM");
+		if(color_table != null){
+			size = 14 + DIB_SIZE + (int)color_table.getFileSize();
+		}
+		else{
+			size = 14 + DIB_SIZE;
+		}
+		int idat_pos = (size + 3) & ~0x3;
+		int idat_pad = idat_pos - size;
+		size += idat_pad;
+		size += (int)idata.getFileSize();
+		
+		bmp_header.addToFile(size);
+		bmp_header.addToFile(0); //Reserved
+		bmp_header.addToFile(idat_pos);
+		
+		//Output to disk
+		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(path));
+		bmp_header.writeToStream(bos);
+		dib_header.writeToStream(bos);
+		if(color_table != null){
+			color_table.writeToStream(bos);
+		}
+		for(int i = 0; i < idat_pad; i++) bos.write(0);
+		idata.writeToStream(bos);
+		bos.close();
+		
+	}
 	
 }

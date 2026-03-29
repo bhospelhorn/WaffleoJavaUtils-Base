@@ -7,6 +7,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import waffleoRai_Utils.KMeansClustering;
+import waffleoRai_Utils.KMeansClustering.KMeansResults;
+
 public class PaletteGen {
 	
 	/*----- Constants -----*/
@@ -16,9 +19,13 @@ public class PaletteGen {
 	private static final int SORT_MODE_CLOSEHITS = 2;
 	private static final int SORT_MODE_AVGRANK = 3;
 	
+	private static final long RANDOM_SEED = 0x6cc9fe22c330df5eL;
+	
 	/*----- Instance Variables -----*/
 	
 	private boolean includeAlpha;
+	private int alphaReplaceValue = 0x00ffffff;
+	private boolean hasTransparent;
 	private int bitDepth;
 	
 	private CounterNode head;
@@ -31,6 +38,7 @@ public class PaletteGen {
 	
 	private class CounterNode implements Comparable<CounterNode>{
 		public int argb;
+		public double alphaF;
 		public int count = 0;
 		public float[] hsb;
 		
@@ -50,17 +58,20 @@ public class PaletteGen {
 			int g = (argb >>> 8) & 0xff;
 			int b = argb & 0xff;
 			hsb = Color.RGBtoHSB(r, g, b, hsb);
+			alphaF = (double)((argb >>> 24) & 0xff) / 255.0;
 		}
 		
-		public double hsbDist(float[] other_hsb){
+		public double hsbDist(float[] other_hsb, double other_alpha){
 			if(other_hsb != null){
 				double hdist = (double)hsb[0] - (double)other_hsb[0];
 				double sdist = (double)hsb[1] - (double)other_hsb[1];
 				double bdist = (double)hsb[2] - (double)other_hsb[2];
+				double adist = alphaF - other_alpha;
 				hdist *= hdist;
 				sdist *= sdist;
 				bdist *= bdist;
-				return Math.sqrt(hdist + sdist + bdist);
+				adist *= adist;
+				return Math.sqrt(hdist + sdist + bdist + adist);
 			}
 			return 0.0;
 		}
@@ -133,6 +144,14 @@ public class PaletteGen {
 	
 	private void tallyPixelValue(int argb){
 		if(!includeAlpha) argb |= 0xff000000;
+		else {
+			int a = (argb >>> 24) & 0xff;
+			if(a == 0) {
+				//argb = alphaReplaceValue;
+				hasTransparent = true;
+				return;
+			}
+		}
 		
 		CounterNode cn = ctrMap.get(argb);
 		if(cn == null){
@@ -203,7 +222,7 @@ public class PaletteGen {
 	
 	/*----- Getters -----*/
 	
-	public int[] generatePalette(){
+	public int[] generatePalette_old(){
 		int ccount = 1 << bitDepth;
 		ArrayList<CounterNode> selected = new ArrayList<CounterNode>(ccount);
 
@@ -228,7 +247,7 @@ public class PaletteGen {
 			for(CounterNode cn : all){
 				for(int j = i+1; j < sz; j++){
 					CounterNode other = all.get(j);
-					double dist = cn.hsbDist(other.hsb);
+					double dist = cn.hsbDist(other.hsb, other.alphaF);
 					if(dist < cn.closestValue){
 						cn.closestFriend = other;
 						cn.closestValue = dist;
@@ -269,6 +288,10 @@ public class PaletteGen {
 			//Just return all, ig
 			selected.addAll(ctrMap.values());
 		}
+		if(includeAlpha && hasTransparent) {
+			//Replace last with default transparent value
+			selected.remove(ccount-1);
+		}
 		sortMode = SORT_MODE_HSB;
 		Collections.sort(selected);
 		
@@ -277,7 +300,64 @@ public class PaletteGen {
 			out[i] = selected.get(i).argb;
 		}
 		
+		if(includeAlpha && hasTransparent) {
+			//Replace last with default transparent value
+			out[ccount-1] = alphaReplaceValue;
+		}
+		
 		return out;
+	}
+	
+	public int[] generatePalette() {
+		final int MAX_ITER = 10;
+		
+		int ccount = 1 << bitDepth;
+		int k = ccount;
+		if(includeAlpha && hasTransparent) k--;
+		
+		ArrayList<CounterNode> allNodes = new ArrayList<CounterNode>(ctrMap.size());
+		allNodes.addAll(ctrMap.values());
+		int nodeCount = allNodes.size();
+		int[][] allColors = new int[nodeCount][];
+		int i = 0;
+		for(CounterNode n : allNodes) {
+			allColors[i++] = ImageUtils.argb2Vector(n.argb);
+		}
+		
+		KMeansResults kmeans = KMeansClustering.cluster(allColors, k, MAX_ITER, RANDOM_SEED);
+		
+		//Go with centroid? Or nearest value? Let's try nearest value...
+		ArrayList<CounterNode> pltNodes = new ArrayList<CounterNode>(k);
+		for(int c = 0; c < k; c++) {
+			double minDist = Double.MAX_VALUE;
+			int minIdx = -1;
+			for(int j = 0; j < nodeCount; j++) {
+				if(kmeans.clusterAssignments[j] == c) {
+					if(kmeans.centroidDists[j] < minDist) {
+						minIdx = j;
+						minDist = kmeans.centroidDists[j];
+					}
+				}
+			}
+			CounterNode n = allNodes.get(minIdx);
+			pltNodes.add(n);
+		}
+		
+		//Copy to output
+		sortMode = SORT_MODE_HSB;
+		Collections.sort(pltNodes);
+		
+		int[] plt = new int[ccount];
+		i = 0;
+		for(CounterNode n : pltNodes) {
+			plt[i++] = n.argb;
+		}
+		
+		if(includeAlpha && hasTransparent) {
+			plt[k] = alphaReplaceValue;
+		}
+		
+		return plt;
 	}
 	
 	/*----- Setters -----*/
