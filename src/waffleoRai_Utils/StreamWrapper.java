@@ -1,5 +1,7 @@
 package waffleoRai_Utils;
 
+import java.io.InputStream;
+
 public interface StreamWrapper {
 	
 	public byte get();
@@ -10,5 +12,7 @@ public interface StreamWrapper {
 	public void close();
 	
 	public void rewind();
+	
+	public InputStream asInputStream();
 	
 }

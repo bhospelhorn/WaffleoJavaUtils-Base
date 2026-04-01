@@ -1,7 +1,10 @@
 package waffleoRai_Utils;
 
+import java.io.InputStream;
 import java.util.LinkedList;
 import java.util.List;
+
+import waffleoRai_Files.BufferReferenceInputStream;
 
 public class BufferReference{
 
@@ -29,10 +32,18 @@ public class BufferReference{
 	public FileBuffer getBuffer(){return src;}
 	public long getBufferPosition(){return pos;}
 	
+	public InputStream asInputStream() {
+		return new BufferReferenceInputStream(this);
+	}
+	
 	public boolean hasRemaining() {
 		if(src == null) return false;
 		long fsize = src.getFileSize();
 		return pos < fsize;
+	}
+	
+	public long getRemaining() {
+		return src.getFileSize() - pos;
 	}
 	
 	/*----- Setters -----*/

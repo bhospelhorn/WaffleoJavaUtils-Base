@@ -1,56 +1,54 @@
 package waffleoRai_Utils;
 
+import java.io.InputStream;
 import java.util.LinkedList;
+
+import waffleoRai_Files.LinkedBytesStream;
 
 public class LinkedBytesStreamer implements StreamWrapper{
 	
 	private LinkedList<Byte> list;
 	
-	public LinkedBytesStreamer()
-	{
+	public LinkedBytesStreamer(){
 		list = new LinkedList<Byte>();
 	}
 	
-	public byte get()
-	{
+	public byte get(){
 		if(list.isEmpty()) return -1;
 		return list.pop();
 	}
 	
-	public int getFull()
-	{
+	public int getFull(){
 		if(list.isEmpty()) return -1;
 		return Byte.toUnsignedInt(list.pop());
 	}
 	
-	public void push(byte b)
-	{
+	public void push(byte b){
 		list.push(b);
 	}
 	
-	public void put(byte b)
-	{
+	public void put(byte b){
 		list.add(b);
 	}
 	
-	public boolean isEmpty()
-	{
+	public boolean isEmpty(){
 		return list.isEmpty();
 	}
 	
-	public void close()
-	{
+	public void close(){
 		list.clear();
 	}
 	
-	public int size()
-	{
+	public int size(){
 		return list.size();
 	}
 	
-	public void rewind()
-	{
+	public void rewind() {
 		throw new UnsupportedOperationException();
+	}
+	
+	public InputStream asInputStream() {
+		return LinkedBytesStream.wrap(list);
 	}
 
 }

@@ -380,7 +380,7 @@ public class BmpFile{
 	 * @throws IOException 
 	 */
 	public static void writeRawToBMP(int[][] bitmap, int[] palette, String path) throws IOException {
-		final int DIB_SIZE = 108;
+		final int DIB_SIZE = DIBHDR_VER_BITMAPV4HEADER;
 		FileBuffer bmp_header = new FileBuffer(14, false);
 		FileBuffer dib_header = new FileBuffer(DIB_SIZE, false); //v4
 		FileBuffer color_table = null;

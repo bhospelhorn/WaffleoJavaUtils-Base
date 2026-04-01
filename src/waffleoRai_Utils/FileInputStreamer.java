@@ -85,16 +85,13 @@ public class FileInputStreamer implements StreamWrapper{
 		throw new UnsupportedOperationException();
 	}
 	
-	public void rewind()
-	{
-		try 
-		{
-			stream.reset();
-		} 
-		catch (IOException e) 
-		{
-			e.printStackTrace();
-		}
+	public void rewind(){
+		try {stream.reset();} 
+		catch (IOException e) {e.printStackTrace();}
+	}
+	
+	public InputStream asInputStream() {
+		return stream;
 	}
 	
 }

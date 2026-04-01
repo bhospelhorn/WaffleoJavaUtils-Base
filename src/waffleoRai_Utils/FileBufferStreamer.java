@@ -1,5 +1,9 @@
 package waffleoRai_Utils;
 
+import java.io.InputStream;
+
+import waffleoRai_Files.FileBufferInputStream;
+
 public class FileBufferStreamer implements StreamWrapper{
 
 	private FileBuffer buffer;
@@ -40,5 +44,9 @@ public class FileBufferStreamer implements StreamWrapper{
 	public void rewind() {f_pos = 0;}
 	
 	public FileBuffer getData(){return buffer;}
+	
+	public InputStream asInputStream() {
+		return new FileBufferInputStream(buffer);
+	}
 
 }

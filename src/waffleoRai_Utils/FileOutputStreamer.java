@@ -3,6 +3,7 @@ package waffleoRai_Utils;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 
 public class FileOutputStreamer implements StreamWrapper{
@@ -54,5 +55,7 @@ public class FileOutputStreamer implements StreamWrapper{
 	public void rewind(){
 		throw new UnsupportedOperationException();
 	}
+	
+	public InputStream asInputStream() {throw new UnsupportedOperationException();}
 	
 }

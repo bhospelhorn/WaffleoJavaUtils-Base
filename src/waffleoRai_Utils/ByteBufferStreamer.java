@@ -1,5 +1,6 @@
 package waffleoRai_Utils;
 
+import java.io.InputStream;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
@@ -78,4 +79,8 @@ public class ByteBufferStreamer implements StreamWrapper{
 		buffer.rewind();
 	}
 
+	public InputStream asInputStream() {
+		return new ByteBufferInputStream(buffer);
+	}
+	
 }

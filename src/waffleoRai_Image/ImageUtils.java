@@ -267,4 +267,97 @@ public class ImageUtils {
 		return output;
 	}
 	
+	public static int detectLeftAlphaTrim(BufferedImage input, int alphaThreshold) {
+		if(input == null) return 0;
+		int w = input.getWidth();
+		int h = input.getHeight();
+		
+		//Pixels from left that are all transparent according to alpha threshold
+		int n = 0;
+		for(int x = 0; x < w; x++) {
+			boolean colTrans = true;
+			for(int y = 0; y < h; y++) {
+				int p = input.getRGB(x, y);
+				int a = p >>> 24;
+				if(a > alphaThreshold) {
+					colTrans = false;
+					break;
+				}
+			}
+			if(colTrans) n++;
+			else break;
+		}
+		
+		return n;
+	}
+	
+	public static int detectRightAlphaTrim(BufferedImage input, int alphaThreshold) {
+		if(input == null) return 0;
+		int w = input.getWidth();
+		int h = input.getHeight();
+		
+		int n = 0;
+		for(int x = (w-1); x >= 0; x--) {
+			boolean colTrans = true;
+			for(int y = 0; y < h; y++) {
+				int p = input.getRGB(x, y);
+				int a = p >>> 24;
+				if(a > alphaThreshold) {
+					colTrans = false;
+					break;
+				}
+			}
+			if(colTrans) n++;
+			else break;
+		}
+		
+		return n;
+	}
+	
+	public static int detectTopAlphaTrim(BufferedImage input, int alphaThreshold) {
+		if(input == null) return 0;
+		int w = input.getWidth();
+		int h = input.getHeight();
+		
+		int n = 0;
+		for(int y = 0; y < h; y++) {
+			boolean rowTrans = true;
+			for(int x = 0; x < w; x++) {
+				int p = input.getRGB(x, y);
+				int a = p >>> 24;
+				if(a > alphaThreshold) {
+					rowTrans = false;
+					break;
+				}
+			}
+			if(rowTrans) n++;
+			else break;
+		}
+		
+		return n;
+	}
+	
+	public static int detectBottomAlphaTrim(BufferedImage input, int alphaThreshold) {
+		if(input == null) return 0;
+		int w = input.getWidth();
+		int h = input.getHeight();
+		
+		int n = 0;
+		for(int y = (h-1); y >= 0; y--) {
+			boolean rowTrans = true;
+			for(int x = 0; x < w; x++) {
+				int p = input.getRGB(x, y);
+				int a = p >>> 24;
+				if(a > alphaThreshold) {
+					rowTrans = false;
+					break;
+				}
+			}
+			if(rowTrans) n++;
+			else break;
+		}
+		
+		return n;
+	}
+	
 }
