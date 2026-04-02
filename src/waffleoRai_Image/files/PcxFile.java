@@ -13,6 +13,7 @@ import waffleoRai_Image.Picture;
 import waffleoRai_Image.Pixel;
 import waffleoRai_Image.Pixel_RGBA;
 import waffleoRai_Utils.BitStreamer;
+import waffleoRai_Utils.BufferedBitStreamer;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
 import waffleoRai_Utils.StreamBuffer;
@@ -221,7 +222,7 @@ public class PcxFile implements ImageFile{
 		long datEnd = edPos;
 		if (hasEndPal) datEnd -= 769;
 		FileBuffer decData = decompressor.RLE_Decode(myFile, cPos, datEnd, totalBytes);
-		BitStreamer datStr = new BitStreamer(decData, true);
+		BufferedBitStreamer datStr = new BufferedBitStreamer(decData, true);
 		this.constructPlanes();
 		
 		int line = 0;

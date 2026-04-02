@@ -13,6 +13,9 @@ public class LinkedBytesStreamer implements StreamWrapper{
 		list = new LinkedList<Byte>();
 	}
 	
+	public boolean isReadOnly() {return false;}
+	public long getPosition() {return -1L;}
+	
 	public byte get(){
 		if(list.isEmpty()) return -1;
 		return list.pop();
@@ -45,6 +48,25 @@ public class LinkedBytesStreamer implements StreamWrapper{
 	
 	public void rewind() {
 		throw new UnsupportedOperationException();
+	}
+	
+	public void rewind(long amt) {
+		throw new UnsupportedOperationException();
+	}
+	
+	public long skipToEnd() {
+		int listLen = list.size();
+		list.clear();
+		return listLen;
+	}
+	
+	public long skip(long amt) {
+		long c = 0;
+		while(!list.isEmpty() && (c < amt)) {
+			list.pop();
+			c++;
+		}
+		return c;
 	}
 	
 	public InputStream asInputStream() {

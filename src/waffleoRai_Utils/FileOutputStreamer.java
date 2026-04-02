@@ -22,6 +22,9 @@ public class FileOutputStreamer implements StreamWrapper{
 	}
 	
 	public OutputStream getStream(){return stream;}
+	public boolean isReadOnly() {return false;}
+	
+	public long getPosition() {return written;}
 	
 	public byte get(){
 		throw new UnsupportedOperationException();
@@ -53,6 +56,18 @@ public class FileOutputStreamer implements StreamWrapper{
 	}
 	
 	public void rewind(){
+		throw new UnsupportedOperationException();
+	}
+	
+	public void rewind(long amt){
+		throw new UnsupportedOperationException();
+	}
+	
+	public long skipToEnd() {
+		throw new UnsupportedOperationException();
+	}
+	
+	public long skip(long amt) {
 		throw new UnsupportedOperationException();
 	}
 	

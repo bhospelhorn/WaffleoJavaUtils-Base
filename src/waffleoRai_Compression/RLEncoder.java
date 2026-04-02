@@ -3,6 +3,7 @@ package waffleoRai_Compression;
 import java.io.IOException;
 
 import waffleoRai_Utils.BitStreamer;
+import waffleoRai_Utils.BufferedBitStreamer;
 import waffleoRai_Utils.FileBuffer;
 
 public class RLEncoder {
@@ -176,8 +177,8 @@ public class RLEncoder {
 	{
 		long reqSize = edPos - stPos;
 		FileBuffer out = FileBuffer.createWritableBuffer("RLE_enc", reqSize, true);
-		BitStreamer inStream = new BitStreamer(in, stPos, true);
-		BitStreamer outStream = new BitStreamer(out, false);
+		BufferedBitStreamer inStream = new BufferedBitStreamer(in, stPos, true);
+		BufferedBitStreamer outStream = new BufferedBitStreamer(out, false);
 		
 		int counter = 0;
 		boolean toggleOn = false;
@@ -245,8 +246,8 @@ public class RLEncoder {
 	{
 		FileBuffer out = FileBuffer.createWritableBuffer("RLE_dec", initCap, true);
 		
-		BitStreamer inStream = new BitStreamer(in, stPos, true);
-		BitStreamer outStream = new BitStreamer(out, false);
+		BufferedBitStreamer inStream = new BufferedBitStreamer(in, stPos, true);
+		BufferedBitStreamer outStream = new BufferedBitStreamer(out, false);
 		
 		boolean toggleOn = false;
 		

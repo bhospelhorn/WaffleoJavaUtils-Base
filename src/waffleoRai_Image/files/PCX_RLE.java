@@ -2,6 +2,7 @@ package waffleoRai_Image.files;
 
 import waffleoRai_Compression.RLEncoder;
 import waffleoRai_Utils.BitStreamer;
+import waffleoRai_Utils.BufferedBitStreamer;
 import waffleoRai_Utils.FileBuffer;
 
 public class PCX_RLE extends RLEncoder{
@@ -20,8 +21,8 @@ public class PCX_RLE extends RLEncoder{
 	{
 		int initCap = edPos - stPos;
 		FileBuffer out = new FileBuffer(initCap);
-		BitStreamer inStream = new BitStreamer(in, stPos, true);
-		BitStreamer outStream = new BitStreamer(out, false);
+		BufferedBitStreamer inStream = new BufferedBitStreamer(in, stPos, true);
+		BufferedBitStreamer outStream = new BufferedBitStreamer(out, false);
 		
 		int counter = 0;
 		byte rVal = 0;
