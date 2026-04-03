@@ -378,15 +378,16 @@ public class ImageDither {
 		String inpath = args[0];
 		String outpath = args[1];
 		
-		final int ALGO = DITHER_ALGO_FLOYD_STEINBERG;
+		final int ALGO = DITHER_ALGO_BAYER4;
 		final int ALPHA_MODE = ImageUtils.ALPHA_MODE_FLAG;
 		final int ALPHA_TH = 0x7f;
 		
 		try {
 			BufferedImage img = ImageIO.read(new File(inpath));
-			ImageUtils.setUniformTransparency(img, 0x00ffffff, ALPHA_TH);
+			//ImageUtils.setUniformTransparency(img, 0x00ffffff, ALPHA_TH);
 			System.out.println("Generating palette...");
-			int[] plt = ImageUtils.generatePalette8(img, ALPHA_MODE);
+			//int[] plt = ImageUtils.generatePalette8(img, ALPHA_MODE);
+			int[] plt = ImageUtils.generatePalette4(img, ALPHA_MODE);
 
 			System.out.println("Downscaling...");
 			int w = img.getWidth();

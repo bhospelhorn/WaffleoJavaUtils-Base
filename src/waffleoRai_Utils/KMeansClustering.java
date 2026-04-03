@@ -39,31 +39,17 @@ public class KMeansClustering {
 		}
 	}
 	
-	private static int[] generateSeedPool(int size, double[] seedCentroidDists, Set<Integer> usedPoints) {
-		int[] pool = new int[size];
-		
-		//Create weights
-		int ptCount = seedCentroidDists.length;
+	private static void replenishSeedPool(SimpleWeightedPool<Integer> pointPool, double[] seedCentroidDists, Set<Integer> usedPoints) {
+		pointPool.clearPool();
 		double sum = 0.0;
-		for(int i = 0; i < ptCount; i++) {
-			if(!usedPoints.contains(i)) {
-				sum += seedCentroidDists[i];
-			}
+		for(int i = 0; i < seedCentroidDists.length; i++) {
+			if(usedPoints.contains(i)) continue;
+			sum += seedCentroidDists[i];
 		}
-		
-		int pPos = 0;
-		for(int i = 0; i < ptCount; i++) {
-			if(pPos >= size) break;
-			if(!usedPoints.contains(i)) {
-				int addCount = (int)Math.round((seedCentroidDists[i] / sum) * (double)size);
-				for(int j = 0; j < addCount; j++) {
-					pool[pPos++] = i;
-					if(pPos >= size) break;
-				}
-			}
+		for(int i = 0; i < seedCentroidDists.length; i++) {
+			if(usedPoints.contains(i)) continue;
+			pointPool.addToPool(i, seedCentroidDists[i] / sum);
 		}
-		
-		return pool;
 	}
 	
 	private static void clusterRound(double[][] inputData, KMeansResults clusters) {
@@ -141,7 +127,7 @@ public class KMeansClustering {
 		clusters.avgInterDist /=(double)k;
 	}
 	
-	public static KMeansResults cluster(double[][] inputData, int k, int maxIter, long randomSeed) {
+	public static KMeansResults cluster(double[][] inputData, int k, int minIter, int maxIter, long randomSeed) {
 		if(inputData == null) return null;
 		KMeansResults res = new KMeansResults();
 		
@@ -154,10 +140,10 @@ public class KMeansClustering {
 		res.interDist = new double[k];
 		
 		//Seed clusters
-		int seedPoolSize = Math.max(rowCount << 2, k << 8);
-		Random rand;
-		if(randomSeed == -1L) rand = new Random();
-		else rand = new Random(randomSeed);
+		SimpleWeightedPool<Integer> pointPool = null;
+		if(randomSeed == -1L) pointPool = new SimpleWeightedPool<Integer>();
+		else pointPool = new SimpleWeightedPool<Integer>(randomSeed);
+		Random rand = pointPool.getRNG();
 		int index = rand.nextInt(rowCount);
 		Set<Integer> usedPoints = new HashSet<Integer>();
 		usedPoints.add(index);
@@ -170,11 +156,10 @@ public class KMeansClustering {
 		}
 		double[] seedCentroidDists = new double[rowCount];
 		getDistsSq(inputData, seedCentroid, seedCentroidDists);
-		int[] seedPool = generateSeedPool(seedPoolSize, seedCentroidDists, usedPoints);
-		
+
 		for(int i = 1; i < k; i++) {
-			index = rand.nextInt(seedPool.length);
-			index = seedPool[index];
+			replenishSeedPool(pointPool, seedCentroidDists, usedPoints);
+			index = pointPool.pullElement();
 			usedPoints.add(index);
 			
 			//Update seed centroid
@@ -189,15 +174,12 @@ public class KMeansClustering {
 			
 			//Update distances
 			getDistsSq(inputData, seedCentroid, seedCentroidDists);
-			
-			//Update probability pool
-			seedPool = generateSeedPool(seedPoolSize, seedCentroidDists, usedPoints);
 		}
 		
 		//Run clustering
 		clusterRound(inputData, res);
 		int itr = 1;
-		while(((maxIter < 0) || (itr < maxIter)) && (res.avgInterDist < res.avgIntraDist)) {
+		while((itr < minIter) || ((maxIter < 0) || (itr < maxIter)) && (res.avgInterDist < res.avgIntraDist)) {
 			clusterRound(inputData, res);
 			itr++;
 		}
@@ -205,7 +187,7 @@ public class KMeansClustering {
 		return res;
 	}
 	
-	public static KMeansResults cluster(int[][] inputData, int k, int maxIter, long randomSeed) {
+	public static KMeansResults cluster(int[][] inputData, int k, int minIter, int maxIter, long randomSeed) {
 		if(inputData == null) return null;
 		
 		int rowCount = inputData.length;
@@ -217,7 +199,7 @@ public class KMeansClustering {
 			}
 		}
 		
-		return cluster(data, k, maxIter, randomSeed);
+		return cluster(data, k, minIter, maxIter, randomSeed);
 	}
 	
 	

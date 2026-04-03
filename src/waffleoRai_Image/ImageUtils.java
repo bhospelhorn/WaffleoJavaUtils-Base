@@ -181,6 +181,8 @@ public class ImageUtils {
 			int alpha = (color >>> 24);
 			if(alpha > alphaThreshold) {
 				for(int i = 0; i < palette.length; i++) {
+					int pa = (palette[i] >>> 24);
+					if(pa <= alphaThreshold) continue;
 					int dist = calculateRGBDistanceSquared(color, palette[i]);
 					if(dist < minVal) {
 						minVal = dist;

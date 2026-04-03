@@ -236,6 +236,7 @@ public class PaletteGen {
 	/*----- Getters -----*/
 	
 	public int[] generatePalette() {
+		final int MIN_ITER = 3;
 		final int MAX_ITER = 10;
 		
 		int ccount = 1 << bitDepth;
@@ -248,10 +249,18 @@ public class PaletteGen {
 		int[][] allColors = new int[nodeCount][];
 		int i = 0;
 		for(CounterNode n : allNodes) {
+			/*int[] vec = ImageUtils.argb2Vector(n.argb);
+			allColors[i] = new int[4];
+			allColors[i][0] = vec[0];
+			for(int j = 0; j < 3; j++) {
+				float hsbRaw = n.hsb[j];
+				allColors[i][j+1] = Math.round(hsbRaw * 255.0f);
+			}
+			i++;*/
 			allColors[i++] = ImageUtils.argb2Vector(n.argb);
 		}
 		
-		KMeansResults kmeans = KMeansClustering.cluster(allColors, k, MAX_ITER, RANDOM_SEED);
+		KMeansResults kmeans = KMeansClustering.cluster(allColors, k, MIN_ITER, MAX_ITER, RANDOM_SEED);
 		
 		//Go with centroid? Or nearest value? Let's try nearest value...
 		ArrayList<CounterNode> pltNodes = new ArrayList<CounterNode>(k);
