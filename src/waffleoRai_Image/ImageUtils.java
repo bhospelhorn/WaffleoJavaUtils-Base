@@ -6,6 +6,10 @@ import java.awt.image.BufferedImage;
 
 public class ImageUtils {
 	
+	public static final int ALPHA_MODE_IGNORE = 0;
+	public static final int ALPHA_MODE_8BITFULL = 1;
+	public static final int ALPHA_MODE_FLAG = 2;
+	
 	public static int[] getDefaultPalette2() {
 		int[] plt = new int[4];
 		for(int i = 0; i < 4; i++) {
@@ -144,14 +148,18 @@ public class ImageUtils {
 		return Math.sqrt((double)sq);
 	}
 	
-	public static int getNearestPaletteColor(int color, int[] palette, boolean includeAlpha) {
+	public static int getNearestPaletteColor(int color, int[] palette, int alphaMode) {
+		return getNearestPaletteColor(color, palette, alphaMode, 0x7f);
+	}
+	
+	public static int getNearestPaletteColor(int color, int[] palette, int alphaMode, int alphaThreshold) {
 		if(palette == null) return -1;
 		
 		//Returns palette index of nearest color
 		int minVal = Integer.MAX_VALUE;
 		int minIdx = -1;
 		
-		if(includeAlpha) {
+		if(alphaMode == ImageUtils.ALPHA_MODE_8BITFULL) {
 			for(int i = 0; i < palette.length; i++) {
 				int dist = calculateRGBADistanceSquared(color, palette[i]);
 				if(dist < minVal) {
@@ -160,12 +168,33 @@ public class ImageUtils {
 				}
 			}
 		}
-		else {
+		else if(alphaMode == ImageUtils.ALPHA_MODE_IGNORE){
 			for(int i = 0; i < palette.length; i++) {
 				int dist = calculateRGBDistanceSquared(color, palette[i]);
 				if(dist < minVal) {
 					minVal = dist;
 					minIdx = i;
+				}
+			}
+		}
+		else if(alphaMode == ImageUtils.ALPHA_MODE_FLAG){
+			int alpha = (color >>> 24);
+			if(alpha > alphaThreshold) {
+				for(int i = 0; i < palette.length; i++) {
+					int dist = calculateRGBDistanceSquared(color, palette[i]);
+					if(dist < minVal) {
+						minVal = dist;
+						minIdx = i;
+					}
+				}	
+			}
+			else {
+				for(int i = (palette.length - 1); i >= 0; i--) {
+					int pa = (palette[i] >>> 24);
+					if(pa <= alphaThreshold) {
+						minIdx = i;
+						break;
+					}
 				}
 			}
 		}
@@ -218,14 +247,14 @@ public class ImageUtils {
 		return argb;
 	}
 	
-	public static int[] generatePalette4(BufferedImage input, boolean includeAlpha) {
-		PaletteGen pg = new PaletteGen(4, includeAlpha);
+	public static int[] generatePalette4(BufferedImage input, int alphaMode) {
+		PaletteGen pg = new PaletteGen(4, alphaMode);
 		pg.processImage(input);
 		return pg.generatePalette();
 	}
 	
-	public static int[] generatePalette8(BufferedImage input, boolean includeAlpha) {
-		PaletteGen pg = new PaletteGen(8, includeAlpha);
+	public static int[] generatePalette8(BufferedImage input, int alphaMode) {
+		PaletteGen pg = new PaletteGen(8, alphaMode);
 		pg.processImage(input);
 		return pg.generatePalette();
 	}

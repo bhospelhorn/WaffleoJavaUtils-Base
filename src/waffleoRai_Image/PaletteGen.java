@@ -23,8 +23,10 @@ public class PaletteGen {
 	
 	/*----- Instance Variables -----*/
 	
-	private boolean includeAlpha;
+	//private boolean includeAlpha;
+	private int alphaInclMode;
 	private int alphaReplaceValue = 0x00ffffff;
+	private int alphaThreshold = 0xaf;
 	private boolean hasTransparent;
 	private int bitDepth;
 	
@@ -132,9 +134,10 @@ public class PaletteGen {
 	
 	/*----- Init -----*/
 	
-	public PaletteGen(int bitDepth, boolean inclAlpha){
+	public PaletteGen(int bitDepth, int alphaMode){
 		this.bitDepth = bitDepth;
-		this.includeAlpha = inclAlpha;
+		//this.includeAlpha = inclAlpha;
+		alphaInclMode = alphaMode;
 		head = null;
 		tail = null;
 		ctrMap = new HashMap<Integer, CounterNode>();
@@ -143,14 +146,24 @@ public class PaletteGen {
 	/*----- Internal -----*/
 	
 	private void tallyPixelValue(int argb){
-		if(!includeAlpha) argb |= 0xff000000;
-		else {
-			int a = (argb >>> 24) & 0xff;
-			if(a == 0) {
-				//argb = alphaReplaceValue;
+		int a = (argb >>> 24) & 0xff;
+		switch(alphaInclMode) {
+		case ImageUtils.ALPHA_MODE_IGNORE:
+			argb |= 0xff000000;
+			break;
+		case ImageUtils.ALPHA_MODE_FLAG:
+			if(a <= alphaThreshold) {
+				argb = alphaReplaceValue;
 				hasTransparent = true;
 				return;
 			}
+			else argb |= 0xff000000;
+			break;
+		case ImageUtils.ALPHA_MODE_8BITFULL:
+			if(a <= alphaThreshold) {
+				hasTransparent = true;
+			}
+			break;
 		}
 		
 		CounterNode cn = ctrMap.get(argb);
@@ -222,98 +235,12 @@ public class PaletteGen {
 	
 	/*----- Getters -----*/
 	
-	public int[] generatePalette_old(){
-		int ccount = 1 << bitDepth;
-		ArrayList<CounterNode> selected = new ArrayList<CounterNode>(ccount);
-
-		if(ctrMap.size() > ccount){
-			//Rank by frequency...
-			ArrayList<CounterNode> all = new ArrayList<CounterNode>(ctrMap.size());
-			all.addAll(ctrMap.values());
-			sortMode = SORT_MODE_FREQ;
-			Collections.sort(all);
-			
-			int i = 0;
-			for(CounterNode cn : all){
-				cn.freqRank = i++;
-				
-				cn.closestFriend = null;
-				cn.closestValue = Double.MAX_VALUE;
-			}
-			
-			//Build graph of closest values
-			i = 0;
-			int sz = all.size();
-			for(CounterNode cn : all){
-				for(int j = i+1; j < sz; j++){
-					CounterNode other = all.get(j);
-					double dist = cn.hsbDist(other.hsb, other.alphaF);
-					if(dist < cn.closestValue){
-						cn.closestFriend = other;
-						cn.closestValue = dist;
-					}
-					if(dist < other.closestValue){
-						other.closestFriend = cn;
-						other.closestValue = dist;
-					}
-				}
-				cn.friends = 0;
-				i++;
-			}
-			
-			for(CounterNode cn : all){
-				if(cn.closestFriend != null){
-					cn.closestFriend.friends++;
-				}
-			}
-			
-			sortMode = SORT_MODE_CLOSEHITS;
-			Collections.sort(all);
-			i = 0;
-			for(CounterNode cn : all){
-				cn.friendRank = i++;
-				cn.avgRank = ((double)cn.freqRank + (double)cn.friendRank) / 2.0;
-			}
-			
-			sortMode = SORT_MODE_AVGRANK;
-			Collections.sort(all);
-			i = 0;
-			for(CounterNode cn : all){
-				if(i >= ccount) break;
-				selected.add(cn);
-				i++;
-			}
-		}
-		else{
-			//Just return all, ig
-			selected.addAll(ctrMap.values());
-		}
-		if(includeAlpha && hasTransparent) {
-			//Replace last with default transparent value
-			selected.remove(ccount-1);
-		}
-		sortMode = SORT_MODE_HSB;
-		Collections.sort(selected);
-		
-		int[] out = new int[ccount];
-		for(int i = 0; i < selected.size(); i++){
-			out[i] = selected.get(i).argb;
-		}
-		
-		if(includeAlpha && hasTransparent) {
-			//Replace last with default transparent value
-			out[ccount-1] = alphaReplaceValue;
-		}
-		
-		return out;
-	}
-	
 	public int[] generatePalette() {
 		final int MAX_ITER = 10;
 		
 		int ccount = 1 << bitDepth;
 		int k = ccount;
-		if(includeAlpha && hasTransparent) k--;
+		if((alphaInclMode == ImageUtils.ALPHA_MODE_FLAG) && hasTransparent) k--;
 		
 		ArrayList<CounterNode> allNodes = new ArrayList<CounterNode>(ctrMap.size());
 		allNodes.addAll(ctrMap.values());
@@ -353,7 +280,7 @@ public class PaletteGen {
 			plt[i++] = n.argb;
 		}
 		
-		if(includeAlpha && hasTransparent) {
+		if((alphaInclMode == ImageUtils.ALPHA_MODE_FLAG) && hasTransparent) {
 			plt[k] = alphaReplaceValue;
 		}
 		
@@ -361,6 +288,9 @@ public class PaletteGen {
 	}
 	
 	/*----- Setters -----*/
+	
+	public void setAlphaThreshold(int value) {alphaThreshold = value;}
+	public void setAlphaReplacement(int argb) {alphaReplaceValue = argb;}
 	
 	public void processImage(int[][] imgData){
 		if(imgData == null) return;
