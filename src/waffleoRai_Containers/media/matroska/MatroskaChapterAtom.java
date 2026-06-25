@@ -47,5 +47,9 @@ public class MatroskaChapterAtom {
 	public void setTrackUIDs(List<Integer> value){trackUIDs = value;}
 	public void setDisplayInfo(List<MatroskaChapterDisplay> value){displayInfo = value;}
 	public void setProcesses(List<MatroskaChapterProcess> value){processes = value;}
+	
+	/*----- Read -----*/
+	
+	/*----- Write -----*/
 
 }

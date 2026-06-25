@@ -11,8 +11,7 @@ public class Section implements Comparable<Section>{
 	
 	public FileBuffer data;
 	
-	public Section(FileBuffer myfile, SectionHeader sh) throws UnsupportedFileTypeException, IOException
-	{
+	public Section(FileBuffer myfile, SectionHeader sh) throws UnsupportedFileTypeException, IOException {
 		if (sh == null) throw new FileBuffer.UnsupportedFileTypeException();
 		if (myfile == null) throw new FileBuffer.UnsupportedFileTypeException();
 		header = sh;
@@ -23,24 +22,19 @@ public class Section implements Comparable<Section>{
 		data.addToFile(myfile, stpos, stpos + rawsz);
 	}
 	
-	public void sizeVirtual()
-	{
+	public void sizeVirtual() {
 		long rawsz = header.rawDataSize;
 		long vsz = header.virtualSize;
-		try 
-		{
+		try {
 			FileBuffer newdata = FileBuffer.createWritableBuffer("Win32PESectionVirtual", vsz, false);
-			if (rawsz <= vsz)
-			{
+			if (rawsz <= vsz) {
 				newdata.addToFile(data);
 				long diff = vsz - rawsz;
-				for (long i = 0; i < diff; i++)
-				{
+				for (long i = 0; i < diff; i++) {
 					newdata.addToFile((byte)0x00);
 				}
 			}
-			else
-			{
+			else {
 				//Virtual size is smaller than raw - usually the case
 				newdata.addToFile(data, 0, vsz);
 			}
@@ -52,8 +46,7 @@ public class Section implements Comparable<Section>{
 		}
 	}
 
-	public int compareTo(Section o) 
-	{
+	public int compareTo(Section o) {
 		if (o == null) return 1;
 		if (o == this) return 0;
 		if (this.header == null && o.header == null) return 0;

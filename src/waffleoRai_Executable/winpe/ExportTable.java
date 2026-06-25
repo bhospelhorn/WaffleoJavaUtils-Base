@@ -30,11 +30,9 @@ public class ExportTable {
 	
 	/* --- Construction --- */
 	
-	public ExportTable(String n, int nEntries, int obase)
-	{
+	public ExportTable(String n, int nEntries, int obase) {
 		name = n;
-		if (name == null)
-		{
+		if (name == null){
 			Random r = new Random();
 			name = Long.toHexString(r.nextLong()) + ".dll";
 		}
@@ -44,42 +42,28 @@ public class ExportTable {
 	
 	/* --- Inner Classes --- */
 	
-	public static class ExportEntry implements Comparable<ExportEntry>
-	{
+	public static class ExportEntry implements Comparable<ExportEntry> {
 		private String name;
 		private long RVA;
 		//private String forwarder;
 		private int ordinal;
 		
-		public ExportEntry(String exportName, long rva, int ord)
-		{
+		public ExportEntry(String exportName, long rva, int ord) {
 			name = exportName;
 			//forwarder = forwardName;
 			RVA = rva;
 			ordinal = ord;
 		}
 		
-		public String getExportName()
-		{
-			return name;
-		}
-		
-		public long getRVA()
-		{
-			return RVA;
-		}
-		
-		public int getOrdinal()
-		{
-			return ordinal;
-		}
+		public String getExportName() {return name;}
+		public long getRVA(){return RVA;}
+		public int getOrdinal(){return ordinal;}
 
 		@Override
-		public int compareTo(ExportEntry o) 
-		{
+		public int compareTo(ExportEntry o) {
 			if (o == null) return 1;
 			if (this == o) return 0;
-			if (ExportTable.sortByRVA){
+			if (ExportTable.sortByRVA) {
 				if (this.RVA > o.RVA) return 1;
 				else if (this.RVA == o.RVA) return 0;
 				else return -1;
@@ -87,8 +71,7 @@ public class ExportTable {
 			return this.ordinal - o.ordinal;
 		}
 		
-		public boolean equals(Object o)
-		{
+		public boolean equals(Object o) {
 			if (o == null) return false;
 			if (this == o) return true;
 			if (!(o instanceof ExportEntry)) return false;
@@ -100,13 +83,11 @@ public class ExportTable {
 			return true;
 		}
 		
-		public int hashCode()
-		{
+		public int hashCode(){
 			return name.hashCode() ^ (int)RVA;
 		}
 		
-		public String toString()
-		{
+		public String toString(){
 			return name;
 		}
 		
@@ -114,46 +95,24 @@ public class ExportTable {
 	
 	/* --- Getters --- */
 	
-	public String getName()
-	{
-		return name;
-	}
+	public String getName(){return name;}
+	public OffsetDateTime getTimestamp(){return timestamp;}
+	public int getMajorVersion(){return this.ver_major;}
+	public int getMinorVersion(){return this.ver_minor;}
+	public int getOrdinalBase(){return ordinal_base;}
 	
-	public OffsetDateTime getTimestamp()
-	{
-		return timestamp;
-	}
-	
-	public int getMajorVersion()
-	{
-		return this.ver_major;
-	}
-	
-	public int getMinorVersion()
-	{
-		return this.ver_minor;
-	}
-	
-	public int getOrdinalBase()
-	{
-		return ordinal_base;
-	}
-	
-	public List<ExportEntry> getSortedEntries()
-	{
+	public List<ExportEntry> getSortedEntries() {
 		int sz = 1;
 		if (table != null) sz += table.length;
 		List<ExportEntry> list = new ArrayList<ExportEntry>(sz);
-		for (int i = 0; i < table.length; i++)
-		{
+		for (int i = 0; i < table.length; i++) {
 			if (table[i] != null) list.add(table[i]);
 		}
 		Collections.sort(list);
 		return list;
 	}
 	
-	public ExportEntry getEntry(int ordinal)
-	{
+	public ExportEntry getEntry(int ordinal) {
 		int ind = ordinal - (ordinal_base-1);
 		if (ind < 0) return null;
 		if (ind >= table.length) return null;
@@ -162,26 +121,22 @@ public class ExportTable {
 	
 	/* --- Setters --- */
 	
-	public void setName(String s)
-	{
+	public void setName(String s) {
 		if (s == null || s.isEmpty()) return;
 		name = s;
 	}
 	
-	public void setVersion(int major, int minor)
-	{
+	public void setVersion(int major, int minor) {
 		ver_major = major;
 		ver_minor = minor;
 	}
 	
-	public void setTimestamp(int secondsSinceEpoch)
-	{
+	public void setTimestamp(int secondsSinceEpoch) {
 		timestamp = OffsetDateTime.of(1970, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
 		timestamp = timestamp.plusSeconds(secondsSinceEpoch);
 	}
 
-	public void setEntry(int ordinal, String exname, long RVA)
-	{
+	public void setEntry(int ordinal, String exname, long RVA) {
 		int ind = ordinal - (ordinal_base-1);
 		if (ind < 0) throw new IndexOutOfBoundsException();
 		if (ind >= table.length) throw new IndexOutOfBoundsException();
@@ -189,8 +144,7 @@ public class ExportTable {
 		table[ind] = e;
 	}
 
-	public static void setSortByRVA(boolean b)
-	{
+	public static void setSortByRVA(boolean b) {
 		sortByRVA = b;
 	}
 	

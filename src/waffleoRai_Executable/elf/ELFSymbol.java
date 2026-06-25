@@ -8,7 +8,7 @@ public class ELFSymbol {
 	/*----- Constants -----*/
 	
 	public static final int SIZE_32 = 0x10;
-	public static final int SIZE_64 = 0x20; //TODO No idea if true
+	public static final int SIZE_64 = 0x18;
 	
 	//Binding
 	public static final int STB_LOCAL = 0;
@@ -30,7 +30,7 @@ public class ELFSymbol {
 	
 	private String name;
 	private long addr; //Sometimes holds alignment info or sec offset in reloc files
-	private int size;
+	private long size;
 	
 	private int binding;
 	private int type;
@@ -46,7 +46,7 @@ public class ELFSymbol {
 	
 	public String getName() {return name;}
 	public long getAddress() {return addr;}
-	public int getSize() {return size;}
+	public long getSize() {return size;}
 	public int getBinding() {return binding;}
 	public int getType() {return type;}
 	
@@ -70,20 +70,23 @@ public class ELFSymbol {
 		sym.strOfs = ref.nextInt();
 		
 		if(is64Bit) {
-			//This would not align. Fields are probably in a different order
-			//TODO
+			int infoRaw = Byte.toUnsignedInt(ref.nextByte());
+			sym.binding = (infoRaw >>> 4);
+			sym.type = infoRaw & 0xf;
+			sym.other = Byte.toUnsignedInt(ref.nextByte());
+			sym.linkId = Short.toUnsignedInt(ref.nextShort());
 			sym.addr = ref.nextLong();
+			sym.size = ref.nextLong();
 		}
 		else {
 			sym.addr = Integer.toUnsignedLong(ref.nextInt());
+			sym.size = Integer.toUnsignedLong(ref.nextInt());
+			int infoRaw = Byte.toUnsignedInt(ref.nextByte());
+			sym.binding = (infoRaw >>> 4);
+			sym.type = infoRaw & 0xf;
+			sym.other = Byte.toUnsignedInt(ref.nextByte());
+			sym.linkId = Short.toUnsignedInt(ref.nextShort());
 		}
-		
-		sym.size = ref.nextInt();
-		int infoRaw = Byte.toUnsignedInt(ref.nextByte());
-		sym.binding = (infoRaw >>> 4);
-		sym.type = infoRaw & 0xf;
-		sym.other = Byte.toUnsignedInt(ref.nextByte());
-		sym.linkId = Short.toUnsignedInt(ref.nextShort());
 		
 		return sym;
 	}
@@ -95,17 +98,20 @@ public class ELFSymbol {
 		target.addToFile(strOfs);
 		
 		if(is64Bit) {
-			//TODO
+			target.addToFile((byte)(((binding & 0xf) << 4) | (type & 0xf)));
+			target.addToFile((byte)other);
+			target.addToFile((short)linkId);
+			target.addToFile(addr);
+			target.addToFile(size);
 		}
 		else {
 			target.addToFile((int)addr);
+			target.addToFile((int)size);
+			target.addToFile((byte)(((binding & 0xf) << 4) | (type & 0xf)));
+			target.addToFile((byte)other);
+			target.addToFile((short)linkId);
 		}
-		
-		target.addToFile(size);
-		target.addToFile((byte)(((binding & 0xf) << 4) | (type & 0xf)));
-		target.addToFile((byte)other);
-		target.addToFile((short)linkId);
-		
+
 		return target.getFileSize() - stpos;
 	}
 	

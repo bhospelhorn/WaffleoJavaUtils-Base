@@ -19,8 +19,7 @@ public class SectionHeader {
 	
 	public SectionCharacteristics characteristics;
 	
-	public SectionHeader(FileBuffer myfile, long stpos)
-	{
+	public SectionHeader(FileBuffer myfile, long stpos) {
 		if (myfile == null) return;
 		long cpos = stpos;
 		
@@ -41,8 +40,7 @@ public class SectionHeader {
 		characteristics = new SectionCharacteristics(rawflags);
 	}
 	
-	public void printInfo()
-	{
+	public void printInfo() {
 		System.err.println("--- Section Header ---");
 		System.err.println("\tName: " + name);
 		System.err.println("\tVirtual Size: " + String.format("0x%08X", virtualSize) + " (" + virtualSize + " bytes)");

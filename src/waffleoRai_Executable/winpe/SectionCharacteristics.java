@@ -26,8 +26,7 @@ public class SectionCharacteristics {
 	public boolean IMAGE_SCN_MEM_READ; //0x40000000
 	public boolean IMAGE_SCN_MEM_WRITE; //0x80000000
 	
-	public SectionCharacteristics(int rawflags)
-	{
+	public SectionCharacteristics(int rawflags) {
 		IMAGE_SCN_TYPE_NO_PAD = (rawflags & 0x00000008) != 0;
 		
 		IMAGE_SCN_CNT_CODE = (rawflags & 0x00000020) != 0;
@@ -54,8 +53,7 @@ public class SectionCharacteristics {
 		IMAGE_SCN_MEM_WRITE = (rawflags & 0x80000000) != 0;
 	}
 	
-	public void printInfo()
-	{
+	public void printInfo() {
 		System.err.println("Section Padded: " + !IMAGE_SCN_TYPE_NO_PAD);
 		System.err.println("Contains Code: " + IMAGE_SCN_CNT_CODE);
 		System.err.println("Contains Initialized Data: " + IMAGE_SCN_CNT_INITIALIZED_DATA);

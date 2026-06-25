@@ -63,16 +63,14 @@ public class Win32PE {
 	
 	/* --- Construction --- */
 	
-	public Win32PE(String filepath, boolean verbose) throws IOException, UnsupportedFileTypeException
-	{
+	public Win32PE(String filepath, boolean verbose) throws IOException, UnsupportedFileTypeException {
 		FileBuffer myfile = FileBuffer.createBuffer(filepath, false);
 		parsePE(myfile, verbose);
 	}
 	
 	/* --- Inner Classes --- */
 	
-	private class MSDOS_Header
-	{
+	private class MSDOS_Header {
 		public static final int SERIAL_SIZE = 0x40;
 		
 		public int lastsize;
@@ -93,8 +91,7 @@ public class Win32PE {
 		
 		public long e_lfanew; //PE offset from file start
 		
-		public MSDOS_Header(FileBuffer myfile) throws UnsupportedFileTypeException
-		{
+		public MSDOS_Header(FileBuffer myfile) throws UnsupportedFileTypeException {
 			boolean oldendian = myfile.isBigEndian();
 			myfile.setEndian(false);
 			long cpos = myfile.findString(0, 0x10, DOS_MAGIC);
@@ -121,8 +118,7 @@ public class Win32PE {
 			myfile.setEndian(oldendian);
 		}
 		
-		public void printInfo()
-		{
+		public void printInfo() {
 			System.err.println("Bytes on last page of file: " + lastsize + String.format(" (0x%04X)", lastsize));
 			System.err.println("Pages in file: " + nblocks + String.format(" (0x%04X)", nblocks));
 			System.err.println("Number of relocations: " + nreloc + String.format(" (0x%04X)", nreloc));
@@ -142,26 +138,21 @@ public class Win32PE {
 		}
 	}
 
-	private class MSDOS_Stub
-	{
+	private class MSDOS_Stub {
 		public byte[] stub;
 		
-		public MSDOS_Stub(FileBuffer myfile, long stpos, int len) throws UnsupportedFileTypeException
-		{
+		public MSDOS_Stub(FileBuffer myfile, long stpos, int len) throws UnsupportedFileTypeException {
 			if (len < 1) throw new FileBuffer.UnsupportedFileTypeException();
 			stub = new byte[len];
-			for (int i = 0; i < len; i++)
-			{
+			for (int i = 0; i < len; i++) {
 				stub[i] = myfile.getByte(stpos + i);
 			}
 		}
 		
-		public void printInfo()
-		{
+		public void printInfo()	{
 			System.err.println("DOS Stub");
 			System.err.println("Length: " + String.format("0x%04X", stub.length) + " (" + stub.length + " bytes)");
-			for (int i = 0; i < stub.length; i++)
-			{
+			for (int i = 0; i < stub.length; i++) {
 				System.err.print(String.format("%02X ", stub[i]));
 				if (i % 16 == 15) System.err.print("\n");
 			}
@@ -169,8 +160,7 @@ public class Win32PE {
 		}
 	}
 	
-	public static enum Machine
-	{
+	public static enum Machine {
 		INTEL_I386(0x14C, "Intel i386"),
 		INTEL_I860(0x14D, "Intel i860"),
 		INTEL_X64(0x8664, "Intel x64"),
@@ -204,44 +194,35 @@ public class Win32PE {
 		private int n;
 		private String name;
 		
-		private Machine(int number, String str)
-		{
+		private Machine(int number, String str) {
 			n = number;
 			name = str;
 		}
 		
-		public short getNumber()
-		{
+		public short getNumber() {
 			return (short)n;
 		}
 		
-		public String toString()
-		{
-			return name;
-		}
+		public String toString(){return name;}
 	
 		private static Map<Integer, Machine> codemap;
 		
-		private static void populateMap()
-		{
+		private static void populateMap(){
 			codemap = new HashMap<Integer, Machine>();
 			Machine[] all = Machine.values();
-			for (Machine m : all)
-			{
+			for (Machine m : all){
 				codemap.put(m.n, m);
 			}
 		}
 		
-		public static Machine getMachine(int code)
-		{
+		public static Machine getMachine(int code){
 			if (codemap == null) populateMap();
 			return codemap.get(code);
 		}
 		
 	}
 	
-	private class PE_Header
-	{
+	private class PE_Header {
 		public static final int SERIAL_SIZE = 24;
 		
 		public Machine machine;
@@ -273,8 +254,7 @@ public class Win32PE {
 		public boolean IMAGE_FILE_UP_SYSTEM_ONLY; //0x4000
 		public boolean IMAGE_FILE_BYTES_REVERSED_HI; //0x8000
 		
-		public PE_Header(FileBuffer myfile, long stpos) throws UnsupportedFileTypeException
-		{
+		public PE_Header(FileBuffer myfile, long stpos) throws UnsupportedFileTypeException {
 			myfile.setEndian(false);
 			long cpos = myfile.findString(stpos, stpos+0x10, PE_MAGIC);
 			if (cpos != stpos) throw new FileBuffer.UnsupportedFileTypeException();
@@ -312,8 +292,7 @@ public class Win32PE {
 			
 		}
 		
-		public void printInfo()
-		{
+		public void printInfo() {
 			System.err.println("Machine: " + machine.toString());
 			System.err.println("Number of Sections: " + nSections);
 			System.err.println("Timestamp: " + timestamp.format(DateTimeFormatter.RFC_1123_DATE_TIME));
@@ -339,8 +318,7 @@ public class Win32PE {
 		}
 	}
 	
-	private class OPHeader_COFF
-	{
+	private class OPHeader_COFF {
 		public static final int SERIAL_SIZE_32 = 28;
 		public static final int SERIAL_SIZE_64 = 24;
 		
@@ -355,8 +333,7 @@ public class Win32PE {
 		public long baseOfCode; //4
 		public long baseOfData; //32-bit only [4]
 		
-		public OPHeader_COFF(FileBuffer myfile, long stpos) throws UnsupportedFileTypeException
-		{
+		public OPHeader_COFF(FileBuffer myfile, long stpos) throws UnsupportedFileTypeException {
 			PE32PLUS = false;
 			if (myfile == null) throw new FileBuffer.UnsupportedFileTypeException();
 			long cpos = myfile.findString(stpos, stpos + 0x10, PE_OP_MAGIC_32);
@@ -381,8 +358,7 @@ public class Win32PE {
 			if (!PE32PLUS) baseOfData = Integer.toUnsignedLong(myfile.intFromFile(cpos)); cpos += 4;
 		}
 		
-		public void printInfo()
-		{
+		public void printInfo() {
 			if(PE32PLUS) System.err.println("64-Bit PE");
 			else  System.err.println("32-Bit PE");
 			System.err.println("Linker Version: " + majorLinkerVer + "." + minorLinkerVer);
@@ -396,8 +372,7 @@ public class Win32PE {
 		
 	}
 	
-	public static enum Subsystem
-	{
+	public static enum Subsystem {
 		IMAGE_SUBSYSTEM_UNKNOWN(0,"Subsystem Unknown"),
 		IMAGE_SUBSYSTEM_NATIVE(1,"Device Drivers & Native Windows Processes"),
 		IMAGE_SUBSYSTEM_WINDOWS_GUI(2,"Windows GUI Subsystem"),
@@ -416,44 +391,37 @@ public class Win32PE {
 		private int n;
 		private String name;
 		
-		private Subsystem(int number, String str)
-		{
+		private Subsystem(int number, String str) {
 			n = number;
 			name = str;
 		}
 		
-		public short getNumber()
-		{
+		public short getNumber() {
 			return (short)n;
 		}
 		
-		public String toString()
-		{
+		public String toString() {
 			return name;
 		}
 	
 		private static Map<Integer, Subsystem> codemap;
 		
-		private static void populateMap()
-		{
+		private static void populateMap() {
 			codemap = new HashMap<Integer, Subsystem>();
 			Subsystem[] all = Subsystem.values();
-			for (Subsystem m : all)
-			{
+			for (Subsystem m : all) {
 				codemap.put(m.n, m);
 			}
 		}
 		
-		public static Subsystem getSubsystem(int code)
-		{
+		public static Subsystem getSubsystem(int code) {
 			if (codemap == null) populateMap();
 			return codemap.get(code);
 		}
 		
 	}
 	
-	private class DLL_Characteristics
-	{
+	private class DLL_Characteristics {
 		public boolean IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA; //0x0020
 		public boolean IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE; //0x0040
 		public boolean IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY; //0x0080
@@ -469,8 +437,7 @@ public class Win32PE {
 		public boolean IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE; //0x8000
 	}
 	
-	private class OPHeader_WIN
-	{
+	private class OPHeader_WIN {
 		public static final int SERIAL_SIZE_32 = 68;
 		public static final int SERIAL_SIZE_64 = 88;
 		
@@ -501,20 +468,17 @@ public class Win32PE {
 		
 		public int numberOfRvaAndSizes;
 		
-		public OPHeader_WIN(FileBuffer myfile, long stpos, boolean as64bit) throws UnsupportedFileTypeException
-		{
+		public OPHeader_WIN(FileBuffer myfile, long stpos, boolean as64bit) throws UnsupportedFileTypeException {
 			if (myfile == null) throw new FileBuffer.UnsupportedFileTypeException();
 			if (stpos < 0) throw new FileBuffer.UnsupportedFileTypeException();
 			long cpos = stpos;
 			PE32PLUS = as64bit;
 			
-			if (as64bit)
-			{
+			if (as64bit) {
 				imageBase = myfile.longFromFile(cpos); 
 				cpos += 8;
 			}
-			else
-			{
+			else {
 				imageBase = Integer.toUnsignedLong(myfile.intFromFile(cpos));
 				cpos += 4;
 			}
@@ -550,15 +514,13 @@ public class Win32PE {
 			dll_char.IMAGE_DLLCHARACTERISTICS_GUARD_CF = (rawflags & 0x4000) != 0;
 			dll_char.IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE = (rawflags & 0x8000) != 0;
 			
-			if (as64bit)
-			{
+			if (as64bit) {
 				sizeOfStackReserve = myfile.longFromFile(cpos); cpos += 8;
 				sizeOfStackCommit = myfile.longFromFile(cpos); cpos += 8;
 				sizeOfHeapReserve = myfile.longFromFile(cpos); cpos += 8;
 				sizeOfHeapCommit = myfile.longFromFile(cpos); cpos += 8;
 			}
-			else
-			{
+			else {
 				sizeOfStackReserve = Integer.toUnsignedLong(myfile.intFromFile(cpos)); cpos += 4;
 				sizeOfStackCommit = Integer.toUnsignedLong(myfile.intFromFile(cpos)); cpos += 4;
 				sizeOfHeapReserve = Integer.toUnsignedLong(myfile.intFromFile(cpos)); cpos += 4;
@@ -609,8 +571,7 @@ public class Win32PE {
 		
 	}
 
-	private class DD_Table
-	{
+	private class DD_Table {
 		public static final int ENTRY_SIZE = 8;
 		
 		public static final int TBL_IDX_EXPORT = 0;
@@ -637,8 +598,7 @@ public class Win32PE {
 		public int[] rva_tbl;
 		public int[] sz_tbl;
 		
-		public DD_Table(FileBuffer myfile, long stpos, int nEntries)
-		{
+		public DD_Table(FileBuffer myfile, long stpos, int nEntries) {
 			numberEntries = -1;
 			if (myfile == null) return;
 			if (nEntries > 16) nEntries = 16;
@@ -656,13 +616,11 @@ public class Win32PE {
 			}
 		}
 		
-		public int getSize()
-		{
+		public int getSize() {
 			return numberEntries * ENTRY_SIZE;
 		}
 	
-		public void printInfo()
-		{
+		public void printInfo() {
 			System.err.println("Data Directory Table");
 			System.err.println("Number of Entries: " + numberEntries);
 			if (numberEntries > TBL_IDX_EXPORT)
@@ -755,25 +713,21 @@ public class Win32PE {
 		
 	}
 		
-	private class SectionHeaderTable
-	{
+	private class SectionHeaderTable {
 		public SectionHeader[] headers;
 		
-		public SectionHeaderTable(FileBuffer myfile, long stpos, int nSections) throws UnsupportedFileTypeException
-		{
+		public SectionHeaderTable(FileBuffer myfile, long stpos, int nSections) throws UnsupportedFileTypeException {
 			if (nSections == 0) throw new FileBuffer.UnsupportedFileTypeException();
 			headers = new SectionHeader[nSections];
 			
 			long cpos = stpos;
-			for (int i = 0; i < nSections; i++)
-			{
+			for (int i = 0; i < nSections; i++) {
 				headers[i] = new SectionHeader(myfile, cpos);
 				cpos += SectionHeader.SERIAL_SIZE;
 			}
 		}
 		
-		public void printInfo()
-		{
+		public void printInfo() {
 			if (headers == null) System.err.println("<NO SECTIONS>");
 			for (int i = 0; i < headers.length; i++)
 			{
@@ -786,14 +740,12 @@ public class Win32PE {
 	
 	/* --- Parsers --- */
 	
-	private void parsePE(FileBuffer myfile, boolean verbose) throws UnsupportedFileTypeException, IOException
-	{
+	private void parsePE(FileBuffer myfile, boolean verbose) throws UnsupportedFileTypeException, IOException {
 		//DOS Header
 		myfile.setEndian(false);
 		header_msdos = new MSDOS_Header(myfile);
 		
-		if (verbose)
-		{
+		if (verbose) {
 			System.err.println("----------------");
 			System.err.println("DOS Header Read!");
 			System.err.println("----------------");
@@ -804,8 +756,7 @@ public class Win32PE {
 		int stublen = (int)header_msdos.e_lfanew - MSDOS_Header.SERIAL_SIZE;
 		msdos_stub = new MSDOS_Stub(myfile, MSDOS_Header.SERIAL_SIZE, stublen);
 		
-		if (verbose)
-		{
+		if (verbose) {
 			System.err.println("----------------");
 			System.err.println("DOS Stub Read!");
 			System.err.println("----------------");
@@ -816,8 +767,7 @@ public class Win32PE {
 		long cpos = header_msdos.e_lfanew;
 		header_signature = new PE_Header(myfile, header_msdos.e_lfanew);
 		
-		if (verbose)
-		{
+		if (verbose) {
 			System.err.println("----------------");
 			System.err.println("PE Header Read!");
 			System.err.println("----------------");
@@ -828,8 +778,7 @@ public class Win32PE {
 		cpos += PE_Header.SERIAL_SIZE;
 		header_coff = new OPHeader_COFF(myfile, cpos);
 		
-		if (verbose)
-		{
+		if (verbose) {
 			System.err.println("----------------");
 			System.err.println("PE OP COFF Header Read!");
 			System.err.println("----------------");
@@ -842,8 +791,7 @@ public class Win32PE {
 		cpos += cohsz;
 		header_win = new OPHeader_WIN(myfile, cpos, header_coff.PE32PLUS);
 		
-		if (verbose)
-		{
+		if (verbose) {
 			System.err.println("----------------");
 			System.err.println("PE OP WIN Header Read!");
 			System.err.println("----------------");
@@ -856,8 +804,7 @@ public class Win32PE {
 		cpos += wohsz;
 		table_datadir = new DD_Table(myfile, cpos, header_win.numberOfRvaAndSizes);
 		
-		if (verbose)
-		{
+		if (verbose) {
 			System.err.println("----------------");
 			System.err.println("Data Directory Read!");
 			System.err.println("----------------");
@@ -870,8 +817,7 @@ public class Win32PE {
 		int nsec = header_signature.nSections;
 		SectionHeaderTable sht = new SectionHeaderTable(myfile, cpos, nsec);
 		
-		if (verbose)
-		{
+		if (verbose) {
 			System.err.println("----------------");
 			System.err.println("Section Header Table Read!");
 			System.err.println("----------------");
@@ -879,8 +825,7 @@ public class Win32PE {
 		}
 		
 		//Copy Sections
-		if (nsec > 0)
-		{
+		if (nsec > 0) {
 			sections = new Section[nsec];
 			for (int i = 0; i < nsec; i++)
 			{
@@ -891,8 +836,7 @@ public class Win32PE {
 		
 	}
 	
-	public static ExportTable readExportTable(Winexe myfile, boolean verbose)
-	{
+	public static ExportTable readExportTable(Winexe myfile, boolean verbose) {
 		if (myfile == null) return null;
 		
 		long staddr = myfile.getDataTableRVA(Win32PE.TBL_IDX_EXPORT);
@@ -979,15 +923,12 @@ public class Win32PE {
 	
 	/* --- Getters --- */
 	
-	public Winexe readdress()
-	{
+	public Winexe readdress() {
 		Winexe exe = new Winexe(header_signature.machine, header_signature.nSections, header_win.imageBase);
 		
 		exe.loadDataDirTable(table_datadir.rva_tbl, table_datadir.sz_tbl);
-		for (Section s : sections)
-		{
-			if (s != null)
-			{
+		for (Section s : sections) {
+			if (s != null) {
 				exe.addSection(s);
 			}
 		}
