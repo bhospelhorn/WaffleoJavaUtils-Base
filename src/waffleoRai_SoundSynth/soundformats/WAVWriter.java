@@ -63,7 +63,7 @@ public class WAVWriter implements PCMFileWriter{
 		fmt.addToFile((short)1); //Compression code. Fixed for now since only handle one format
 		fmt.addToFile((short)channelCount); //Number of channels
 		fmt.addToFile(sampleRate); //Sample rate
-		int ba = (bitDepth/8)/channelCount;
+		int ba = (bitDepth * channelCount) >>> 3;
 		int abps = sampleRate * ba;
 		fmt.addToFile(abps);
 		fmt.addToFile((short)ba);
