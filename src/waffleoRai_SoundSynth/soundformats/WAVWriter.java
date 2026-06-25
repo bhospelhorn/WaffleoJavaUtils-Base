@@ -13,7 +13,7 @@ import waffleoRai_Sound.WAV;
 import waffleoRai_SoundSynth.AudioSampleStream;
 import waffleoRai_Utils.FileBuffer;
 
-public class WAVWriter {
+public class WAVWriter implements PCMFileWriter{
 	
 	private AudioSampleStream source;
 	private int sampleRate;

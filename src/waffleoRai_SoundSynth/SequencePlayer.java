@@ -1,7 +1,5 @@
 package waffleoRai_SoundSynth;
 
-import java.io.BufferedOutputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -14,6 +12,8 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 
+import waffleoRai_SoundSynth.soundformats.AIFFWriter;
+import waffleoRai_SoundSynth.soundformats.PCMFileWriter;
 import waffleoRai_SoundSynth.soundformats.WAVWriter;
 
 /*
@@ -32,6 +32,8 @@ import waffleoRai_SoundSynth.soundformats.WAVWriter;
  * 		Added removeListener(Object o) and dispose()
  * 2021.07.25 | 1.4.0
  * 		Added method to directly access channel
+ * 2026.06.24 | 1.4.1
+ * 		Fixed unending sequence bug in render out. Also added AIFF.
  */
 
 /**
@@ -49,8 +51,8 @@ import waffleoRai_SoundSynth.soundformats.WAVWriter;
  * can occur well before they are played back, noting the time coordinate of the event
  * relative to the current playback time coordinate is essential.
  * @author Blythe Hospelhorn
- * @version 1.4.0
- * @since July 25, 2021
+ * @version 1.4.1
+ * @since June 24, 2026
  */
 public abstract class SequencePlayer implements SynthPlayer{
 	
@@ -1002,8 +1004,7 @@ public abstract class SequencePlayer implements SynthPlayer{
 	
 	/*--- Write ---*/
 	
-	public void writeMixdownTo(String path, int loops) throws IOException
-	{
+	public void writeMixdownTo(String path, int loops) throws IOException {
 		//Uses current state of player (master vol and muted channels)
 		
 		//Check to make sure it is not running.
@@ -1013,15 +1014,20 @@ public abstract class SequencePlayer implements SynthPlayer{
 		synchronized(this){exporting = true;}
 		rewind();
 		
-		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(path));
-		WAVWriter writer = new WAVWriter(this, bos);
+		PCMFileWriter writer = null;
+		String pathLower = path.toLowerCase();
+		if(pathLower.endsWith(".aif") || pathLower.endsWith(".aiff")) {
+			writer = new AIFFWriter(this, path);
+		}
+		else {
+			writer = new WAVWriter(this, path);
+		}
 		
 		double hzratio = (double)getSampleRate()/tickrate;
 		int nexttick = 0;
 		
 		boolean seqend = false;
-		while(!seqend && (myloops < loops))
-		{	
+		while(!seqend && (myloops < loops)) {	
 			if(loopcount > 0){
 				if(myloops >= loopcount) break;
 			}
@@ -1032,24 +1038,29 @@ public abstract class SequencePlayer implements SynthPlayer{
 				if(ctr_sampling++ >= nexttick)
 				{
 					//Do operations for this tick
-					for(int i = 0; i < tracks.length; i++){if(tracks[i] != null) tracks[i].onTick(tick);}
+					for(int i = 0; i < tracks.length; i++){
+						if(tracks[i] != null) tracks[i].onTick(tick);
+					}
 					tick++;
 					
 					//Check flags set by MIDI operations...
 					//(Track end, tempo change, loop end)
-					for(int i = 0; i < tracks.length; i++){if(tracks[i] != null) {seqend = (seqend && tracks[i].trackEnd());};}
+					seqend = true;
+					for(int i = 0; i < tracks.length; i++){
+						if(tracks[i] != null) {
+							seqend = (seqend && tracks[i].trackEnd());
+						};
+					}
 					//for(PlayerTrack t : tracks){seqend = (seqend && t.trackEnd());};
 					if(seqend) break;
 					if(loopme)loopMe();
-					if(tempo_flag)
-					{
+					if(tempo_flag) {
 						hzratio = (double)getSampleRate()/tickrate;
 						ctr_sampling = 0;
 						ctr_tick = 0;
 						tempo_flag = false;
 					}
-					else
-					{
+					else {
 						//Find sampling coordinate of next tick
 						double nextraw = hzratio * (++ctr_tick);
 						nexttick = (int)Math.floor(nextraw);
@@ -1062,11 +1073,11 @@ public abstract class SequencePlayer implements SynthPlayer{
 					}
 				}
 			}
-			catch(InterruptedException ex)
-			{
+			catch(InterruptedException ex) {
 				System.err.println("Unexpected interrupt occurred! Stopping synthesis!");
 				ex.printStackTrace();
-				bos.close();
+				writer.complete();
+				//bos.close();
 				synchronized(this){exporting = false;}
 				return;
 			}
@@ -1074,29 +1085,28 @@ public abstract class SequencePlayer implements SynthPlayer{
 		
 		for(SynthChannel ch : channels) ch.allNotesOff();
 		boolean sremain = true;
-		while(sremain)
-		{
-			try{
+		while(sremain) {
+			try {
 				//for (int i = 0; i < 16; i++) putNextSample(playback_line);
 				writer.write(1);
 			}
-			catch(InterruptedException ex)
-			{
+			catch(InterruptedException ex) {
 				System.err.println("Unexpected interrupt occurred! Stopping playback!");
 				ex.printStackTrace();
-				bos.close();
+				writer.complete();
+				//bos.close();
 				synchronized(this){exporting = false;}
 				return;
 			}
 			
 			sremain = false;
-			for(SynthChannel ch : channels){
+			for(SynthChannel ch : channels) {
 				if(ch.countActiveVoices() > 0) {sremain = true; break;}
 			}
 		}
 		
 		writer.complete();
-		bos.close();
+		//bos.close();
 		synchronized(this){exporting = false;}
 	}
 	

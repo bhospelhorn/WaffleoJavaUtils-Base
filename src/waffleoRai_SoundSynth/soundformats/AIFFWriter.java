@@ -6,7 +6,7 @@ import waffleoRai_Sound.AiffFile;
 import waffleoRai_SoundSynth.AudioSampleStream;
 import waffleoRai_Utils.FileBuffer;
 
-public class AIFFWriter {
+public class AIFFWriter implements PCMFileWriter{
 	
 	private AudioSampleStream src;
 	private String output_path;
